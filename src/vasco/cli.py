@@ -36,7 +36,7 @@ def cli():
     if args: from vasco.helpers import vascolog, genplotms
     if args.parameter_list: 
         params=params_fromlist(args.parameter_list)
-        genplotms(input_file,kind='png', **params)
+        print(f"created {genplotms(input_file,kind='png', **params)}")
 
 if __name__=='__main__':
     cli()
