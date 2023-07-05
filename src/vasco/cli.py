@@ -20,13 +20,15 @@ def params_fromlist(pl_value):
     for i in range(len(pl)):
         if '=' in pl[i]:
             k,v=pl[i].split('=')
-            try:
-                v=int(v)
-            except:
+            if "'" in v: v=v.replace("'","")
+            else:
                 try:
-                    v=float(v)
+                    v=int(v)
                 except:
-                    v=str(v).strip()
+                    try:
+                        v=float(v)
+                    except:
+                        v=str(v).strip()
             params[k]=v
     return params
 
