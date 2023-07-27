@@ -11,22 +11,28 @@ $ vasco -l "SCAN,SOURCE,ANTENNA" -f test.fits > list.obs
 
 # USAGE
 ```bash
-usage: vasco [-h] [-plist PARAMETER_LIST] input_file
+usage: vasco [-h] [-f INPUT_FILE] [-plist PARAMETER_LIST] [-l [LIST_OBSERVATION]]
 
 VLBI and SMILE source based CASA Optimizations (VASCO).
 
-positional arguments:
-  input_file            Give the input file path.
-
 optional arguments:
   -h, --help            show this help message and exit
+  -f INPUT_FILE, --input-file INPUT_FILE
+                        Give the input file path.
 
 plotting:
-  use plotms based arguments to generate plots in the terminal.
+  
+                                     use plotms based arguments to generate plots in the terminal.
 
   -plist PARAMETER_LIST, --parameter-list PARAMETER_LIST
                         list of parameters comma separated to fill in plotms
 
+operations:
+  
+                               use operations based on file type e.g., .FITS .MS
+
+  -l [LIST_OBSERVATION], --list-observation [LIST_OBSERVATION]
+                        lists all the useful details similar to listobs in CASA.
 ```
 
 # Installation
