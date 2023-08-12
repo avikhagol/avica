@@ -7,7 +7,7 @@ This is a helper tool for CASA based optimizations to use rPICARD and CASA for V
 
 ```bash
 $ vasco -l "SCAN,SOURCE,ANTENNA" -f test.fits > list.obs
-$ vasco path/to/fits -it
+$ vasco path/to/fits --identify-targets
 ec071d_1_1.IDI1
 science:['J1143+1834']
 
