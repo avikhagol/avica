@@ -1,7 +1,7 @@
 from collections import defaultdict
 from pathlib import Path
 import argparse
-from vasco.fits import _listobs, identify_targets
+from vasco.fits import _listobs, Targets as t
 
 def ascii_art():
     art="""
@@ -84,9 +84,20 @@ def cli():
                 print(Path(fitsfile).name)
                 _listobs(fitsfile,cardname)
         if args.identify_targets:
-            for fitsfile in input_file: 
+            
+            targets,sourcesl={},[]
+            for fitsfile in input_file:
                 print(Path(fitsfile).name)
-                identify_targets(fitsfile)
+                Targ=t(fitsfile)
+                targ=Targ.identify_target
+                for k,v in targ.items(): 
+                    sourcesl.extend(v)
+                    if k not in list(targets.keys()): targets[k]=v
+                    elif v and (set(v) & set(sourcesl)): 
+                        targets[k].extend(v)
+                        targets[k]=list(set(targets[k]))
+
+            print(targets)
 
 if __name__=='__main__':
     cli()

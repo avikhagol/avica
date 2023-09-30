@@ -7,7 +7,7 @@ from collections import Counter
 import numpy as np
 
 
-def __getcolname(data,colnames=['SOURCE']):
+def _getcolname(data,colnames=['SOURCE']):
     _colname=None
     for cname in data.columns:
         for colname in colnames:
@@ -59,7 +59,7 @@ def _listobs(fitsfile,hduname=None) :
                 uvsid_colname='SOURCE'                       # SOURCE_ID name not consistent b/w VLBA nad EVN column of UV_DATA
                 uvsidd=hdul['UV_DATA'].data
                 sourced=hdul['SOURCE'].data
-                uvsid_colname=__getcolname(uvsidd,['SOURCE'])
+                uvsid_colname=_getcolname(uvsidd,['SOURCE'])
                 # for cname in uvsidd.columns:
                 #     if 'SOURCE' in str(cname.name).upper(): 
                 #         uvsid_colname=str(cname.name)
@@ -75,7 +75,7 @@ def _listobs(fitsfile,hduname=None) :
                 ind_inst=np.append(ind_inst,-1)
                 scanlist=uvsid[ind_inst]
                 totalrows=len(uvsid)
-                sourceid_colname=__getcolname(sourced,['SOURCE_ID', 'ID_NO.', 'ID_NO'])        
+                sourceid_colname=_getcolname(sourced,['SOURCE_ID', 'ID_NO.', 'ID_NO'])        
                                                                                              # ID_NO. name not consistent b/w VLBA nad EVN column of SOURCE
 
                 for i,sid in enumerate(sourced[sourceid_colname]):
@@ -107,7 +107,7 @@ def _listobs(fitsfile,hduname=None) :
 def sources(hdul):
     sourced=hdul['SOURCE'].data
     sourcename={}
-    sourceid_colname=__getcolname(sourced,['SOURCE_ID', 'ID_NO.', 'ID_NO'])
+    sourceid_colname=_getcolname(sourced,['SOURCE_ID', 'ID_NO.', 'ID_NO'])
     for i,sid in enumerate(sourced[sourceid_colname]):
             sourcename[sid]=hdul['SOURCE'].data.SOURCE[i]
     return sourcename
@@ -115,15 +115,18 @@ def sources(hdul):
 
 
 
-def scanlist(uv_data):
+def scanlist(hdul):
     """
     return array of scanlist and index of the scan in the sequence of data from UV_DATA column
     """
-    uvsid_colname=__getcolname(uv_data,['SOURCE'])
+
+    uv_data=hdul['UV_DATA'].data
+    
+    uvsid_colname=_getcolname(uv_data,['SOURCE'])
     uvsid=uv_data[uvsid_colname]
     ind_inst=np.where((np.diff(uvsid)!=0)==True)
     ind_inst=np.append(ind_inst,-1)
-    scanlist_arr=uvsid[ind_inst]
+    scanlist_arr=np.array(uvsid[ind_inst])
     return scanlist_arr, ind_inst
 
 def __sel_ind(data):
@@ -132,25 +135,9 @@ def __sel_ind(data):
     grouped_data=data[ind]
     return grouped_data
 
-def __check_phaseref(scanlist_arr):
-    """
-    check scan list and see if phase referencing is used.
-    """
-    sdict={'phref':{}, 'other':{}}
-    isTrue=False
-    sources=np.unique(scanlist_arr)    
-    for source in sources:
-        source_seq_ind=np.where(source==scanlist_arr)
-        phaseref_ind=np.where(np.diff(source_seq_ind)[0]==2)[0]
-        if len(phaseref_ind)>1:
-            isTrue=True
-            sdict['phref'][source]=source_seq_ind
-            # sdict['phref']['nbr']=
-        else:
-            sdict['other'][source]=source_seq_ind
-    return isTrue,sdict
 
-def __return_target(sdict):
+
+def _return_target(sdict):
     """
     TODO: group by occurance of phaseref combination, as the cov is affected by indices
     """
@@ -165,25 +152,63 @@ def __return_target(sdict):
     bright_cal=list(sdict['other'].keys())
     return science_targets,phase_cal,bright_cal
 
-def identify_targets(fitsfile):
-    with fits.open(fitsfile, 'readonly') as hdul:
-        uv_data=hdul['UV_DATA'].data
-        sourcename=sources(hdul)
-        sl_arr,ind_sl=scanlist(uv_data)
-        ispref,sdict=__check_phaseref(sl_arr)
+def check_phaseref(scanlist_arr):
+        """
+        check scan list and see if phase referencing is used.
+        """
+    
+        sdict={'phref':{}, 'other':{}}
+        isTrue=False
+        sources=np.unique(scanlist_arr)    
+        for source in sources:
+            source_seq_ind=np.where(source==scanlist_arr)
+            phaseref_ind=np.where(np.diff(source_seq_ind)[0]==2)[0]
+            if len(phaseref_ind)>1:
+                isTrue=True
+                sdict['phref'][source]=source_seq_ind
+                # sdict['phref']['nbr']=
+            else:
+                sdict['other'][source]=source_seq_ind
+        return isTrue,sdict
+
+def identify_targets(ispref,sdict,sourcename):
+        targets={}
+        # scanlist_arr,ind_sl=scanlist(hdul)
+        # ispref,sdict=check_phaseref(scanlist_arr)
+        # sourcename=sources(hdul)
         if ispref:
-            st,pt,ct=__return_target(sdict)
-            print(f"science:{[sourcename[s] for s in st]}\n")
-            print(f"phase:{[sourcename[p] for p in pt]}\n")
-            print(f"brightcal:{[sourcename[c] for c in ct]}\n")
-            # return {'science':sourcename[st],'phase':sourcename[pt],'brightcal':sourcename[ct]}
+            st,pt,ct=_return_target(sdict)
+            # targets['phref']=[sourcename[s] for s in list(sdict['phref'])]
+            targets['science']=[sourcename[s] for s in st]
+            targets['phase']=[sourcename[p] for p in pt]
+            targets['other']=[sourcename[c] for c in ct]
+            
         else:
             print('not phase referencing')
-            print(f"science:{[sourcename[s] for s in list(sdict['other'].keys())]}\n")
+            targets['science']=[sourcename[s] for s in list(sdict['other'].keys())]
+        
+        return targets
 
-# hdul=fits.open('/data/avi/d/BB240GD/BB240/BB240GD/VLBA_BB240GD_bb240gd_BIN0_SRC0_0_110927T171838.idifits')
-# uv_data=hdul['UV_DATA'].data
-# sa,ind_sa= scanlist(uv_data)
-# isph,sdict=__check_phaseref(sa)
-# st,pt,ct=__return_target(sdict)
-# print(st,pt,ct)
+class Targets:
+    def __init__(self,fitsfile) -> None:
+        self.fitsfile=fitsfile
+    
+        # helper and output variables
+        self.hdul=fits.open(fitsfile)
+        self.scanlist_arr,ind_sl=scanlist(self.hdul)
+        self.sourcename=sources(self.hdul)
+        
+        self.check_phaseref=check_phaseref(self.scanlist_arr)
+        self.identify_target=identify_targets(self.check_phaseref[0],self.check_phaseref[1],self.sourcename)
+        # self.targets = identify_targets(self.fitsfile)
+    
+    
+    
+
+# fitsfile='/data/avi/d/BB240GD/BB240/BB240GD/VLBA_BB240GD_bb240gd_BIN0_SRC0_0_110927T171838.idifits'
+# # uv_data=hdul['UV_DATA'].data
+# # sa,ind_sa= scanlist(uv_data)
+# # isph,sdict=_check_phaseref(sa)
+# # st,pt,ct=_return_target(sdict)
+# # print(st,pt,ct)
+# print(identify_targets(fitsfile))
