@@ -101,7 +101,7 @@ def cli():
         if args.find_refant:
             for fitsfile in input_file:
                 print(Path(fitsfile).name)
-                find_refant(fitsfile)
+                refant_dict=find_refant(fitsfile)
 
 if __name__=='__main__':
     cli()

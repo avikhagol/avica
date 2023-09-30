@@ -199,6 +199,23 @@ def identify_targets(ispref,sdict,sourcename):
         return targets
 
 def find_refant(fitsfile):
+    """takes fitsfile as input and returns the reference antenna which is good geometrically, observation length, and by SEFD
+    prints table with columns [ANNAME,STD_TSYS,nRows,Distance] sorted by best reference antenna; returns a dictionary of the same table.
+
+    Returns:
+    -----
+
+    (dict)
+    sorted dictionary in order of best antenna.
+
+    key         {key        : param}
+
+    ANNAME      {antenna_id : antenna_name}
+    STD_TSYS    {antenna_id : standard_deviation_of_TSYS}
+    nRows       {antenna_id : no_of_datapoints}
+    Distance    {antenna_id : median_distance}
+
+    """
     f=fits.open(fitsfile)
     hduname=_gethduname(f, ['SYSTEM_TEMPERATURE'])
     # hduname='SYSTEM_TEMPERATURE'
@@ -246,13 +263,15 @@ def find_refant(fitsfile):
         t['Distance']=[ant_with_d[ant] for ant in t['ANNAME']]
         for ant in missing_antennav: t.add_row([ant, float('nan'), 0,ant_with_d[ant]])
         tp=t.to_pandas()
+        tp.index += 1
         med_tp=tp['nRows'].median()
-        for sigma in [1.5,1.4,1.3,1.2,1.1,1.0,0.9]:
-            med_above=tp['nRows']>=med_tp*sigma
+        for sigma_cut in [1.5,1.4,1.3,1.2,1.1,1.0,0.9]:
+            med_above=tp['nRows']>=med_tp*sigma_cut
             tp_cut=tp[med_above]
             if len(tp_cut)>=4:break
-        print(tp_cut.sort_values(by=['STD_TSYS', 'Distance'], ascending=[True, True]).to_string(index=False))
-
+        tp_res=tp_cut.sort_values(by=['STD_TSYS', 'Distance'], ascending=[True, True])
+        print(tp_res.to_string(index=False))
+        return tp_res.to_dict()
     else:
         print('missing TSYS info!\n')
     
