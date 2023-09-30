@@ -1,7 +1,7 @@
 from collections import defaultdict
 from pathlib import Path
 import argparse
-from vasco.fits import _listobs, Targets as t
+from vasco.fits import _listobs, Targets as t, find_refant
 
 def ascii_art():
     art="""
@@ -30,8 +30,8 @@ op=parser.add_argument_group('operations',"""
                              use operations based on file type e.g., .FITS .MS
 """)
 op.add_argument('-l','--list-observation',help="lists all the useful details similar to listobs in CASA or listr in AIPS.", required=False, action="store", const="SCAN", nargs='?')
-op.add_argument('-it','--identify-targets',help="find targets for phasecal, science and bright cal for FF", required=False, action="store_true")
-
+op.add_argument('-t','--identify-targets',help="find targets for phasecal, science and bright cal for FF", required=False, action="store_true")
+op.add_argument('-r', '--find-refant', help="find refant by checking TSYS info", required=False, action="store_true")
 
 args=parser.parse_args()
 
@@ -98,6 +98,10 @@ def cli():
                         targets[k]=list(set(targets[k]))
 
             print(targets)
+        if args.find_refant:
+            for fitsfile in input_file:
+                print(Path(fitsfile).name)
+                find_refant(fitsfile)
 
 if __name__=='__main__':
     cli()
