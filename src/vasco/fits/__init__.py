@@ -25,7 +25,7 @@ def _gethduname(hdulist,hdunames=['SYSTEM_TEMPERATURE']):
             
     return _hduname
 
-def _listobs(fitsfile,hduname=None) :
+def _listobs(fitsfile,cardname=None) :
     """
     read fits file hdus, produce a CASA listobs() output
 
@@ -35,7 +35,7 @@ def _listobs(fitsfile,hduname=None) :
     :fitsfile: (str)
         - give path for the right fitsfile eg .uvfits, .fits, .idifits
     
-    :hduname: (str)
+    :cardname: (str)
         - give name of the HDUList hdus separeted by comma
     
     Return:
@@ -58,15 +58,19 @@ def _listobs(fitsfile,hduname=None) :
                 dateobs=c.header['DATE-OBS']
             except:
                 pass
-            if c.name in hduname:
+            if c.name in cardname:
                 hdudata=c.data
                 print(Table(hdudata))
             hdunames.append(c.name)
-        if "SCAN" in hduname:
-            
-                uvtime=hdul['UV_DATA'].data.TIME
-                uvsid_colname='SOURCE'                       # SOURCE_ID name not consistent b/w VLBA nad EVN column of UV_DATA
-                uvsidd=hdul['UV_DATA'].data
+        if "SCAN" in cardname:
+                # cardname="PRIMARY"
+                if "UV_DATA" in hdunames: 
+                    cardname="UV_DATA"
+                else:
+                    raise ValueError("This fits file is not supported for this operation: Missing 'UV_DATA' extension")
+                uvtime=hdul[cardname].data.TIME
+                uvsid_colname='SOURCE'                       # SOURCE_ID name not consistent b/w VLBA and EVN column ofcardname                
+                uvsidd=hdul[cardname].data
                 sourced=hdul['SOURCE'].data
                 uvsid_colname=_getcolname(uvsidd,['SOURCE'])
                 # for cname in uvsidd.columns:
@@ -77,7 +81,7 @@ def _listobs(fitsfile,hduname=None) :
                 scanmjd=Time(uvtime, format='mjd', scale='utc')
                 zerotime=Time(dateobs, format='isot',scale='utc')
                 scantime=zerotime.mjd+scanmjd
-                integrationTime=Counter(hdul['UV_DATA'].data.INTTIM).keys()
+                integrationTime=Counter(hdul[cardname].data.INTTIM).keys()
                 
                 sourcename={}
                 ind_inst=np.where((np.diff(uvsid)!=0)==True)
@@ -98,8 +102,6 @@ def _listobs(fitsfile,hduname=None) :
                     r_e=j+1
                     if j==-1:r_e=totalrows
                     ind_inst_cut=range(r_s,r_e)
-                    
-
                     nrows=np.size(ind_inst_cut)
                     time_inst=scantime[ind_inst_cut]
 
@@ -108,8 +110,6 @@ def _listobs(fitsfile,hduname=None) :
                         print(timeobserved.ljust(50," "), sourcename[scanlist[i]].ljust(15," "), str(scanlist[i]).ljust(4," "), nrows,)
 
                     r_s=j+1
-            # except Exception as e:
-            #     print(e)
     
     print(f"Possible hdus can be: {str(hdunames)}")
 
