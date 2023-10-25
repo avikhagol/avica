@@ -1,5 +1,5 @@
 from pathlib import Path
-import os
+import os, ast
 from os import path, makedirs
 from pyvirtualdisplay import Display
 # from casatools import logsink
@@ -7,6 +7,24 @@ from pyvirtualdisplay import Display
 # vascolog=logsink('vasco.log')
 # vascolog.setlogfile='vasco.log'
 # vascolog.setglobal(True)
+
+def get_functionnames(modulefile=None,module=None, match=''):
+    """
+    return a list of function names from a given file or ast module object.
+    import glob
+        from vasco.helpers import get_functionnames
+        for fl in glob.glob(__path__[0]+'/fits/*py'):
+            print(get_functionnames(modulefile=fl,))
+    """
+    if modulefile is not None: 
+        with open(modulefile) as f:
+            module=ast.parse(f.read())
+                
+    functiondefs=[]
+    for elem in module.body:
+        if isinstance(elem,ast.FunctionDef): 
+            if match in elem.name:functiondefs.append(elem.name)
+    return functiondefs
 
 
 def genplotms(vis, suffix='',kind='plot',w=None,h=None,z=1.5, **kwargs):
