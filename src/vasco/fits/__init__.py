@@ -163,7 +163,6 @@ def check_phaseref(scanlist_arr):
         """
         check scan list and see if phase referencing is used.
         """
-    
         sdict={'phref':{}, 'other':{}}
         isTrue=False
         sources=np.unique(scanlist_arr)    
@@ -235,8 +234,8 @@ def find_refant(fitsfile):
             s_ind=np.where(antenna==ant)                                                            # Select each antenna for all sources
             if len(s_ind[0]):
                 anlist.append(antenna_dict[ant])    
-                tsys1_std.append(np.median((np.std(tsys1[s_ind], axis=0))))                         # Calculates standard deviation for each IFs and then takes median
-                if tsys2 is not None: tsys2_std.append(np.median((np.std(tsys2[s_ind], axis=0))))
+                tsys1_std.append(np.nanmedian((np.nanstd(tsys1[s_ind], axis=0))))                         # Calculates standard deviation for each ants and then takes median
+                if tsys2 is not None: tsys2_std.append(np.nanmedian((np.nanstd(tsys2[s_ind], axis=0))))
                 ancountlist.append(ancount[ant])
             else:
                 missing_antennav.append(antenna_dict[ant])
@@ -247,12 +246,12 @@ def find_refant(fitsfile):
             # xyz - np.min(xyz, axis=0)
             for i,v in enumerate(xyz):
                 d.append(distance.euclidean(refcoord,v)*.001)                                       # Distance of all from one refant
-            med_d.append((antenna_dict[ant],np.median(d)))                                          # Median distance of all ants for one refant
+            med_d.append((antenna_dict[ant],np.nanmedian(d)))                                          # Median distance of all ants for one refant
     #     med_dlist=list(zip(*med_d))[1]
         ant_with_d=dict(med_d)
                 
         if len(tsys2_std) == len(tsys1_std):
-            tsys_std=np.median([tsys1_std,tsys2_std],axis=0)                                        # Calculate median if TSYS1 and TSYS2 both are present
+            tsys_std=np.nanmedian([tsys1_std,tsys2_std],axis=0)                                        # Calculate median if TSYS1 and TSYS2 both are present
 
         else:
             tsys_std=tsys1_std
