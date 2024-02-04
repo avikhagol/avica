@@ -195,7 +195,7 @@ def identify_targets(ispref,sdict,sourcename):
         
         return targets
 
-def find_refant(fitsfile):
+def find_refant(fitsfile, verbose=True, return_onmissing=False):
     """takes fitsfile as input and returns the reference antenna which is good geometrically, observation length, and by SEFD
     prints table with columns [ANNAME,STD_TSYS,nRows,Distance] sorted by best reference antenna; returns a dictionary of the same table.
 
@@ -212,10 +212,12 @@ def find_refant(fitsfile):
     nRows       {antenna_id : no_of_datapoints}
     Distance    {antenna_id : median_distance}
 
+    TODO: prompt on nan values when present
+
     """
     f=fits.open(fitsfile)
     hduname=_gethduname(f, ['SYSTEM_TEMPERATURE'])
-    # hduname='SYSTEM_TEMPERATURE'
+    
     if hduname:
         from scipy.spatial import distance
         tsys1=f[hduname].data.TSYS_1                                                                # This axis should be always present
@@ -243,11 +245,11 @@ def find_refant(fitsfile):
             
             d=[]
             refcoord=xyz[np.where(anname_geom==antenna_dict[ant])][0]
-            # xyz - np.min(xyz, axis=0)
+            
             for i,v in enumerate(xyz):
                 d.append(distance.euclidean(refcoord,v)*.001)                                       # Distance of all from one refant
             med_d.append((antenna_dict[ant],np.nanmedian(d)))                                          # Median distance of all ants for one refant
-    #     med_dlist=list(zip(*med_d))[1]
+    
         ant_with_d=dict(med_d)
                 
         if len(tsys2_std) == len(tsys1_std):
@@ -269,10 +271,11 @@ def find_refant(fitsfile):
             tp_cut=tp[med_above]
             if len(tp_cut)>=4:break
         tp_res=tp_cut.sort_values(by=['STD_TSYS', 'Distance'], ascending=[True, True])
-        print(tp_res.to_string(index=False))
+        if verbose: print(tp_res.to_string(index=False))
         return tp_res.to_dict()
     else:
-        print('missing TSYS info!\n')
+        if verbose: print('missing TSYS info!\n')
+        if return_onmissing: return False
     
 
 class Targets:

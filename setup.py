@@ -26,7 +26,7 @@ setup(
     install_requires=["astropy", "numpy", "ipython", "pyvirtualdisplay", "pandas", "scipy",
                     #  "casaplotms", # start depreciation
                     #   "casatools",
-                      "protobuf==3.20",
+                      "protobuf==3.19.6",
                       ],
     extras_require = {
         "dev" : ["pytest>=3.7",
