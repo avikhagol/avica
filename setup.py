@@ -5,7 +5,7 @@ with open("README.md", "r") as rdme:
 
 setup(
     name = 'vasco',
-    version = '0.0.1',
+    version = '0.0.2',
     url='https://gitlab.ia.forth.gr/smile/vasco/',
     author='Avinash Kumar',
     author_email='avialxee@gmail.com',

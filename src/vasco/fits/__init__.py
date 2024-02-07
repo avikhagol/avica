@@ -5,7 +5,7 @@ from astropy.table import Table, QTable
 import numpy as np
 from collections import Counter
 import numpy as np
-
+import itertools
 
 def _getcolname(data,colnames=['SOURCE']):
     _colname=None
@@ -177,42 +177,145 @@ def check_phaseref(scanlist_arr):
                 sdict['other'][source]=source_seq_ind
         return isTrue,sdict
 
-def identify_targets(ispref,sdict,sourcename):
-        targets={}
-        # scanlist_arr,ind_sl=scanlist(hdul)
-        # ispref,sdict=check_phaseref(scanlist_arr)
-        # sourcename=sources(hdul)
-        if ispref:
-            st,pt,ct=_return_target(sdict)
-            # targets['phref']=[sourcename[s] for s in list(sdict['phref'])]
-            targets['science']=[sourcename[s] for s in st]
-            targets['phase']=[sourcename[p] for p in pt]
-            targets['other']=[sourcename[c] for c in ct]
-            
-        else:
-            print('not phase referencing')
-            targets['science']=[sourcename[s] for s in list(sdict['other'].keys())]
+
+# def get_phref(s, sl, dic):
+#     phref_byidx = {}
+
+#     for sid in s:
+#         ps = dic['phref'][sid][0]
+#         for idx in ps[1:-1]:
+#             if sl[idx-1] == sl[idx+1]:
+#                 phref_byidx[idx] = (sid, sl[idx-1])
+
+#     return phref_byidx
+
+# def seq_s_fromphrefidx(phref_byidx):
+#     seq_s = dict(Counter(phref_byidx.values()))
+#     seq_snew = {}
+
+#     for ss, countt in seq_s.items():
+#         if (ss[1], ss[0]) in seq_s:
+#             seq_snew[(ss[1], ss[0])] = countt + int(seq_s[(ss[1], ss[0])])
+
+#     return seq_snew
+
+# def find_source_seq(t):
+#     bolean, dic = t.check_phaseref
+#     phref_byidx={}
+#     s = set(dic['phref'].keys())
+#     print(s) # debugging
+#     phref_byidx = get_phref(s, sl, dic)
+    
+#     seq_s = seq_s_fromphrefidx(phref_byidx)
+    
+#     return seq_s, phref_byidx
+
+def find_first_occurrence(arr, sequence):
+    # Convert sequence to set for faster membership testing
+    sequence_set = set(sequence)
+    sequence_length = len(sequence_set)
+
+    # Find occurrences of the sequence
+    occurrences = [i for i in range(len(arr) - sequence_length + 1) if set(arr[i:i+sequence_length]) == sequence_set]
+
+    if len(occurrences)>1:
+        # Find the index of the first occurrence
+        first_occurrence_index = occurrences[0]
+        return first_occurrence_index
+    else:
+        # Return None if no occurrence is found
+        return None
+    
+def identify_sources(fitsfile):
+    t = Targets(fitsfile)
+    source_list = t.scanlist_arr
+    s = {
+        'calibrators_instrphase' : '',
+        'calibrators_bandpass' : '',
+        'calibrators_rldly' : None,
+        'calibrators_dterms': None,
+        'calibrators_phaseref' : None,
+        'science_target' : None
+    }
+    
+    science_target=[]
+    calibrators_phaseref=[]
+    _, dic = t.check_phaseref
+#     seq_s,idx_s=find_source_seq(t)
+    sd = set(dic['phref'].keys())
+    sourcenames = sources(t.hdul)
+    seq_s = itertools.combinations(sd,2)
+    for seq in seq_s:
+        idx_f_o_cl= find_first_occurrence(source_list,seq)
         
-        return targets
+        if idx_f_o_cl is not None: 
+            sid = source_list[idx_f_o_cl]
+            st = seq[0] if sid == seq[1] else seq[1]
+            if sid not in science_target:
+                calibrators_phaseref.extend([sid])
+            if st not in calibrators_phaseref:
+                science_target.extend([st])
+#             print(sid,st,s['calibrators_phaseref'])
+    
+    s['calibrators_instrphase'] = [sourcenames[s] for s in list(set(dic['other'].keys()))]
+    s['calibrators_bandpass'] = s['calibrators_instrphase']
+    if len(science_target):
+        s['science_target'] = [sourcenames[s] for s in list(set(science_target))]
+    if len(calibrators_phaseref):
+        s['calibrators_phaseref'] = [sourcenames[s] for s in list(set(calibrators_phaseref))]
+    return s
+
+# def identify_targets(ispref,sdict,sourcename):
+#         """
+        # Depreciated: as dictionary key relative to picard input_template is used.
+#         """
+        
+#         targets={}
+#         # scanlist_arr,ind_sl=scanlist(hdul)
+#         # ispref,sdict=check_phaseref(scanlist_arr)
+#         # sourcename=sources(hdul)
+#         if ispref:
+#             st,pt,ct=_return_target(sdict)
+#             # targets['phref']=[sourcename[s] for s in list(sdict['phref'])]
+#             targets['science']=[sourcename[s] for s in st]
+#             targets['phase']=[sourcename[p] for p in pt]
+#             targets['other']=[sourcename[c] for c in ct]
+            
+#         else:
+#             print('not phase referencing')
+#             targets['science']=[sourcename[s] for s in list(sdict['other'].keys())]
+        
+#         return targets
+
+def identify_refant(fitsfile, n=4, **kwargs):
+    """
+    returns dataframe of first "n" best refants has id as the index
+    TODO: multiply some weights to central antennas.
+    """
+    refants = find_refant(fitsfile, **kwargs)[:n].ANNAME
+    return refants
 
 def find_refant(fitsfile, verbose=True, return_onmissing=False):
-    """takes fitsfile as input and returns the reference antenna which is good geometrically, observation length, and by SEFD
-    prints table with columns [ANNAME,STD_TSYS,nRows,Distance] sorted by best reference antenna; returns a dictionary of the same table.
+    """takes fitsfile as input and returns the reference antenna which is good geometrically, observation length, and by TSYS
+    prints table with columns [ANNAME,STD_TSYS,nRows,Distance,c] sorted by best reference antenna;
 
     Returns:
     -----
 
-    (dict)
-    sorted dictionary in order of best antenna.
+    (pandas dataframe)
+    sorted dataframe in order of best antenna.
 
-    key         {key        : param}
+    if return_onmissing is True, returns False for missing TSYS info.
 
-    ANNAME      {antenna_id : antenna_name}
-    STD_TSYS    {antenna_id : standard_deviation_of_TSYS}
-    nRows       {antenna_id : no_of_datapoints}
-    Distance    {antenna_id : median_distance}
+    columns 
 
-    TODO: prompt on nan values when present
+    ANNAME      : Antenna Name
+    STD_TSYS    : Standard Deviation in the TSYS value
+    nRows       : number of rows for each station/anenna
+    Distance    : Centroid distance for each station/antenna
+    c           : confidence value taken as the multiplication of the normalized three values.
+
+    TODO: prompt on nan values when present in TSYS
 
     """
     f=fits.open(fitsfile)
@@ -254,25 +357,34 @@ def find_refant(fitsfile, verbose=True, return_onmissing=False):
                 
         if len(tsys2_std) == len(tsys1_std):
             tsys_std=np.nanmedian([tsys1_std,tsys2_std],axis=0)                                        # Calculate median if TSYS1 and TSYS2 both are present
-
+            
         else:
             tsys_std=tsys1_std
-            
-            
-
+        
         t=QTable([anlist,tsys_std,ancountlist], names=('ANNAME', 'STD_TSYS','nRows'), meta={'name':'ANTENNA TSYS Variance'})
-        t['Distance']=[ant_with_d[ant] for ant in t['ANNAME']]
+        t['Distance']  = [ant_with_d[ant] for ant in t['ANNAME']]
+        
         for ant in missing_antennav: t.add_row([ant, float('nan'), 0,ant_with_d[ant]])
+        
         tp=t.to_pandas()
         tp.index += 1
-        med_tp=tp['nRows'].median()
-        for sigma_cut in [1.5,1.4,1.3,1.2,1.1,1.0,0.9]:
-            med_above=tp['nRows']>=med_tp*sigma_cut
-            tp_cut=tp[med_above]
-            if len(tp_cut)>=4:break
-        tp_res=tp_cut.sort_values(by=['STD_TSYS', 'Distance'], ascending=[True, True])
+    
+        tp_res=tp
+        max_nrows= tp_res['nRows'].max()
+        max_distance = tp_res['Distance'].max()
+        max_std_tsys = tp_res['STD_TSYS'].median()
+
+        tsys=tp_res['STD_TSYS']/max_std_tsys
+        nrows= tp_res['nRows']/max_nrows
+        distance = tp_res['Distance']/max_distance
+
+        res=tsys*nrows*distance
+        res=1-(res/res.max())
+        
+        tp_res.insert(4,'c', res)
+        tp_res = tp_res.sort_values(by='c', ascending=[False])
         if verbose: print(tp_res.to_string(index=False))
-        return tp_res.to_dict()
+        return tp_res
     else:
         if verbose: print('missing TSYS info!\n')
         if return_onmissing: return False
@@ -288,4 +400,5 @@ class Targets:
         self.sourcename=sources(self.hdul)
         
         self.check_phaseref=check_phaseref(self.scanlist_arr)
-        self.identify_target=identify_targets(self.check_phaseref[0],self.check_phaseref[1],self.sourcename)
+        # self.identify_sources = identify_sources()
+        # self.identify_target=identify_targets(self.check_phaseref[0],self.check_phaseref[1],self.sourcename)

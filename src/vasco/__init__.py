@@ -69,7 +69,7 @@ def cli():
     if not status_check: 
         raise RuntimeError(desc)
     else:
-        from vasco.fits import _listobs, Targets as t, find_refant
+        from vasco.fits import _listobs, Targets as t, find_refant, identify_sources
         
         if args.list_observation:
             cardname=args.list_observation.split(',')
@@ -78,19 +78,20 @@ def cli():
                 _listobs(fitsfile,cardname)
         if args.identify_targets:
             
-            targets,sourcesl={},[]
+            # targets,sourcesl={},[]
             for fitsfile in input_file:
                 print(Path(fitsfile).name)
-                Targ=t(fitsfile)
-                targ=Targ.identify_target
-                for k,v in targ.items(): 
-                    sourcesl.extend(v)
-                    if k not in list(targets.keys()): targets[k]=v
-                    elif v and (set(v) & set(sourcesl)): 
-                        targets[k].extend(v)
-                        targets[k]=list(set(targets[k]))
+                sources = identify_sources(fitsfile)
+                # Targ=t(fitsfile)
+                # targ=Targ.identify_target
+                # for k,v in sources.items(): 
+                #     sourcesl.extend(v)
+                #     if k not in list(targets.keys()): targets[k]=v
+                #     elif v and (set(v) & set(sourcesl)): 
+                #         targets[k].extend(v)
+                #         targets[k]=list(set(targets[k]))
 
-            print(targets)
+                print(sources)
         if args.find_refant:
             for fitsfile in input_file:
                 print(Path(fitsfile).name)
