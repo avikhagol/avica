@@ -6,6 +6,7 @@ import numpy as np
 from collections import Counter
 import numpy as np
 import itertools
+from pathlib import Path
 
 def _getcolname(data,colnames=['SOURCE']):
     _colname=None
@@ -13,17 +14,17 @@ def _getcolname(data,colnames=['SOURCE']):
         for colname in colnames:
             if colname in str(cname.name).upper():
                 _colname=str(cname.name)
-            
     return _colname
 
 def _gethduname(hdulist,hdunames=['SYSTEM_TEMPERATURE']):
     _hduname=None
-    for hdu in hdulist:
+    hduids = []
+    for lid,hdu in enumerate(hdulist):
         for hduname in hdunames:
             if str(hduname).upper() in str(hdu.name).upper():
                 _hduname=str(hdu.name)
-            
-    return _hduname
+                hduids.append(lid)
+    return _hduname, hduids
 
 def _listobs(fitsfile,cardname=None) :
     """
@@ -256,9 +257,10 @@ def identify_sources(fitsfile):
             if st not in calibrators_phaseref:
                 science_target.extend([st])
 #             print(sid,st,s['calibrators_phaseref'])
-    
-    s['calibrators_instrphase'] = [sourcenames[s] for s in list(set(dic['other'].keys()))]
-    s['calibrators_bandpass'] = s['calibrators_instrphase']
+    phrefs = list(set(dic['other'].keys()))
+    if len(phrefs):
+        s['calibrators_instrphase'] = [sourcenames[s] for s in phrefs]
+        s['calibrators_bandpass'] = s['calibrators_instrphase']
     if len(science_target):
         s['science_target'] = [sourcenames[s] for s in list(set(science_target))]
     if len(calibrators_phaseref):
@@ -319,7 +321,7 @@ def find_refant(fitsfile, verbose=True, return_onmissing=False):
 
     """
     f=fits.open(fitsfile)
-    hduname=_gethduname(f, ['SYSTEM_TEMPERATURE'])
+    hduname,lids=_gethduname(f, ['SYSTEM_TEMPERATURE'])
     
     if hduname:
         from scipy.spatial import distance
@@ -388,7 +390,34 @@ def find_refant(fitsfile, verbose=True, return_onmissing=False):
     else:
         if verbose: print('missing TSYS info!\n')
         if return_onmissing: return False
-    
+
+def split(hdul, sids, outfits):
+    """
+    Takes hdul and splits file to 'outfits' with only 'sids' present.
+    """
+    if not Path(outfits).exists():
+        hduname, lids = _gethduname(hdul,['UV_DATA'])
+        hdul_new = hdul
+        for lid in lids:
+            idx = np.isin(hdul_new[lid].data.SOURCE, sids)
+            # uvd = hdul_new[15].data.SOURCE[idx]
+            uvd = hdul_new[lid].data[idx]
+            hdr = hdul_new[lid].header
+            colD= hdul_new[lid].columns
+
+            bT  = fits.BinTableHDU.from_columns(colD)
+            bT.name = hduname
+            bT.data = uvd
+            bT.header = hdr
+            hdul_new.insert(lid, bT)
+            del hdul_new[lid+1]
+
+        hdul_new.filename = outfits  
+        hdul_new.writeto(str(outfits))
+        return hdul_new.filename
+    else:
+        print('File Exists!')
+        return False
 
 class Targets:
     def __init__(self,fitsfile) -> None:

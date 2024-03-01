@@ -27,6 +27,11 @@ def get_functionnames(modulefile=None,module=None, match=''):
     return functiondefs
 
 
+def J2000_toB1920(s):
+    from astropy.coordinates import SkyCoord
+    c = SkyCoord.from_name(s, frame='fk5')
+    print(c)
+
 def genplotms(vis, suffix='',kind='plot',w=None,h=None,z=1.5, **kwargs):
     """"
     This helper script can be used with jupyter notebook to create plots using plotms
