@@ -302,12 +302,14 @@ def identify_sources(fitsfile):
         
 #         return targets
 
-def identify_refant(fitsfile, n=4, **kwargs):
+def identify_refant(fitsfile, n=4, refants=[], **kwargs):
     """
     returns dataframe of first "n" best refants has id as the index
-    TODO: multiply some weights to central antennas.
+    TODO: multiply some weights to central antennas. Is necessary?
     """
-    refants = find_refant(fitsfile, **kwargs)[:n].ANNAME
+    refant_found = find_refant(fitsfile)
+    if len(refants): refants =refant_found[refant_found['ANNAME'].isin(refants)][:n].ANNAME
+    else: refants = refant_found[:n].ANNAME
     return refants
 
 def find_refant(fitsfile, verbose=True, return_onmissing=False):
