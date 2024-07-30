@@ -147,15 +147,60 @@ def df_fromtxt(filename):
     df_rfc = df(dic['vals'], columns=list(dic['fields'].keys()))
     return df_rfc
 
-def search_source(sources, filename):
+def search_source(sources, filename, concat, j2colname='J2000 name', ivscolname='IVS name'):
+    """
+    
+    """
+    
     df_rfc = df_fromtxt(filename)
-    return df_rfc[df_rfc.isin(sources).any(axis=1)]
-
-def search_sources(sources, filename):
-    from pandas import concat
-    df_rfc = df_fromtxt(filename)
-    nsources = [source[:9] for source in sources]
-    jsources = [f'J{source}' for source in nsources]
-    res = concat([df_rfc[df_rfc.isin(nsources).any(axis=1)], df_rfc[df_rfc.isin(jsources).any(axis=1)]])
+    for txt_count in [10,9]:          
+        nsources = [source[:txt_count] for source in sources]
+    jsources = []
+    for source in nsources:
+        
+        if source[0]!='J': 
+            jsources.extend([f'J{source}'])
+            
+        else: 
+            jsources.extend([source])
+            nsources.remove(source)
+            nsources.extend([source[1:]])
+    res = concat([df_rfc.loc[df_rfc[ivscolname].str.startswith(tuple(nsources))], df_rfc.loc[df_rfc[j2colname].str.startswith(tuple(jsources))]])
     return res
 
+def search_sources(sources, filename, j2colname='J2000 name', ivscolname='IVS name'):
+    """
+    takes input sources list and returns a dataframe with search result in the colnames specified.
+    
+    :sources:       (list)
+                    list of sources to search in the calibrator list
+
+    :filename:      (str)
+                    path of the calibrator list (in ascii) text file.
+    
+    :j2colname:     (str)
+                    name of the J2000 column name to check the J2000 name of the sources
+    
+    :IVS name:      (str)
+                    name of the IVS column name to check for the corrosponding sources.
+
+    """
+    from pandas import concat
+
+    res = search_source([sources[0]], filename=filename, concat=concat, j2colname=j2colname, ivscolname=ivscolname)
+    if len(sources)>1:
+        for source in sources[1:]:
+            res = concat([res, search_source([source], filename=filename, concat=concat)], axis=0)
+    return res
+
+def latest_file(path: Path, pattern: str = "*"):
+    """
+    to get the last file that was generated, this can be useful for getting any new logfiles.
+    """
+    files = path.glob(pattern)
+    lastf = Path('')
+    
+    try:
+        lastf = max(files, key=lambda x: x.stat().st_ctime)
+    finally:
+        return lastf

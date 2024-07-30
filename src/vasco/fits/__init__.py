@@ -7,10 +7,11 @@ from collections import Counter
 import numpy as np
 import itertools
 from pathlib import Path
-from pandas import DataFrame as df
+from pandas import DataFrame as df, set_option
 import warnings
 warnings.filterwarnings(action='ignore', message='Mean of empty slice')
 
+set_option('display.max_colwidth', None)
 def _getcolname(data,colnames=['SOURCE']):
     _colname=None
     for cname in data.columns:
@@ -114,6 +115,7 @@ def _listobs(fitsfile,cardname=None) :
                         print(timeobserved.ljust(50," "), sourcename[scanlist[i]].ljust(15," "), str(scanlist[i]).ljust(4," "), nrows,)
 
                     r_s=j+1
+
     
     print(f"Possible hdus can be: {str(hdunames)}")
 
@@ -148,6 +150,25 @@ def sources(hdul):
     return sourcename
 
 
+# def scanlist(hdul):
+#     """
+#     return array of scanlist and index of the scan in the sequence of data from UV_DATA column
+#     """
+#     hduname, lids   = _gethduname(hdul,['UV_DATA'])
+#     scanlist_arr    = np.array([])
+#     ind_insts       = []
+#     for lid in lids:
+#         uv_data=hdul[lid].data
+        
+#         uvsid_colname=_getcolname(uv_data,['SOURCE'])
+#         uvsid=uv_data[uvsid_colname]
+#         ind_inst    =   np.where((np.diff(uvsid)!=0)==True)
+#         if lid==lids[-1]:
+#             ind_inst    =   np.append(ind_inst,-1)
+#         ind_insts   =   np.append(ind_insts, ind_inst)
+#         scanlist_arr=   np.append(scanlist_arr,uvsid[ind_inst])
+#     return scanlist_arr, ind_insts
+
 def scanlist(hdul):
     """
     return array of scanlist and index of the scan in the sequence of data from UV_DATA column
@@ -161,6 +182,7 @@ def scanlist(hdul):
     ind_inst=np.append(ind_inst,-1)
     scanlist_arr=np.array(uvsid[ind_inst])
     return scanlist_arr, ind_inst
+
 
 def __sel_ind(data):
     ind=np.where((np.diff(data)!=0)==True)
@@ -196,7 +218,7 @@ def check_phaseref(scanlist_arr):
             if len(phaseref_ind)>1:
                 isTrue=True
                 sdict['phref'][source]=source_seq_ind
-                # sdict['phref']['nbr']=
+                
             else:
                 sdict['other'][source]=source_seq_ind
         return isTrue,sdict
@@ -281,17 +303,18 @@ def identify_sources(fitsfile):
     isphref, dic            =   t.check_phaseref
     sd                      =   set(dic['phref'].keys())
     sourcenames             =   sources(t.hdul)
-    seq_s                   =   itertools.combinations(sd,2)
-    for seq in seq_s:
-        idx_f_o_cl          =   find_first_occurrence(source_list,seq)
-        
-        if idx_f_o_cl is not None: 
-            sid = source_list[idx_f_o_cl]
-            st = seq[0] if sid == seq[1] else seq[1]
-            if sid not in science_target:
-                calibrators_phaseref.extend([sid])
-            if st not in calibrators_phaseref:
-                science_target.extend([st])
+    seq_s                   =   itertools.combinations(sd,2) # TODO: when len(nsources)==3 and len (phref list_source_id)==1: make pairs with rest of ids
+    if isphref:
+        for seq in seq_s:
+            idx_f_o_cl          =   find_first_occurrence(source_list,seq, 0)
+            
+            if idx_f_o_cl is not None: 
+                sid = source_list[idx_f_o_cl]
+                st = seq[0] if sid == seq[1] else seq[1]
+                if sid not in science_target:
+                    calibrators_phaseref.extend([sid])
+                if st not in calibrators_phaseref:
+                    science_target.extend([st])
     phrefs = list(set(dic['other'].keys()))
     if len(phrefs):
         s['calibrators_instrphase']     =   [sourcenames[s] for s in phrefs]
@@ -314,6 +337,7 @@ def list_fromdict(d):
 def check_band(hdul):
     """
     return band closest to S,C,X,U,K of observation
+    Gregorian Bands: Q=40-50GHz, K=18-26.5GHz, U=12.4-15.4GHz, X=8.2-10.0GHz, C=3.95-5.85GHz, S=1.73-2.6GHz, L=1.15-1.73GHz
     """   
     
     freq = hdul['FREQUENCY'].header['REF_FREQ']/1.0E+09
@@ -358,24 +382,25 @@ def id_flux_for_sources(hdul, sources, rfcfile, dataframe=True):
     if dataframe:return df.from_dict(dic, orient='index', columns=['flux'])
     else: return dic
     
-def find_phaseref(target_source, t, source_fluxes, sep_limit=2):
+def find_phaseref(target_source, t, source_fluxes, flux_thres=0.150, sep_limit=2):
     """
     finds phaseref source in the sep_limit
     """
     phref_pair_res     =   t.find_phaseref_pairs(target_source, sep_limit)
     phref_id           =   phref_pair_res[:2].index
-    phref_source,sel_id=   [None]*2
     
-    for p_id in phref_id:
-        if p_id in source_fluxes.index:
-            flux = source_fluxes['flux'][p_id]
-            if flux > 0.150:
-                sel_pid = p_id
+    phref_source,sel_pid=   [None]*2
+    if not phref_id.empty:
+        for p_id in phref_id:
+            if p_id in source_fluxes.index:
+                flux = source_fluxes['flux'][p_id]
+                if flux > flux_thres:
+                    sel_pid = p_id
     if sel_pid: 
         phref_source = phref_pair_res['source'][sel_pid]
-        return phref_source, sel_pid
+    return phref_source, sel_pid
 
-def find_phref_for_target_islowsnr(fitsfile, target_source, rfcfile, flux_thres=150, sep_limit=2):
+def find_phref_for_target_islowsnr(t, target_source, rfcfile, source_fluxes=None, flux_thres=150, sep_limit=2):
     """
     if scanlist is non-phaseref and target is low snr or flux missing for target 
     treat as phref. 
@@ -387,9 +412,8 @@ def find_phref_for_target_islowsnr(fitsfile, target_source, rfcfile, flux_thres=
     phaseref_source_name, phaseref_source_id
     """
     phref_source, p_id = [None]*2
-    t = Targets(fitsfile)
     isphref, dic_phref     =   t.check_phaseref
-    source_fluxes = id_flux_for_sources(t.hdul, t.sources_list, rfcfile)
+    if source_fluxes is None: source_fluxes = id_flux_for_sources(t.hdul, t.sources_list, rfcfile)
     target_id = get_source_id(t.hdul, target_source)[0] 
     flux_target = 0
     if target_id in source_fluxes.index: # also when low snr
@@ -422,7 +446,7 @@ def find_calibrators(hdul, calib_ids=[]):
     for c in calids:
         std_tsys_v = np.nanstd(np.nanmean(tsys_rec[tsys_rec[sid_colname]==c][str_ts1], axis=0))     # takes mean of all the IFs and std of all the values for the possible calibrator
         tsys1_std.append(std_tsys_v) 
-        tsys2_std.append(np.nanstd(np.nanmean(tsys_rec[tsys_rec[sid_colname]==c][str_ts2], axis=0)) if tsys2 is None else std_tsys_v ) 
+        tsys2_std.append(np.nanstd(np.nanmean(tsys_rec[tsys_rec[sid_colname]==c][str_ts2], axis=0)) if tsys2 is not None else std_tsys_v ) 
         
     tsys_std    =   np.nanmean([tsys1_std, tsys2_std], axis=0)                                      # mean for non-tsys2 case is still valid because std_tsys1 = std_tsys2 in that case
     tsys_df     =   df(tsys_std, index=calids, columns=['std_tsys'])
@@ -454,51 +478,59 @@ def identify_calibrators(hdul, flux_df, calib_ids=[]):
     calib         =   {}
     
     
-    _calib_df     =  find_calibrators(hdul, calib_ids) if flux_df is None else identify_calibrators_from_flux(hdul, flux_df, calib_ids=[])
+    _calib_df     =  find_calibrators(hdul, calib_ids) if flux_df is None else identify_calibrators_from_flux(hdul, flux_df, calib_ids)
     
     calib['calibrators_instrphase'] = calib['calibrators_bandpass'] = list(_calib_df['sources'][:2])
     return calib
 
 def identify_sources_fromtarget(fitsfile, target_source, rfcfile=None, verbose=False, flux_df=None):
+    """
+    TODO: make it work for non rfcfile cases as well.
+    """
     t = Targets(fitsfile)
     s = identify_sources(fitsfile)
     
     isphref, dic = t.check_phaseref
     sources_dict = sources(t.hdul)
-    calib_candidates = set() # TODO: check efficiency
-    calib_candidates.update(s['calibrators_instrphase'])
     
     allsources=set()
-    s.values()
+    
     for ss in s.values():
         if ss:
             allsources.update(ss)
-            
+    calib_candidates = allsources.copy()
+    calib_candidates.remove(target_source)
+    
+    
     if len(allsources)>=3:
+        s['science_target'] = [target_source]
+        if (flux_df is None): 
+            # HACK:        to get None values back from id_flux_for_sources we use rfcfile=True
+            flux_df = id_flux_for_sources(t.hdul, t.sources_list, rfcfile) if rfcfile else id_flux_for_sources(t.hdul, t.sources_list, True)
+        
+        
         if isphref: # check whether science target is a phaseref calibrator
             if verbose: print('is phref')
-            if target_source in s['calibrators_phaseref']:
+            
+            ps, pid = find_phref_for_target_islowsnr(t, target_source, rfcfile, flux_df, sep_limit=18)
+            
+            if (target_source in s['calibrators_phaseref']) or (target_source in s['calibrators_instrphase']):
                 if verbose: print('target is calib')
-                if rfcfile:
-                    ps, pid = find_phref_for_target_islowsnr(fitsfile, target_source, rfcfile, sep_limit=10)
-                    if not ps: 
-                        if verbose : print('target is calib but ps not found')
-                        isphref = False
-                        s['calibrators_phaseref'] = None
+                if (target_source in s['calibrators_phaseref']): 
+                    if verbose: print('target is phref calib')
+            if not ps: 
+                if verbose : print('target is in phref but ps not found')
+                isphref = False
+                s['calibrators_phaseref'] = None
             else:
-                calib_candidates.update(s['calibrators_phaseref'])
+                s['calibrators_phaseref'] = ps
 
-        if not isphref:            
-            s['science_target'] = [target_source]
-            if target_source in s['calibrators_instrphase']:
-                s['calibrators_bandpass'].remove(target_source)
-                s['calibrators_instrphase'].remove(target_source)
-    if flux_df is None: 
-        flux_df = id_flux_for_sources(t.hdul, t.sources_list, rfcfile) if rfcfile else id_flux_for_sources(t.hdul, t.sources_list, True)
+    if target_source in s['calibrators_instrphase']:    s['calibrators_instrphase'].remove(target_source)
+    
     id_calib_candidates = get_sources_id(sources_dict, calib_candidates)
     calib = identify_calibrators(t.hdul, flux_df ,id_calib_candidates)
-        
     s.update(calib)
+    
     return s
 
 # def identify_targets(ispref,sdict,sourcename):
@@ -528,9 +560,9 @@ def identify_refant(fitsfile, n=4, refants=[], **kwargs):
     returns dataframe of first "n" best refants has id as the index
     TODO: multiply some weights to central antennas. Is necessary?
     """
-    refant_found = find_refant(fitsfile)
-    if len(refants): refants =refant_found[refant_found['ANNAME'].isin(refants)][:n].ANNAME
-    else: refants = refant_found[:n].ANNAME
+    refant_found, _ = find_refant(fitsfile, **kwargs)
+    if len(refants): refants =refant_found[refant_found['ANNAME'].isin(refants)][:n]#.ANNAME
+    else: refants = refant_found[:n]#.ANNAME
     return refants
 
 def find_refant(fitsfile, verbose=True, return_onmissing=False, tsys_wt=0.99, nrows_wt=0.95, distance_wt=0.80):
@@ -620,11 +652,12 @@ def find_refant(fitsfile, verbose=True, return_onmissing=False, tsys_wt=0.99, nr
         
         tp_res.insert(4,'c', res)
         tp_res = tp_res.sort_values(by='c', ascending=[False])
-        if verbose: print(tp_res.to_string(index=False))
-        return tp_res
+        print_out       =   tp_res.to_string(index=False)
+        if verbose: print(print_out)
+        return tp_res, print_out
     else:
         if verbose: print('missing TSYS info!\n')
-        if return_onmissing: return False
+        if return_onmissing: return False, False
 
 def split(hdul, sids: list, outfits : str):
     """
@@ -653,6 +686,31 @@ def split(hdul, sids: list, outfits : str):
     else:
         print('File Exists!')
         return False
+
+def split_up(fitsfile:str, sids: list, outfits:str):
+    """
+    Takes fitsfile and splits file to 'outfits' with only 'sids' present.
+    """
+    import shutil
+    shutil.copy(fitsfile, outfits)
+    with fits.open(outfits, mode='update') as hdul_new:
+        hduname, lids = _gethduname(hdul_new,['UV_DATA'])
+        for lid in lids:
+            idx = np.isin(hdul_new[lid].data.SOURCE, sids)
+            # uvd = hdul_new[15].data.SOURCE[idx]
+            uvd = hdul_new[lid].data[idx]
+            hdr = hdul_new[lid].header
+            colD= hdul_new[lid].columns
+
+            bT  = fits.BinTableHDU.from_columns(colD)
+            bT.name = hduname
+            bT.data = uvd
+            bT.header = hdr
+            hdul_new.insert(lid, bT)
+            del hdul_new[lid+1]
+
+        hdul_new.filename = outfits  
+        return hdul_new.filename
 
 class Targets:
     from astropy.coordinates import SkyCoord as SC
@@ -726,6 +784,6 @@ class Targets:
             if id_found is None: id_found = find_first_occurrence(slist, (id_target, id_ps))
             if id_found : closer_scan = 1
             chances[i]              =   (np.round(((1/sep_limit)*p_sep + closer_scan)/2, 3))
-        res                         =   self.df(zip(other_sources[idxres].SOURCE, chances), index=list(other_sources[idxres][sid_colname]), columns=['source', 'chances'])
+        res                         =   df(zip(other_sources[idxres].SOURCE, chances), index=list(other_sources[idxres][sid_colname]), columns=['source', 'chances'])
         res                         =   res.sort_values(by=['chances'], ascending=[False])
         return res
