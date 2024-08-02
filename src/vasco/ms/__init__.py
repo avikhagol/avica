@@ -24,6 +24,7 @@ import glob
 from vasco.util import read_inputfile, latest_file
 from vasco.sources import check_band, identify_sources_fromtarget
 from vasco import c
+from vasco.diag import df_baseline_by, pl_diag
 
 from casampi.MPICommandClient import MPICommandClient
 
@@ -745,3 +746,68 @@ def split_ms(vis, outvis, source_list=[], fids=[], mpi=False):
         ret =   mstransform(vis=f'{vis}', outputvis=f'{outvis}', datacolumn='data', field=f'{fids}', createmms=True)
     # res         = MPICLIENT.push_command_request(mstransform_cmd, block=True)
     return ret
+
+# ---------- Diagnostics -----------
+
+
+def sel_by_baseline(vis, **kwargs):
+    
+    tb.open(vis)
+    ij = tb.getcol('ANTENNA1'),tb.getcol('ANTENNA2')
+    baseline_seq = ((ij[0]+1)*256) + (ij[1]+1)
+    allbaselines = np.unique(baseline_seq)
+    tb.done()
+    tb.open(f"{vis}/ANTENNA")
+    annames = tb.getcol('NAME')
+    xyz =list(zip(*tb.getcol('POSITION')))
+    tb.done()
+    
+    
+    return np.isin(baseline_seq, df_baseline_by(allbaselines, annames, xyz, **kwargs).index)
+
+def get_axes(vis):
+    tb.open(vis)
+    
+    time = tb.getcol('TIME')/(3600*24)
+    time = Time(time, format='mjd')
+    data = tb.getcol('DATA')
+    field   = tb.getcol('FIELD_ID')
+    tb.done()
+    amp     = np.sqrt(data.real.T*data.real.T + data.imag.T*data.imag.T)
+    avg_amp = np.nanmean(amp.T, axis=0)[0]
+    avg_phase= np.nanmean(np.rad2deg(np.arctan2(data.imag, data.real)), axis=0)[0]
+    
+    wo_nan  = np.argwhere(~np.isnan(avg_amp)).T[0]
+    
+    field   = field[wo_nan]
+    avg_amp = avg_amp[wo_nan]
+    avg_phase=avg_phase[wo_nan]
+    time = time.mjd[wo_nan]
+    return field, avg_amp, avg_phase, time, wo_nan
+
+def get_fid(vis, target):
+    fid=None
+    
+    msmd = msmetadata()
+    try:
+        msmd.open(vis)
+
+        fid = msmd.fieldsforname(target)[0]
+
+    except Exception as e:
+        print(str(e))
+    finally:
+        msmd.done()                   
+
+    return fid
+
+def pl_diag_ms(vis, target, kind='plot', **kwargs):
+    
+    field, avg_amp, avg_phase, time, wo_nan     =   get_axes(vis)
+    idx_baseline                                =   sel_by_baseline(vis, **kwargs)[wo_nan]
+    fieldid                                     =   get_fid(vis,target)
+    idx_sel                                     =   np.where(field==fieldid)
+    
+    return pl_diag(target=target, amp=avg_amp, phase=avg_phase, time=time, 
+                   idx_baseline=idx_baseline, idx_sel=idx_sel, 
+                   kind='jpg', eps=0.005, min_samples=5)
