@@ -1,16 +1,36 @@
-import glob
+import glob, re
 from collections import defaultdict
 from pathlib import Path
 import json
+import subprocess
 
 def save_metafile(metafile, metad):
     with open(str(metafile), 'w') as mf: json.dump(metad, mf)
+    print("saved", str(metafile))
 
 def read_metafile(metafile):
     with open(metafile, 'r') as sf:
         metad                       =   sf.read()
         meta                        =   json.loads(metad)
     return meta
+
+
+def run_fitsverify(fitsfile):
+   val = None
+   try:
+      # Aim: run fitsverify and capture output for extra byte
+      result = subprocess.run(["fitsverify", fitsfile], capture_output=True, text=True)
+                              
+      output = result.stdout + "\n" + result.stderr
+      match = re.search(r"File has extra byte\(s\) after last HDU at byte (\d+)", output)
+      
+      if match:
+         val = int(match.group(1))  # Return the extracted number
+      
+   except subprocess.CalledProcessError as e:
+         return f"Error running fitsverify: {e}"
+   
+   return val
 
 def read_inputfile(folder,inputfile='config.inp',):
     """

@@ -24,8 +24,8 @@ def check_band(freq, bands=None):
         if not bands:
             bands = {
             'S' : np.array([2.0, 2.6]),
-            'C' : np.array([3.5, 7.9]),
-            'X' : np.array([7.901, 8.8]),
+            'C' : np.array([3.5, 6.4]),
+            'X' : np.array([7.401, 8.8]),
             'U' : np.array([11.8, 15.7]),
             'K' : np.array([20.0, 25.0]),
             'Q' : np.array([40.0, 46.0]),
@@ -109,6 +109,10 @@ def find_phaseref_pairs(c_target, target, c_others, others, scanlist_seq, source
             if id_found is None: id_found = find_first_occurrence(scanlist_seq, (id_target, id_ps))
             if id_found : closer_scan = 1
             chances[i]              =   (np.round(((1/sep_limit)*p_sep + closer_scan)/2, 3))
+        print(others)
+        print(chances)
+        print(other_dict,"\n",list(other_dict.keys()))
+        res                         =   df()
         res                         =   df(zip(others, chances), index=list(other_dict.keys()), columns=['source', 'chances'])
         res                         =   res.sort_values(by=['chances'], ascending=[False])    
         return res
@@ -402,7 +406,7 @@ def identify_sources_fromtarget(scanlist_seq, sourcenames, target_source, other_
     calib_candidates.remove(target_source)
     alls             = list(allsources).copy()
     
-    if len(allsources)>=3:
+    if len(allsources)>=2:
         s['science_target'] = [target_source]
         if (flux_df is None): 
             # HACK:        to get None values back from id_flux_for_sources using caliblist_file=True
@@ -442,7 +446,6 @@ def identify_sources_fromtarget(scanlist_seq, sourcenames, target_source, other_
                     if ps in s['calibrators_instrphase']:
                         s['calibrators_instrphase'].remove(ps)
             if verbose: print(f'target is in phref but {msg}')
-                
         
     if target_source in s['calibrators_instrphase']:    s['calibrators_instrphase'].remove(target_source)
     

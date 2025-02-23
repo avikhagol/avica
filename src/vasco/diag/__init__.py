@@ -27,7 +27,7 @@ def pl_diag(axs_df, eps=0.005, n_cores=15, kind='png', autocorr=False, prefix=''
     }
     
     output=f"{prefix}_vs_time.jpg"
-    pl_scatter(axs_df, kind='jpg', output=output, **dic_pl_scatter)
+    pl_scatter(axs_df, kind=kind, output=output, **dic_pl_scatter)
 
     dic_pl_scatter={
         'x_labels':[ 'uvdist', 'uvdist'],
@@ -38,7 +38,7 @@ def pl_diag(axs_df, eps=0.005, n_cores=15, kind='png', autocorr=False, prefix=''
     }
     
     output=f"{prefix}_vs_uvdist.jpg"
-    pl_scatter(axs_df, kind='jpg', output=output, **dic_pl_scatter)
+    pl_scatter(axs_df, kind=kind, output=output, **dic_pl_scatter)
     dic_pl_scatter={
         'x_labels':['amp'],
         'y_labels':['phase'],
@@ -89,10 +89,12 @@ def pl_diag(axs_df, eps=0.005, n_cores=15, kind='png', autocorr=False, prefix=''
     }
     
     output=f"{prefix}_vs_uvdist_dbscan.jpg"
-    pl_scatter(axs_df_scatter, kind='jpg', output=output, **dic_pl_scatter)
+    pl_scatter(axs_df_scatter, kind=kind, output=output, **dic_pl_scatter)
     
     good_scatter_dic = stat_gooddata(axs_df_scatter, pop_perc=0.8)
-    big_group_scatter = good_scatter_dic[good_scatter_dic['good_labels'][0]]
+    big_group_scatter = good_scatter_dic[good_scatter_dic['good_labels'][0]] if 'good_labels' in good_scatter_dic else np.nan
+    if np.nan == big_group_scatter:
+        print("No good clusters!")
     return big_group_scatter
 
 
@@ -126,9 +128,6 @@ def find_eps(normalised_data):
     save_fig(plt, fig, kind='jpg', output='KneeFind.jpg')
     
     return knee_value
-
-
-
 
 def get_avg_amp_phase(data, weight):
     """
@@ -247,6 +246,8 @@ def stat_gooddata(axs_df_field_scatter, pop_perc=0.8):
                 if 'good_labels' not in good_group:
                     good_group['good_labels']=[]
                 good_group['good_labels'].append(str(group_name))    
+                    # good_group['good_labels']={}
+                # good_group['good_labels'][str(group_name)] = group_percentages[group_name]
                 print(f"Group: {group_name} | {group_percentages[group_name]:.2f}%","\t", group_data[['amp_scatter', 'phase_scatter']].values[0])
             else:
                 print(f"Noise: {group_name} | {group_percentages[group_name]:.2f}%","\t", group_data[['amp_scatter', 'phase_scatter']].values[0])

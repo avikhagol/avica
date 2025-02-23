@@ -711,7 +711,7 @@ def mpi_fringefit(vis, fid, scannos, refant, ff_caltable, gt, spws, antenna=[], 
                     + """)"""
                     )
     res = mpiclient.push_command_request(fringefit_cmd, block=False)
-    print(f'processing {refant} with scans {str(scannos)}')
+    
     return res
 
 def short_fringe_fit_mpi(vis, dic_ant_with_scans, annames, caltable, gt, spws, iter_scan_count=5, mpiclient=MPICLIENT):
@@ -778,15 +778,14 @@ def short_fringe_fit_mpi(vis, dic_ant_with_scans, annames, caltable, gt, spws, i
 # all_selected_scans
 
 
-
-def an_dic(vis):
+def an_dic(vis, target=None):
 
     tsys_anid, tsys_vals  = get_tb_data(f"{vis}/SYSCAL", axs=['ANTENNA_ID', 'TSYS'])
     pos, annames           = get_tb_data(f"{vis}/ANTENNA", axs=['POSITION', 'NAME'])
     xyz = list(zip(*pos.compute()))
     tsys_anid = tsys_anid.compute()
+    # if target is not None: 
     tsys_vals = tsys_vals.compute()
-
     an_dict = {}
 
     ans_seq = []
@@ -807,7 +806,7 @@ def an_dic(vis):
             tsy_an_std = np.nanstd(tsys_val[itsys]) if len(itsys) else float('nan')
             tsys_std.append(tsy_an_std)
             
-        an_dict[anid]['STD_TSYS']= np.nanmean(tsys_std) if not np.isnan(tsys_std) else float('nan')
+        an_dict[anid]['STD_TSYS']= np.nanmean(tsys_std, axis=0) if not all(np.isnan(tsys_std)) else float('nan')
     return an_dict
 
 
@@ -856,7 +855,7 @@ def get_tbd(tbl, cols=[]):
     tb.close()
     return res[0] if len(res)==1 else res
 
-def select_df_refant_sources(tbls, an_dict, autocorr=False, minsnr=3.0):
+def select_df_refant_sources(tbls, an_dict, autocorr=False, minsnr=3.0, wt_d=1.0, wt_tsys=0.7, wt_occ=0.85, wt_snr=1.0):
     
     ddf_tbl = df_fromables(tbls)
     
@@ -915,8 +914,6 @@ def select_df_refant_sources(tbls, an_dict, autocorr=False, minsnr=3.0):
 
     refant_snr_median = ddf_tbl.groupby(['FIELD_ID','refant','refantid', 'refant_D','STD_TSYS', 'refant_count'])[['SNR']].median().reset_index()
     
-    wt_d, wt_tsys, wt_occ, wt_snr = 1.0, 0.6, 0.85, 1.0
-
     d, std_tsys, occ, snr   =   refant_snr_median['refant_D'], refant_snr_median['STD_TSYS'], refant_snr_median['refant_count'], refant_snr_median['SNR']
     d_norm                  =   1-(d/d.max())
     tsys_norm               =   1-(std_tsys/std_tsys.max())
@@ -935,7 +932,8 @@ def select_df_refant_sources(tbls, an_dict, autocorr=False, minsnr=3.0):
 
 def find_refant_fromdf(tbls, an_dict, sources_dict, autocorr=False, minsnr=3.0, calib_snr_thres=7.0, n_refant=4, n_calib=6, verbose=True):
 
-    
+    tbls = [tbl for tbl in tbls if Path(tbl).exists()]
+
     df_refant, ddf_tbl = select_df_refant_sources(tbls=tbls, an_dict=an_dict, autocorr=autocorr, minsnr=minsnr)
 
     refants = df_refant['refant'].unique()[:n_refant]
@@ -954,132 +952,132 @@ def find_refant_fromdf(tbls, an_dict, sources_dict, autocorr=False, minsnr=3.0, 
     dic_field                       =   df_field.reset_index()[['FIELD_ID','NAME', 'SNR']].groupby(['FIELD_ID']).max().reset_index().to_dict('list')
     return dic_field, refants, pp_out
 
-def identify_refant_ms(vis, selected_sources=None, refants=None, spws=None, gaintable=[], target='', ff_tbl_name=None, new_meta=False, new_tbls=False, mpi=False, verbose=True):
-    """
-    Returns
-    ----
+# def identify_refant_ms(vis, selected_sources=None, refants=None, spws=None, gaintable=[], target='', ff_tbl_name=None, new_meta=False, new_tbls=False, mpi=False, verbose=True):
+#     """
+#     Returns
+#     ----
     
-    refant_list, FIELD_dictionary, printable_output
+#     refant_list, FIELD_dictionary, printable_output
     
-    :refant_list:       (_list_)
-                        [refants]
-    :FIELD_dictionary:  (_dict_)
-                        {'NAME': [sources], 'SNR':[snr_sources], 'FIELD_ID':[sources_id]}}
-                        snr_sources: median values of all scans, antennas in the field
-    :printable_output:  (_str_)
-                        table as string
-    OLD:
-    :FIELD_dictionary:  {'FIELD_NAME': [sources], {'SNR_FIELD':[snr_sources]}}
-                        snr_sources: median values of all scans, antennas in the field
-    """
+#     :refant_list:       (_list_)
+#                         [refants]
+#     :FIELD_dictionary:  (_dict_)
+#                         {'NAME': [sources], 'SNR':[snr_sources], 'FIELD_ID':[sources_id]}}
+#                         snr_sources: median values of all scans, antennas in the field
+#     :printable_output:  (_str_)
+#                         table as string
+#     OLD:
+#     :FIELD_dictionary:  {'FIELD_NAME': [sources], {'SNR_FIELD':[snr_sources]}}
+#                         snr_sources: median values of all scans, antennas in the field
+#     """
 
 
-    # ___________________ Reading the Measeurement Set file ____________________
-    dic_field, refants, pp_out      =   {}, [], ""
-    initialize()
-    print("starting MPI")
-    MPICLIENT           =   start_mpi()
+#     # ___________________ Reading the Measeurement Set file ____________________
+#     dic_field, refants, pp_out      =   {}, [], ""
+#     initialize()
+#     print("starting MPI")
+#     MPICLIENT           =   start_mpi()
     
-    DASKCLIENT                      =   daskclient()
-    DASKCLIENT.restart()
-    # try:
-    df_vis                      =   get_df_vis(vis).persist()
+#     DASKCLIENT                      =   daskclient()
+#     DASKCLIENT.restart()
+#     # try:
+#     df_vis                      =   get_df_vis(vis).persist()
     
-    metadir                     =   Path(vis).parent / 'vasco.meta'
+#     metadir                     =   Path(vis).parent / 'vasco.meta'
     
-    sources_list                =   get_tb_data(f"{vis}/FIELD", axs=["NAME"]).compute()
-    annames                     =   get_tb_data(f"{vis}/ANTENNA", axs=["NAME"]).compute()
+#     sources_list                =   get_tb_data(f"{vis}/FIELD", axs=["NAME"]).compute()
+#     annames                     =   get_tb_data(f"{vis}/ANTENNA", axs=["NAME"]).compute()
     
-    sources_dict                =   {}
-    for sid, src in enumerate(sources_list):
-        sources_dict[sid]       =   src
+#     sources_dict                =   {}
+#     for sid, src in enumerate(sources_list):
+#         sources_dict[sid]       =   src
 
-    # ___________________ Processing ____________________
+#     # ___________________ Processing ____________________
 
-    print("..short fringefit to rate the antennas and sources")
-    # refants, ff_tbls, new_meta, new_tbls, meta, metafile = params_check(vis=vis, sources=sources, refants=refants, spws=spws, ff_tbls=ff_tbls, new_meta=new_meta, new_tbls=new_tbls, mpi=mpi)
+#     print("..short fringefit to rate the antennas and sources")
+#     # refants, ff_tbls, new_meta, new_tbls, meta, metafile = params_check(vis=vis, sources=sources, refants=refants, spws=spws, ff_tbls=ff_tbls, new_meta=new_meta, new_tbls=new_tbls, mpi=mpi)
     
     
-    if not ff_tbl_name: ff_tbl_name = f'{vis}_{target}_ff'
+#     if not ff_tbl_name: ff_tbl_name = f'{vis}_{target}_ff'
 
-    an_tsys                         =   get_tb_data(f"{vis}/SYSCAL", axs=['ANTENNA_ID']).compute()
-    an_tsys                         =   np.unique(an_tsys)
-    rsources_dict                   =   {v: k for k, v in sources_dict.items()}
+#     an_tsys                         =   get_tb_data(f"{vis}/SYSCAL", axs=['ANTENNA_ID']).compute()
+#     an_tsys                         =   np.unique(an_tsys)
+#     rsources_dict                   =   {v: k for k, v in sources_dict.items()}
 
-    fields                          =   df_vis['fid'].unique().persist()
-    nfields                         =   len(fields)
-    fid                             =   rsources_dict[target]
-    tmask                           =   df_vis['fid']==int(fid)
-    df_target                       =   df_vis[tmask].persist()
+#     fields                          =   df_vis['fid'].unique().persist()
+#     nfields                         =   len(fields)
+#     fid                             =   rsources_dict[target]
+#     tmask                           =   df_vis['fid']==int(fid)
+#     df_target                       =   df_vis[tmask].persist()
 
-    ans_target                      =   set(df_target['an1'].unique().compute())
-    ans_target.update(df_target['an2'].unique().compute())
-    ans_target                      =   ans_target.intersection(an_tsys)
+#     ans_target                      =   set(df_target['an1'].unique().compute())
+#     ans_target.update(df_target['an2'].unique().compute())
+#     ans_target                      =   ans_target.intersection(an_tsys)
 
-    fids = sources_dict.keys()
+#     fids = sources_dict.keys()
 
-    nscan = 5
-    if nfields > 50:   
-        nscan = 2
-    if nfields > 90:   
-        nscan = 1
-    print(f"\t{nfields} fields found, using {nscan} long scans for each field")
+#     nscan = 5
+#     if nfields > 50:   
+#         nscan = 2
+#     if nfields > 90:   
+#         nscan = 1
+#     print(f"\t{nfields} fields found, using {nscan} long scans for each field")
     
-    selected_long_scans          =   select_long_scans(df_vis, list(fids), nscan=nscan)
+#     selected_long_scans          =   select_long_scans(df_vis, list(fids), nscan=nscan)
 
-    all_selected_scans            =   []
-    dic_ant_with_scans            =   {}
-    all_selected_scans.extend(sid for f in selected_long_scans for sid in selected_long_scans[f])
-    print("..processed 0")
-    df_sid_ans              =       df_vis.groupby(['sid', 'an1', 'an2']).max().reset_index()
+#     all_selected_scans            =   []
+#     dic_ant_with_scans            =   {}
+#     all_selected_scans.extend(sid for f in selected_long_scans for sid in selected_long_scans[f])
+#     print("..processed 0")
+#     df_sid_ans              =       df_vis.groupby(['sid', 'an1', 'an2']).max().reset_index()
 
-    df_sid_ans              =       df_sid_ans.persist()
+#     df_sid_ans              =       df_sid_ans.persist()
 
-    scan_with_ants          =       df_sid_ans.groupby('sid').apply(compute_antennas, meta=('anid', 'object'))
-    scan_with_ants          =       scan_with_ants.persist()
-    print("..processed ..1")
-    print(df_sid_ans.to_string())
-    ant_with_scans          =       df_sid_ans.map_partitions(compute_scans, selected_scans=all_selected_scans, meta=('sid', 'object')).compute()
-    print("..processed ....2")
-    anmax                   =       max(ant_with_scans.index.max())
-    print("..processed ......3")
+#     scan_with_ants          =       df_sid_ans.groupby('sid').apply(compute_antennas, meta=('anid', 'object'))
+#     scan_with_ants          =       scan_with_ants.persist()
+#     print("..processed ..1")
+#     print(df_sid_ans.to_string())
+#     ant_with_scans          =       df_sid_ans.map_partitions(compute_scans, selected_scans=all_selected_scans, meta=('sid', 'object')).compute()
+#     print("..processed ....2")
+#     anmax                   =       max(ant_with_scans.index.max())
+#     print("..processed ......3")
 
-    # ___________________ Creating Metadata ____________________
-    res_metafile            =   f'{metadir}/meta_snrrating.vasco'
-    df_metafile             =   f'{metadir}/{Path(vis).stem}_df_vis.parquet'
-    dic_result              =   {}
+#     # ___________________ Creating Metadata ____________________
+#     res_metafile            =   f'{metadir}/meta_snrrating.vasco'
+#     df_metafile             =   f'{metadir}/{Path(vis).stem}_df_vis.parquet'
+#     dic_result              =   {}
 
-    shutil.rmtree(df_metafile, ignore_errors=True)
-    shutil.rmtree(res_metafile, ignore_errors=True)
-    # df_vis.to_parquet(df_metafile,  engine="pyarrow", write_index=True)
-    # dic_result['df_vis']    =   df_metafile
-    # except Exception as e:
-    #     traceback.print_exc()
-    # finally:
-    #     # ___________________ Stopping dask client ____________________
-    #     DASKCLIENT.shutdown()
+#     shutil.rmtree(df_metafile, ignore_errors=True)
+#     shutil.rmtree(res_metafile, ignore_errors=True)
+#     # df_vis.to_parquet(df_metafile,  engine="pyarrow", write_index=True)
+#     # dic_result['df_vis']    =   df_metafile
+#     # except Exception as e:
+#     #     traceback.print_exc()
+#     # finally:
+#     #     # ___________________ Stopping dask client ____________________
+#     #     DASKCLIENT.shutdown()
 
-    # ___________________ Using MPI for fringefitting _____________
-    for i in range(anmax+1):
-        dic_ant_with_scans[i] = list(ant_with_scans[islice[:], islice[i]].ravel())
-        dic_ant_with_scans[i].extend(ant_with_scans[islice[i], islice[:]].ravel())
+#     # ___________________ Using MPI for fringefitting _____________
+#     for i in range(anmax+1):
+#         dic_ant_with_scans[i] = list(ant_with_scans[islice[:], islice[i]].ravel())
+#         dic_ant_with_scans[i].extend(ant_with_scans[islice[i], islice[:]].ravel())
 
-    dic_result, tbls    =   short_fringe_fit_mpi(vis, dic_ant_with_scans, annames, caltable=ff_tbl_name, gt=gaintable, spws=spws, iter_scan_count=5, mpiclient=MPICLIENT)
+#     dic_result, tbls    =   short_fringe_fit_mpi(vis, dic_ant_with_scans, annames, caltable=ff_tbl_name, gt=gaintable, spws=spws, iter_scan_count=5, mpiclient=MPICLIENT)
     
-    print("tables collected..")
-    save_metafile(res_metafile, dic_result)
+#     print("tables collected..")
+#     save_metafile(res_metafile, dic_result)
 
-    # ___________________ Starting dask client ____________________
-    # if DASKCLIENT.status == 'closed':
-    #     DASKCLIENT = daskclient()
-    # DASKCLIENT.restart()
+#     # ___________________ Starting dask client ____________________
+#     # if DASKCLIENT.status == 'closed':
+#     #     DASKCLIENT = daskclient()
+#     # DASKCLIENT.restart()
 
-    # try:
-    #     # ___________________ finding refant and sources ______________
+#     # try:
+#     #     # ___________________ finding refant and sources ______________
 
-    #     dic_field, refants, pp_out = find_refant_fromdf(tbls, an_dic(vis), sources_dict, verbose=verbose)
-    # except Exception as e:
-    #     traceback.print_exc()
-    # finally:
-    DASKCLIENT.shutdown()
-    return dic_field, refants, pp_out
+#     #     dic_field, refants, pp_out = find_refant_fromdf(tbls, an_dic(vis), sources_dict, verbose=verbose)
+#     # except Exception as e:
+#     #     traceback.print_exc()
+#     # finally:
+#     DASKCLIENT.shutdown()
+#     return dic_field, refants, pp_out

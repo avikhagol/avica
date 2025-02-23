@@ -26,9 +26,10 @@ from vasco.sources import check_band, identify_sources_fromtarget, choose_calib_
 from scipy.spatial import distance
 
 from vasco import c
-from vasco.diag import get_avg_amp_phase, pl_diag
-from vasco.ms.fringefit import start_mpi
+from vasco.diag import get_avg_amp_phase, pl_diag, get_labels_dbscan, calcscatter_fromlabels_df
 
+from vasco.ms.fringefit import start_mpi
+import traceback
 
 msmd=msmetadata()
 tb = table()
@@ -832,9 +833,9 @@ def identify_sources_fromsnr_ms(vis, target_source, caliblist_file=None, snr_met
 
     s_df                                    =   df(data=sourcenames.values(), index=sourcenames.keys(), columns=['source_name'])
     mf_df                                   =   df.from_dict(mf_dic)
-    mf_df                                   =   mf_df.rename(columns={'FIELD_NAME':'source_name', 'SNR_FIELD':'flux'})
+    mf_df                                   =   mf_df.rename(columns={'NAME':'source_name', 'SNR':'flux'})
     
-    mf_df.loc[:,'FIELD_ID']                 =   [int(s_df.loc[s_df['source_name']==sname].index.values[0]) for sname in mf_df['source_name']]
+    # mf_df.loc[:,'FIELD_ID']                 =   [int(s_df.loc[s_df['source_name']==sname].index.values[0]) for sname in mf_df['source_name']]
 
     mf_df                                   =   mf_df.drop_duplicates()
     mf_df                                   =   mf_df.set_index('FIELD_ID')
@@ -931,7 +932,7 @@ def get_fid(vis, target):
     return fid
 
 
-def get_axes(vis):
+def get_axs(vis, ret_sel_idx=False):
     """
     Returns avg_amp, avg_phase, time, antenna
     uvdist is taken assuming UVW is taken from a reference origin at (0,0,0)
@@ -939,12 +940,13 @@ def get_axes(vis):
     from vasco.ms import get_tb_data
     time, field, data, weight, an1, an2, uvw, flag = get_tb_data(vis, axs=['TIME', 'FIELD_ID', 'DATA', 
                                                                       'WEIGHT','ANTENNA1','ANTENNA2','UVW',
-                                                                      'FLAG'])
+                                                                      'FLAG_ROW'])
     amp, ph                  = get_avg_amp_phase(data, weight)
     sel_idx                  = np.argwhere(~np.isnan(amp)).T[0] 
     
-    amp, phase                        = amp[sel_idx], ph[sel_idx]
-    if not len(sel_idx):
+    if (sel_idx is not None) and len(sel_idx):
+        amp, ph                        = amp[sel_idx], ph[sel_idx]
+    if (sel_idx is not None) and not len(sel_idx):
         sel_idx  = None
     time                              = Time(time/(3600*24), format='mjd')[sel_idx].decimalyear
     an1                               = an1[sel_idx]
@@ -953,27 +955,104 @@ def get_axes(vis):
     uvdist                            = uvdist[sel_idx]
     field                             = field[sel_idx]
     
-    unflagged                         = ((~flag).sum(axis=0)).astype(int)[0][sel_idx]
+    # unflagged                         = ((~flag).sum(axis=0)).astype(int)[0][sel_idx] # for tb.getcol('FLAG') which operates on spw etc
+    unflagged                         = (~flag).astype(int).T
     data_dict                         = {'time':time.T, 'unflagged':unflagged.T, 'uvdist':uvdist,
                                          'an1':an1.T,'an2':an2.T, 'field':field.T, 
-                                         'amp':amp.T, 'phase':phase.T,
+                                         'amp':amp.T, 'phase':ph.T,
                                         }
     
     axs_df                            = df(data_dict)
+    
+    if ret_sel_idx: return axs_df, sel_idx
     return axs_df
 
 def pl_diag_ms(vis, target, kind='png', **kwargs):
+    
     fid=''
     
     #       Create dataframe from the MS file
-    axs_df = get_axes(vis)
+    axs_df = get_axs(vis)
+    
+    
+    if target:
+        msmd.open(vis)
+        fid=msmd.fieldsforname(target)
+        msmd.done() 
+        axs_df = axs_df[axs_df['field'].values==fid]
+        
+    unflagged = axs_df['unflagged']==1
+    wd = (Path(vis).parent / 'output' / target).resolve()
+    return pl_diag(axs_df[unflagged], kind=kind, prefix=str(wd) , **kwargs)
+
+def flag_d(vis, target):
+    success=False
+    flagged_perc = 0.0
+    eps=0.005 
+    n_cores=15
+    kind='png'
+
+    df_vis = get_axs(vis)
+
+    df_ms = df_vis
+    # idx_autocorr = df_ms['an1']==df_ms['an2']
+    idx_non_autocorr = df_ms['an1']!=df_ms['an2']
+    # df_ms.loc[idx_autocorr,'unflagged'] = 0
+    idx_field = None
+    axs_d = df_ms[idx_non_autocorr]
     if target:
         msmd.open(vis)
         fid=msmd.fieldsforname(target)
     msmd.done() 
     if target:
-        axs_df_field = axs_df.loc[np.where(axs_df['field'].values==fid)]
-    else:
-        axs_df_field = axs_df    
-    wd = (Path(vis).parent / 'output' / target).resolve()
-    return pl_diag(axs_df_field, kind=kind, prefix=str(wd) )
+        idx_field = axs_d['field'].values==fid
+        axs_d = axs_d.loc[idx_field]
+    
+    amp = axs_d['amp'].values
+    phase = ((axs_d['phase'] + 180)/360).values
+
+    ap_normalised = np.column_stack((amp, phase))
+
+    min_samples=int(np.log(len(ap_normalised))/2)
+    if min_samples < 5: min_samples=5
+    labels = get_labels_dbscan(ap_normalised, eps, min_samples, n_jobs=n_cores)
+
+    axs_df_scatter = calcscatter_fromlabels_df(axs_d, labels, 'amp', 'phase')
+
+    # good_scatter_dic = stat_gooddata(axs_df_scatter, pop_perc=0.8)
+    flaggable_idx = axs_df_scatter['labels']==-1
+    
+    print(sum(flaggable_idx), "flaggable visibility")
+
+    tb = table()
+    tb.open(vis, nomodify=False)
+    
+    size =  df_vis.index.max() + 1  
+    idx_int = df_vis[idx_non_autocorr][idx_field][flaggable_idx].index
+    
+    
+    
+    flaggable_data = tb.getcol('FLAG_ROW')
+    if len(flaggable_data)!= len(df_vis.index): raise TypeError("The flag row column is not the same as column data")
+
+    flaggable_data[idx_int] = True
+
+    # flag= tb.getcol('FLAG')
+    # flag.T[idx_int] = ~tb.getcol('FLAG').T[idx_int]
+
+    try:
+        
+        tb.putcol('FLAG_ROW', flaggable_data)
+        # tb.putcol('FLAG', flag)
+        success = tb.flush()
+        tb.close()
+        tb.done()
+        
+        flagged_perc = np.round(len(idx_int)/len(flaggable_data)*100,3)
+        overall_flagged = np.round(sum(flaggable_data)/len(flaggable_data)*100,3)
+        print(f"Flagged successfully: {flagged_perc} % | overall flagged: {overall_flagged} %")
+        
+    except:
+        traceback.print_exc()
+        success=False
+    return flagged_perc, success

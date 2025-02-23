@@ -330,7 +330,7 @@ def identify_sources_fromtarget(fitsfile, target_source, rfcfile=None, verbose=F
     calib_candidates.remove(target_source)
     alls = list(allsources).copy()
     
-    if len(allsources)>=3:
+    if len(allsources)>=2:
         s['science_target'] = [target_source]
         if (flux_df is None): 
             # HACK:        to get None values back from id_flux_for_sources we use rfcfile=True
@@ -356,6 +356,8 @@ def identify_sources_fromtarget(fitsfile, target_source, rfcfile=None, verbose=F
             else:
                 s['calibrators_phaseref'] = ps
                 if ps in calib_candidates: calib_candidates.remove(ps)      # See identify_calibrators_comment
+    # else:
+    #     s['calibrators_instrphase'] = [target_source]
 
     if target_source in s['calibrators_instrphase']:    s['calibrators_instrphase'].remove(target_source)
     

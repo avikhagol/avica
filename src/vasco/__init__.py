@@ -310,10 +310,10 @@ def cli():
                         with open(f'{metafolder}/refants_fits.out', 'w') as vrm: vrm.write(print_outs)
                     # print(refant_dict)
                 else:
-                    from vasco.ms.fringefit import identify_refant_ms
+                    from vasco.ms import identify_refant_casa
                     vis = fitsfile
                     print(vis)
-                    refants, calibs, print_outs         =   identify_refant_ms(str(vis), new_tbls=new_tbls, new_meta=new_meta, mpi=mpi, target=sources[0], 
+                    refants, calibs, print_outs         =   identify_refant_casa(str(vis), new_tbls=new_tbls, new_meta=new_meta, mpi=mpi, target=sources[0], 
                                                                                  selected_sources=sources, refants=ants, spws=spws, verbose=True)
                     refant_dict = {'refants': refants}
                     with open(f'{metafolder}/sources.vasco', 'w') as vrm: json.dump(calibs, vrm)

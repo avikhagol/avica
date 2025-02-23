@@ -10,6 +10,7 @@ import itertools
 from pathlib import Path
 from pandas import DataFrame as df, set_option
 import warnings
+import re
 warnings.filterwarnings(action='ignore', message='Mean of empty slice')
 
 set_option('display.max_colwidth', None)
@@ -120,6 +121,71 @@ def _listobs(fitsfile,cardname=None) :
     
     print(f"Possible hdus can be: {str(hdunames)}")
 
+def choose_correct_id_forduplicate_fields(hdu):
+    chosen_id, rem_ids = None, None
+    from dask import array as da
+    shdu, shduids   = _gethduname(hdu, ['SOURCE'])
+    source_data     =   hdu[shdu].data
+    source_col = _getcolname(source_data,['SOURCE'])
+    id_col = _getcolname(source_data,['SOURCE_ID', 'ID_NO.', 'ID_NO'])
+
+    snames = list(hdu[shdu].data[source_col])
+
+    if len(snames)!=len(np.unique(snames)):
+        duplicates = [k for k,v in Counter(snames).items() if v>1]
+        duplicate_ids = hdu[shdu].data[id_col][np.where(hdu[shdu].data[source_col]==duplicates[0])]
+        
+        uvhdu, uvhduids   = _gethduname(hdu, ['UV_DATA'])
+        for hduid in uvhduids:
+            src = da.from_array(hdu[hduid].data['SOURCE'])
+
+            compare = -1
+            chosen_id = None
+            rem_ids = []
+            non_zero_rowsc = 0
+            for id in duplicate_ids:
+                rows_val=src[np.where(src==5)].compute()
+                
+                if rows_val.shape[0]>compare:
+                    non_zero_rowsc+=1
+                    chosen_id=id
+                    compare=rows_val.shape[0]
+
+                if non_zero_rowsc>1:        # TODO: replace the row values for SOURCE_ID with the chosenid
+                    raise NameError("There are duplicate fields with data in the FITS! ")
+        rem_ids = [rmid for rmid in duplicate_ids if rmid!=chosen_id]
+
+    return chosen_id, rem_ids
+
+def fix_duplicate_fields(hdu):
+
+    chosen_id, rem_ids = choose_correct_id_forduplicate_fields(hdu)
+    shdu, shduids   = _gethduname(hdu, ['SOURCE'])
+    source_data     =   hdu[shdu].data
+    source_col = _getcolname(source_data,['SOURCE'])
+    id_col = _getcolname(source_data,['SOURCE_ID', 'ID_NO.', 'ID_NO'])
+
+    hdu[shdu].data = source_data[np.where(source_data[id_col]!=rem_ids)]
+    # print(hdu[shdu].data)
+
+    return hdu
+
+
+def add_O(src_name):
+    if str(src_name)[0] == '0':
+        zero_grouped = re.match(r'(0*)(.*)', src_name).groups()
+        prefix = "O"*len(zero_grouped[0])
+        print(src_name, "has zero ==>", prefix+zero_grouped[1])
+        return prefix+zero_grouped[1]
+
+def fix_leading_zeros(hdu):
+    shdu, shduids   = _gethduname(hdu, ['SOURCE'])
+    source_data     =   hdu[shdu].data
+    source_col = _getcolname(source_data,['SOURCE'])
+    for i,src in enumerate(hdu[shdu].data[source_col]):
+        if str(src)[0] == '0':
+            hdu[shdu].data[source_col][i] = add_O(src)
+    return hdu        
 
 def datetimerange_fromfits(fitsfile):
     """
