@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+
+# options
+# wd, mpi, ants, spws, -S sources, from-meta, from-snr, -o output-file
+# -l listobs, -t identify-targets, -t find refant, -s split-source
+# to-B B1920
+# C column (search source column selection)
+# plot
+
 import argparse
 from pathlib import Path
 
@@ -39,7 +47,6 @@ parser.add_argument('-S','--sources', help="selected fields i.e source names for
 parser.add_argument('--from-meta', help='useful to run operations without determining metadata and tables again', action='store_true', required=False)
 parser.add_argument('--from-snr', help='to find sources from snr data second input in --input-file is the snr metafile; should have .vasco in path; also needs --output-file else only prints output', action='store_true', required=False)
 parser.add_argument('-o','--output-file', help='Give the output file path.', required=False)
-parser.add_argument('--gen-antab', help='Generate ANTAB', action='store_true', required=False)
 
 op=parser.add_argument_group('operations',"""
                              use operations based on file type e.g., .FITS .MS
@@ -251,21 +258,6 @@ def cli():
     metafolder                      =   str(f'{wd}/vasco.meta')
     status_check,desc, desc_arr     =   _vitals_check(args, metafolder)
     new_tbls = new_meta             =   not args.from_meta
-    if args.gen_antab:
-        pout            =    """"""
-        from vasco.idifits import ANTAB
-        fitsfile = input_file[0]
-        vlbacalf = input_file[1]
-        antabfile = f'{wd}/gc_dpfu_fromidi.ANTAB'
-        an = ANTAB(fitsfile, vlbacalf)
-        anfile = f'{antabfile}'
-        allans, _tsys_head, dmissing    = an.gen_antab(anfile)
-        
-        pout+=f"missing         \t\t\t:{','.join(dmissing)}\n" if dmissing else "\n"
-        pout+=f"all antennas    \t:{','.join(allans)}\n" if allans else "\n"
-        
-        print(pout)
-            
     if 'search source' in desc: searchs   =   True
 
     if args.to_B:

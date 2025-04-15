@@ -12,7 +12,7 @@ from scipy.spatial import distance
 # from vasco import c
 from vasco.util import save_metafile, latest_file
 
-from casampi.MPICommandClient import MPICommandClient
+
 # from casatools import msmetadata, table
 from casatasks import listobs
 
@@ -258,6 +258,7 @@ def listobs_mpi(vis, overwrite, listfile, verbose):
 
 def start_mpi():
     # try:
+    from casampi.MPICommandClient import MPICommandClient
     client = MPICommandClient()
     client.start_services()
     client.set_log_mode('redirect')
@@ -568,7 +569,7 @@ def start_mpi():
 
 
 
-from dask_mpi import initialize
+# from dask_mpi import initialize
 from dask.distributed import Client, progress, LocalCluster
 
 # initialize()
@@ -582,23 +583,83 @@ def daskclient(
 
     return client
 
+def get_obsdetails(df_vis_field):                                                       # not being used, this might be ineffecient compared to the groupby which is tested to be giving correct values.
+    df_loc  = df_vis_field.compute()
+    unique_sids, idx_first_occur = np.unique(df_loc['sid'], return_index=True)
+
+    obs_details = {}
+
+    for i, sid in enumerate(unique_sids):
+        start_idx = idx_first_occur[i]
+        sid_val     =   df_loc['sid'].values[start_idx]
+        if i + 1 < len(idx_first_occur):
+            end_idx = idx_first_occur[i + 1] - 1
+        else:
+            end_idx = len(df_loc) - 1
+        t = Time(df_loc.iloc[[start_idx, end_idx]]/(3600*24), format='mjd', scale='tt')
+        
+        t1 = t[1]
+        t0 = t[0]
+        td = (t1-t0).to_value('sec')
+        
+        if 'sid' not in obs_details:
+            obs_details = {'sid':[sid_val],'idx': [(start_idx, end_idx)], 'td':[td]}
+        else:
+            obs_details['sid'].append(sid_val)
+            obs_details['idx'].append((start_idx, end_idx))
+            obs_details['td'].append(td)
+        print(td, t)
+        obs_details['tot_obs'] = np.sum(obs_details['td'])
+        obs_details['scan_min'] = np.min(obs_details['td'])
+        obs_details['scan_max'] = np.max(obs_details['td'])
+        
+    return obs_details
 
 def get_df_vis_forsampling(vis):
-    time, an1, an2, fids, sids, flag_row = get_tb_data(f'{vis}', axs=['TIME', 'ANTENNA1', 'ANTENNA2', 'FIELD_ID', 'SCAN_NUMBER', 'FLAG_ROW'])
+    time, expos, an1, an2, fids, sids, flag_row = get_tb_data(f'{vis}', axs=['TIME', 'EXPOSURE', 'ANTENNA1', 'ANTENNA2', 'FIELD_ID', 'SCAN_NUMBER', 'FLAG_ROW'])
 
     unflagged                               = np.logical_not(flag_row).astype(int)
 
     data_dict = {
-        'time': time,
+        'time': time, 'expos':expos,
         'an1': an1.T, 'an2': an2.T, 'fid': fids.T,
         'sid': sids.T, 'unflagged':unflagged.T
     }
-    df_vis = dd.from_pandas(df(data_dict), npartitions=10)  # Adjust partitions based on your dataset size
+    df_vis = dd.from_pandas(df(data_dict), npartitions=10)  
+    return df_vis
+
+def add_band_column(df_vis, bands_dict, numchan, nrows):
+    
+    bandsize_arr        =   [sum(numchan[band_info["spws"]]) for band_info in bands_dict.values()]   # nspw*nchan
+    
+    pattern_length      =   sum(bandsize_arr)
+
+    band_ids             =   np.repeat(range(len(bandsize_arr)), bandsize_arr)
+    
+    
+    band_ids_tiled = np.tile(band_ids, nrows // pattern_length + 1)
+    
+    band_series = df(band_ids_tiled, columns=['band_id'])
+    
+    df_vis = df_vis.assign(band_id=band_series['band_id'])
+    
+    id_toband = {}
+    for i,band in enumerate(bands_dict):
+        id_toband[i] = band
+    
+    df_vis['band'] = df_vis['band_id'].map(id_toband)
+    
 
     return df_vis
 
 
-def apparant_sampling(vis, target):
+def apparant_sampling(vis, target, bands_dict : dict = None, selected_band="", nvis_includes_nchan=False):
+    """
+    
+    calculates nvis/nspw/nbaseline/ntint
+    for selected target & band
+    
+    """
     dic_apparant_sampling   =   {}
     fields = get_tb_data(f"{vis}/FIELD", ['NAME'])
     fid     =   list(fields).index(target)
@@ -607,37 +668,76 @@ def apparant_sampling(vis, target):
     tb= table()
     tb.open(f"{vis}/SPECTRAL_WINDOW")
     numchan = tb.getcol('NUM_CHAN')
-    nspw = numchan.shape[0]
-    nchan = max(numchan)
+    chwidths = tb.getcol('CHAN_WIDTH')
+    
     tb.done()
 
     df_vis = get_df_vis_forsampling(vis)
     
     tb.open(f"{vis}")
-    expos = tb.getcol('EXPOSURE')
+    nrowsd = tb.nrows()
     tb.close()
     
-    expos_max, expos_min =expos.max(),expos.min()
     
-    df_vis_field      =   df_vis[df_vis['fid']==fid]
-    t1 = Time(df_vis_field[['time', 'sid']].groupby(['sid']).max()['time'].compute().values/(3600*24), format='mjd').decimalyear
-    t2 = Time(df_vis_field[['time', 'sid']].groupby(['sid']).min()['time'].compute().values/(3600*24), format='mjd').decimalyear
-    obslen      =           sum((Time(t1, format='decimalyear')-Time(t2, format='decimalyear')).to_value('sec'))
-    nbaseline   = df_vis_field[['an1','an2', 'time']][(df_vis_field['unflagged']==1) & (df_vis_field['an1']!=df_vis_field['an2'])].groupby(['an1','an2']).max().compute().shape[0]
-    ntint       =   df_vis_field[['an1','an2', 'time']][(df_vis_field['unflagged']==1) & (df_vis_field['an1']!=df_vis_field['an2'])].groupby(['time']).max().compute().shape[0]
-    nvis        =   df_vis_field[['an1','an2', 'time']][(df_vis_field['unflagged']==1) & (df_vis_field['an1']!=df_vis_field['an2'])].compute().shape[0]
+    df_vis                  =   df_vis
     
-    # obslen = (Time(df_vis_field[['field','time']].groupby(['field']).max()['time'].values[0], format='decimalyear')- Time(df_vis_field[['field','time']].groupby(['field']).min()['time'].values[0], format='decimalyear')).to_value('sec')
+    if not selected_band:
+        df_vis              =   add_band_column(df_vis=df_vis, bands_dict=bands_dict, numchan=numchan, nrows=nrowsd)             # this is based on the assumption that for each timestamp, there will be nspws
+        bands_to_process    =   [band for band in bands_dict]
+    else:
+        bands_to_process    =   [selected_band]
     
-    dic_apparant_sampling = {
-        "nvis":nvis, "nspw":nspw, "nbaseline":nbaseline, "ntint":ntint,
-        "nchan" : nchan,
-        "apparant_sampling": nvis/nspw/nbaseline/ntint,
-        "expos_max":expos_max, "expos_min":expos_min,
-        "obslen":obslen,
-    }
-
+    df_vis_field            =   df_vis.query(f"fid=={fid}")
     
+    
+    if selected_band:
+        df_vis_field[f'band']     =   selected_band
+        
+    
+    for band in bands_to_process:
+        dic_apparant_sampling[band] = {}
+        
+        df_vis_field_band   =   df_vis_field.query(f"band=='{band}' & unflagged==1")
+        
+        expos_max, expos_min =df_vis_field_band['expos'].max().compute(),df_vis_field_band['expos'].min().compute()
+        nrows               =   len(df_vis_field_band.index)                  # CASA seems to give nrows in listobs for target as the flagged+unflagged data.
+        
+        
+        
+        ntint               =   len(df_vis_field_band.groupby(['time']).max().index)#shape[0]
+        nbaseline           =   len(df_vis_field_band.groupby(['an1','an2']).max().index)#shape[0]
+        spws                =   bands_dict[band]['spws']                    # is found in the col of chwidths
+        # nchan               =   numchan                                            # is found in the row of the chwidths
+        chwidth             =   np.min(chwidths[:,spws])/1e3
+        
+        # df_vis_field_band   =   df_vis_field_band.query(f'an1!=an2')                      # if want to remove auto-corr # alternatively: rem flag and autocorr -> df_vis_field_band[['an1','an2', 'time']][(df_vis_field_band['unflagged']==1) & (df_vis_field_band['an1']!=df_vis_field_band['an2'])]
+        # time_groups = df_vis_field_band.groupby([['sid','time']])
+        # t1 = Time(time_groups.max().compute().values / (3600 * 24), format='mjd').decimalyear
+        # t2 = Time(time_groups.min().compute().values / (3600 * 24), format='mjd').decimalyear
+    
+        t1 = Time(df_vis_field_band[['time', 'sid']].groupby(['sid']).max().compute()['time'].values/(3600*24), format='mjd').decimalyear
+        t2 = Time(df_vis_field_band[['time', 'sid']].groupby(['sid']).min().compute()['time'].values/(3600*24), format='mjd').decimalyear
+        
+        obslen      =   sum((Time(t1, format='decimalyear')-Time(t2, format='decimalyear')).to_value('sec'))
+        scan_min    =   min((Time(t1, format='decimalyear')-Time(t2, format='decimalyear')).to_value('sec'))
+        scan_max    =   max(((Time(t1, format='decimalyear')-Time(t2, format='decimalyear')).to_value('sec')))
+        
+        nspw        =   len(spws)
+        nchan       =   max(numchan[bands_dict[band]['spws']])
+        nvis                =   nrows*nchan if nvis_includes_nchan else nrows
+        # obslen = (Time(df_vis_field_band[['field','time']].groupby(['field']).max()['time'].values[0], format='decimalyear')- Time(df_vis_field_band[['field','time']].groupby(['field']).min()['time'].values[0], format='decimalyear')).to_value('sec')
+        
+        dic_apparant_sampling[band]={
+            "nvis":nvis, "nspw":nspw, "nbaseline":nbaseline, "ntint":ntint,
+            "nchan" : nchan,
+            "chwidth" : chwidth,
+            "apparant_sampling": nvis/nspw/nbaseline/ntint,
+            "expos_max":expos_max, "expos_min":expos_min,
+            "obslen":obslen,
+            "scan_min":scan_min,
+            "scan_max":scan_max
+        }
+        print(band, "done")
     return dic_apparant_sampling
 
 
@@ -834,11 +934,12 @@ def short_fringe_fit_mpi(vis, dic_ant_with_scans, annames, caltable, gt, spws, i
 # all_selected_scans
 
 
-def an_dic(vis, target=None):
+def an_dic(vis, target=None, antenna=[], notantenna=[]):
 
     tsys_anid, tsys_vals  = get_tb_data(f"{vis}/SYSCAL", axs=['ANTENNA_ID', 'TSYS'])
     pos, annames           = get_tb_data(f"{vis}/ANTENNA", axs=['POSITION', 'NAME'])
-    xyz = list(zip(*pos.compute()))
+    pos = pos.compute()
+    xyz = list(zip(*pos))
     tsys_anid = tsys_anid.compute()
     # if target is not None: 
     tsys_vals = tsys_vals.compute()
@@ -847,22 +948,25 @@ def an_dic(vis, target=None):
     ans_seq = []
 
     for anid,an in enumerate(annames.compute()):
-        an_dict[anid]={'ANNAME': an}
-        # measuring centroid distance
-        d=[]
-        refcoord=xyz[anid]
-        for v in xyz:
-            d.append(distance.euclidean(refcoord,v)*.001)                                       # Distance of all from one refant
-        an_dict[anid]['d']=np.nanmedian(d)   # Median distance of all ants for one refant
-        
-        # calculating TSYS variability
-        tsys_std = []
-        for tsys_val in tsys_vals:
-            itsys = np.where(tsys_anid==anid)
-            tsy_an_std = np.nanstd(tsys_val[itsys]) if len(itsys) else float('nan')
-            tsys_std.append(tsy_an_std)
+        if not antenna: antenna = list(range(len(annames)))
+        antenna = [antv for antv in antenna if antv not in notantenna]
+        if anid in antenna:                
+            an_dict[anid]={'ANNAME': an}
+            # measuring centroid distance
+            d=[]
+            refcoord=xyz[anid]
+            for v in xyz:
+                d.append(distance.euclidean(refcoord,v)*.001)                                       # Distance of all from one refant
+            an_dict[anid]['d']=np.nanmedian(d)   # Median distance of all ants for one refant
             
-        an_dict[anid]['STD_TSYS']= np.nanmean(tsys_std, axis=0) if not all(np.isnan(tsys_std)) else float('nan')
+            # calculating TSYS variability
+            tsys_std = []
+            for tsys_val in tsys_vals:
+                itsys = np.where(tsys_anid==anid)
+                tsy_an_std = np.nanstd(tsys_val[itsys]) if len(itsys) else float('nan')
+                tsys_std.append(tsy_an_std)
+                
+            an_dict[anid]['STD_TSYS']= np.nanmean(tsys_std, axis=0) if not all(np.isnan(tsys_std)) else float('nan')
     return an_dict
 
 
@@ -981,16 +1085,17 @@ def select_df_refant_sources(tbls, an_dict, autocorr=False, minsnr=3.0, calib_sn
     d, std_tsys, occ, snr   =   refant_snr_median_18['refant_D'], refant_snr_median_18['STD_TSYS'], refant_snr_median_18['refant_count'], refant_snr_median_18['SNR']
     d_norm                  =   1-(d/d.max())
     tsys_norm               =   1-(std_tsys/std_tsys.max())
-    # max_field_snr           =   field_snr['SNR'].compute().values[0]
-    # if max_field_snr>1000:
-    #     max_field_snr           =   1000#field_snr['SNR'].compute().values[0]
-    #     print(f"for robustness clipping SNR>{np.round(max_field_snr,3)} in the `c` calculation\n")
-    #     snr                     =   snr.clip(upper=max_field_snr)
+    max_field_snr           =   refant_snr_median_18['SNR'].max()
+    if max_field_snr>600:
+        max_field_snr           =   600#field_snr['SNR'].compute().values[0]
+        print(f"for robustness clipping SNR>{np.round(max_field_snr,3)} in the `c` calculation\n")
+        snr                     =   snr.clip(upper=max_field_snr)
     snr_norm                =   snr/snr.max()
     occ_norm                =   occ/occ.max()
     
 
     refant_snr_median_18['c']  =   ((d_norm*wt_d)+(snr_norm*wt_snr)+(tsys_norm*wt_tsys)+(occ_norm*wt_occ))/(wt_d+wt_snr+wt_tsys+wt_occ)
+    # refant_snr_median_18['c']  =   ((d_norm*wt_d)+(snr_norm*wt_snr)+(occ_norm*wt_occ))/(wt_d+wt_snr+wt_occ)
     refant_with_c =         refant_snr_median_18.sort_values(by=['c'], ascending=False)
 
     return refant_with_c, ddf_tbl.persist()
@@ -1007,7 +1112,8 @@ def find_refant_fromdf(tbls, an_dict, sources_dict, autocorr=False, minsnr=3.0, 
     ddf_tbl_18 = ddf_tbl.dropna().query('SNR>18')
     if len(ddf_tbl_18['FIELD_ID'].unique())<n_calib+1:
         ddf_tbl_18 = ddf_tbl.dropna().query(f'SNR>{calib_snr_thres}')
-    df_field = ddf_tbl_18[['FIELD_ID','SCAN', 'SNR']].groupby(['FIELD_ID','SCAN']).mean().compute().sort_values(by=['SNR'], ascending=False).reset_index()[:n_calib]          # taking first n_calib considering scans
+    df_field = ddf_tbl_18[['FIELD_ID','SCAN', 'SNR']].groupby(['FIELD_ID','SCAN']).mean().compute().sort_values(by=['SNR'], ascending=False).reset_index()
+    df_field = df_field.groupby(by=['FIELD_ID']).max().reset_index()[['FIELD_ID','SNR']].sort_values(by=['SNR'], ascending=False)[:n_calib]          # taking first n_calib considering scans
     
     df_field['NAME'] = df_field['FIELD_ID'].map(sources_dict)
     pp_out += df_refant.to_string() + "\n"

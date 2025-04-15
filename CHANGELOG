@@ -1,0 +1,75 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- 
+
+### Fixed
+
+- apparant sampling code is robust for all MS datasets
+
+### Changed
+
+- switched from pandas
+
+### Removed
+
+- 
+
+
+## [0.1.5]
+
+### Added
+
+- CHANGELOG, CONTRIBUTING
+- Ability to get apparanat sampling for MS data with multiple band
+- CLI has ANTAB generation option
+
+### Fixed
+
+- using proper time conversion for timestamp (#2)
+- bug in ambiguous timestamp for ANTAB data handled
+
+### Changed
+
+- `save_fig` also takes dpi
+- Improvements in `apparant_sampling` code
+
+### Removed
+
+
+## [0.1.2] - 2025-03-10
+
+### Added
+
+- casatools, casatasks, dask[distributed] will be installed with `vasco[all]`
+- `apparant_sampling` method in `vasco.ms.fringefit`
+- takes first `n_calib` after the SNR rating.
+- `creat_df_fromrfcfile`, `search_rfc_catalog` method in `vasco.util` for parsing RFC catalog files and performing search using dataframe.
+
+### Fixed
+
+- For robust selection the default value for flux_thres(used as snr thres) to 7.0 for VASCO SNR rating.
+
+### Changed
+
+- Lowered default value for flux_thres(used as snr thres) to 7.0 for VASCO SNR rating.
+- few name changes e.g., _label -> _axs in `vasco.diag` (#68b3a1c0)
+- new methods added to `vasco.ms.fringefit`
+- `flag_d` in `vasco.ms` is now `flag=True` by default.
+
+
+### Removed
+
+- Redunant naming conventins within methods.
+
+
+[unreleased]: https://gitlab.ia.forth.gr/smile/vasco/compare/v0.1.3...HEAD
+[0.1.2] : https://gitlab.ia.forth.gr/smile/vasco/compare/v0.1.2...v0.1.3

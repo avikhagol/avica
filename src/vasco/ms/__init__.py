@@ -905,6 +905,64 @@ def split_ms(vis, outvis, source_list=[], fids=[], mpi=False):
     
 #     return np.isin(baseline_seq, df_baseline_by(allbaselines, annames, xyz, **kwargs).index)
 
+def get_df_vis(vis, dcol='DATA'):
+    """
+    
+    """
+    time, expos, sid, fid, data, sigma, an1, an2, uvw, flag = get_tb_data(vis, axs=['TIME','EXPOSURE','SCAN_NUMBER', 'FIELD_ID', dcol, 
+                                                                      'SIGMA','ANTENNA1','ANTENNA2','UVW',
+                                                                      'FLAG'])
+
+    [field_name]               = get_tb_data(f"{vis}/FIELD", axs=['NAME'])
+    
+    npol =data.shape[0]
+    nchan=data.shape[1]
+    nrows=data.shape[2]
+    
+    batch_idx = np.repeat(np.arange(npol), nrows * nchan)  # (npol * nrows * nchan,)
+    sample_idx = np.tile(np.repeat(np.arange(nrows), nchan), npol)  # (npol * nrows * nchan,)
+    channel_idx = np.tile(np.arange(nchan), npol * nrows)  # (npol * nrows * nchan,)
+    
+    multi_index = MultiIndex.from_arrays(
+        [batch_idx, sample_idx, channel_idx], names=["pol", "row", "nchan"]
+    )
+    
+    wt_calc = 1/(sigma*sigma)
+    
+    amp = np.abs(data)
+    phase = np.angle(data, deg=True)
+    
+    amp_reshaped = amp.transpose(0, 2, 1).reshape(-1, 1)  # Reshape to (npol * nrows * nchan, 1)
+    phase_reshaped = phase.transpose(0, 2, 1).reshape(-1, 1)  # Reshape to (npol * nrows * nchan, 1)
+    flag_reshaped = flag.transpose(0, 2, 1).reshape(-1, 1)  # Reshape to (npol * nrows * nchan, 1)
+    
+    wt_calc_reshaped = np.repeat(wt_calc.T, nchan, axis=0).reshape(-1, 1)  # Broadcast over channels
+    
+    time_repeated = np.tile(np.repeat(time, nchan), npol).reshape(-1, 1)  # Repeating time for each channel
+    expos_repeated = np.tile(np.repeat(expos, nchan), npol).reshape(-1, 1)  
+    an1_repeated =  np.tile(np.repeat(an1, nchan), npol).reshape(-1, 1)  
+    an2_repeated =  np.tile(np.repeat(an2, nchan), npol).reshape(-1, 1)  
+    fid_repeated =  np.tile(np.repeat(fid, nchan), npol).reshape(-1, 1)  
+    sid_repeated =  np.tile(np.repeat(sid, nchan), npol).reshape(-1, 1)  
+    uvw_repeated =  np.tile(np.repeat(uvw.T, nchan, axis=0), npol)
+    
+    dfs = df(
+        np.hstack([time_repeated,expos_repeated,uvw_repeated, an1_repeated,an2_repeated,
+                   fid_repeated, sid_repeated, wt_calc_reshaped, flag_reshaped, amp_reshaped, phase_reshaped], dtype='object'),
+        index=multi_index,
+        columns=['time','expos','u','v','w', 'an1','an2','fid','sid', 'wt_calc', 'flag', 'amp', 'phase',]
+    )
+    
+    
+    dic_field   = {fid: fname for fid,fname in enumerate(field_name)}
+    dfs['field']  =  dfs['fid'].map(dic_field)
+    
+    u=dfs['u'].astype('float64')
+    v=dfs['v'].astype('float64')
+    dfs['uvdist'] = np.sqrt(u*u + v*v)
+
+    return dfs
+
 def get_axes(vis):
     tb.open(vis)
     
@@ -946,6 +1004,7 @@ def get_axs(vis, ret_sel_idx=False):
     """
     Returns avg_amp, avg_phase, time, antenna
     uvdist is taken assuming UVW is taken from a reference origin at (0,0,0)
+    # TODO: take nchan, nspw and create amp/flux for each, that way we can do average laterm and consider flag for each nchan, nspw etc
     """
     from vasco.ms import get_tb_data
     time, field, data, weight, an1, an2, uvw, flag = get_tb_data(vis, axs=['TIME', 'FIELD_ID', 'DATA', 

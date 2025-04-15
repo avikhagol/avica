@@ -8,7 +8,7 @@ import base64, io
 from pandas import DataFrame as df
 from matplotlib import cm
 
-rcParams["figure.dpi"]=360
+DPI = rcParams["figure.dpi"]= 360
 rcParams['lines.markersize'] = 0.2
 plt.rcParams['font.size'] = 4
 plt.rcParams['font.family'] = 'sans-serif' 
@@ -251,8 +251,8 @@ def stat_gooddata(axs_df_field_scatter, pop_perc=0.8):
             print("------")
     
     return good_group
-    
-def save_fig(plt, fig, kind='base64', output='output.jpg'):
+
+def save_fig(plt, fig, kind='base64', output='output.jpg', dpi=300):
     
     if kind == 'base64':
         buf = io.BytesIO()
@@ -284,7 +284,7 @@ def save_fig(plt, fig, kind='base64', output='output.jpg'):
                 except:
                     pass               
         fig.savefig(newPath, format=kind, bbox_inches='tight',
-                    pad_inches=0)
+                    pad_inches=0, dpi=dpi)
         print("saved {}".format(newPath))
         plt.close()
         return newPath

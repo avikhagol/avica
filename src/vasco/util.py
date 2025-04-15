@@ -19,10 +19,33 @@ def read_metafile(metafile):
         meta                        =   json.loads(metad)
     return meta
 
+def read_flaglist(flaglistfile):
+  with open(flaglistfile, 'r') as flagfile:
+    flagcontent = flagfile.read()
+    src_start           = False
+    dic_src_flaggedants = {}
+    for line in flagcontent.split("\n"):
+      if line:
+        if not 'amou' in line[:5].lower():
+          if '--' in line[:5].lower():
+            src= line.replace('--', '').strip()
+            dic_src_flaggedants[src] = {}
+            src_start = True
+          else:
+            ant, perc = '', 'nan'
+            if ":" in line[:4]:
+              src_start = False
+              ant = line[:2]
+              if "%" in line:
+                perc = line.replace(ant, "").replace(":","").replace("%","").strip()
+              else:
+                perc = "nan"
+              dic_src_flaggedants[src][ant] = perc
+  return dic_src_flaggedants
 
 # targets = SkyCoord([23.997513*u.hourangle],[47.119273*u.deg], frame='fk5')
 
-def creat_df_fromrfcfile(rfc_filepath):
+def create_df_fromrfcfile(rfc_filepath):
     
     rfc_dfpath = Path(rfc_filepath).parent / f'{Path(rfc_filepath).stem}.pkl'
     with open(rfc_filepath, 'r') as rfc:
@@ -68,7 +91,7 @@ def search_rfc_catalog(targets, rfc_filepath, reset=False, columns=[]):
     if rfc_dfpath.exists() and not reset:
         df_rfc = read_parquet(rfc_dfpath)
     else:
-        df_rfc = creat_df_fromrfcfile(rfc_filepath=rfc_filepath)
+        df_rfc = create_df_fromrfcfile(rfc_filepath=rfc_filepath)
         
     catalog = SkyCoord(df_rfc['RA_J2000'].values*u.hourangle, df_rfc['DEC_J2000'].values*u.deg, frame='fk5')
     idxsearcharound, idxself, sep2d, dist3d =  search_around_sky(catalog, targets, seplimit=10*u.milliarcsecond)

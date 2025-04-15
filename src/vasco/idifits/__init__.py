@@ -6,7 +6,7 @@ from urllib import request
 from vasco import vascodir
 from pathlib import Path
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 
@@ -171,7 +171,10 @@ class ANTAB:
                                     mm                      =   f"{mm.split('.')[0]}:{float(sec_dec) * 0.6*0.1**len(sec_dec)}"
                                     rowv[1]                 =   f"{hh}:{mm}"
 
-                                yday_row                    =   Time(f"{yyyy}:{rowv[0]}:{rowv[1]}")
+                                hh_strp, mm_strp, ss_strp = rowv[1].split(':')
+                                
+                                fixed_time = (datetime.strptime("0:0:0.0", "%H:%M:%S.%f") + timedelta(hours=float(hh_strp), minutes=float(mm_strp),seconds=float(ss_strp))).strftime("%H:%M:%S.%f")
+                                yday_row                    =   Time(f"{yyyy}:{rowv[0]}:{fixed_time}")
                                 row_validation              =   yday_start < yday_row < yday_end
                                 if row_validation:
 

@@ -5,7 +5,7 @@ with open("README.md", "r") as rdme:
 
 setup(
     name = 'vasco',
-    version = '0.1.3',
+    version = '0.1.5',
     url='https://gitlab.ia.forth.gr/smile/vasco/',
     author='Avinash Kumar',
     author_email='avialxee@gmail.com',
@@ -13,25 +13,26 @@ setup(
     py_modules = ["vasco"],
     package_dir={'':'src'},
     classifiers=["Programming Language :: Python :: 3",
-                 "Programming Language :: Python :: 3.6",
-                 "Programming Language :: Python :: 3.7",
+                #  "Programming Language :: Python :: 3.6",
+                #  "Programming Language :: Python :: 3.7",
                  "Programming Language :: Python :: 3.8",
-                #  "Programming Language :: Python :: 3.9",
-                #  "Programming Language :: Python :: 3.10",
+                 "Programming Language :: Python :: 3.9",
+                 "Programming Language :: Python :: 3.10",
+                 "Programming Language :: Python :: 3.11",
                  "License :: OSI Approved :: BSD License",
                  "Intended Audience :: Science/Research",
                  ],
     long_description=desc,
     long_description_content_type = "text/markdown",
     install_requires=["astropy", "numpy", "ipython", "pyvirtualdisplay", "pandas", "scipy",
-                      "scikit-learn",
+                      "scikit-learn", 'polars',
                       
                     #  "casaplotms", # start depreciation
                     #   "casatools",
-                      "protobuf==3.19.6",
+                      "protobuf==3.20.3",
                       ],
     extras_require = {
-        "all" : ['fitsio', 'casatools', 'casatasks', 'dask[distributed]'] , # hopefully cfitsio is installed in the local system;
+        "all" : ['fitsio', 'casatools', 'casatasks', 'dask[distributed]'] , 
         "dev" : ["pytest>=3.7",
         ]
     },

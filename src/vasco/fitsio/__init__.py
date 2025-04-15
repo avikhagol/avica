@@ -95,9 +95,9 @@ def get_scantime(hdu, dateobs):
     
     hdutime = hdu.read_column(ti)
 
-    scanmjd=Time(hdutime, format='mjd', scale='utc')
     zerotime=Time(dateobs, format='isot',scale='utc')
-    scantime=zerotime.mjd+scanmjd
+    # scantime=zerotime.mjd+scanmjd
+    scantime = Time(zerotime.mjd+hdutime, format='mjd', scale='tt')
     return scantime
 
 def listobs(fitsfile, asdf=True):

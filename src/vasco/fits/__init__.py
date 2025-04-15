@@ -85,11 +85,12 @@ def _listobs(fitsfile,cardname=None) :
                 #         uvsid_colname=str(cname.name)
                 uvsid=uvsidd[uvsid_colname]
 
-                scanmjd=Time(uvtime, format='mjd', scale='utc')
+                # scanmjd=Time(uvtime, format='mjd', scale='utc')
                 zerotime=Time(dateobs, format='isot',scale='utc')
-                scantime=zerotime.mjd+scanmjd
+                scantime = np.array(zerotime.mjd, dtype=np.float64)+np.array(uvtime, dtype=np.float64)
+                scantime = Time(scantime, format='mjd', scale='tt')
+                # scantime=zerotime.mjd+uvtime
                 integrationTime=Counter(hdul[cardname].data.INTTIM).keys()
-                
                 sourcename={}
                 ind_inst=np.where((np.diff(uvsid)!=0)==True)
                 ind_inst=np.append(ind_inst,-1)
@@ -755,7 +756,7 @@ def find_refant(fitsfile, verbose=True, return_onmissing=False, tsys_wt=0.99, nr
         t['Distance']  = [ant_with_d[ant] for ant in t['ANNAME']]
         
         for ant in missing_antennav: 
-            print(ant,"\n", t)
+            # print(ant,"\n", t)
             t.add_row([ant, float('nan'), 0,ant_with_d[ant]])  # for antenna missing tsys value adds row with `nan`
         
         tp=t.to_pandas()
