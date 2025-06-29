@@ -4,12 +4,29 @@
 
 ### Added
 
-- `read_df_vis` using polars
+### Fixed
+
+### Changed
+
+### Removed
+
+
+## [0.2.0]
+
+Improvements for reading RFC and class catalogue. Moving towards casacore for reading tables. Prefer Polars over Pandas.
+
+### Added
+
+- `vasco.core` library for casacore based operations. Calculates Visibility summary using `get_vis_summary`.
+- `vasco.ms.read_df_vis` using polars to read the visibility data - not ready for use.
+- `vasco.util.parse_class_cat` to read the CLASS table for the SMILE sample.
+- `vasco.ms.find_phasecenter_inms` to identify the separation from the phasecenter coordinate for the field comparing from the output class catalogue search file and fitsfile, uses msfile to use the field ID corrosponding to the field name in the final dictionary.
+- `vasco.fitsio.catalog_search_from_fits` can search coordinates using `df_catalog` which can be made using `vasco.util.rfc_ascii_to_df` and `vasco.util.parse_class_cat` implemented in `vasco.fitsio.df_search_brightcalib_rfc`.
+- `vasco.fits` contains few functions to create multiple rows in a table corrosponding the the `FREQID` column in `FREQUENCY` table when the values are missing. It can also flatten two duplicate but incremented `FREQID` entries in the `FREQUENCY` table when all other columns are identical.
 
 ### Fixed
 
-- 
-
+- frame `icrs` is preferred over `fk5` by default.
 
 ### Changed
 
@@ -17,7 +34,7 @@
 
 ### Removed
 
-- 
+- dropping `dask` from `vasco[all]` in the setup file.
 
 
 ## [0.1.5]
