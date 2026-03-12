@@ -1042,12 +1042,15 @@ def coordinate_for_target(vis, target, sourcenames):
     sv = c.pop(target, None)
     sv = SkyCoord(sv[0]*u.rad,sv[1]*u.rad) if sv else None
     
-    r, d = list(zip(*c.values()))
-    oth = SkyCoord(r*u.rad,d*u.rad)
+    if c:
+        r, d = list(zip(*c.values()))
+        oth = SkyCoord(r*u.rad,d*u.rad)
+    else:                                       # when target is the only source in file
+        oth = sv
     
     return oth, list(c.keys()), sv
 
-def identify_sources_fromtarget_ms(vis, target_source, caliblist_file=None, flux_thres=0.150, min_flux=0.025, ncalib=9, flux_df=None, sourcenames=None, hard_selection=False, metafolder=None):
+def identify_sources_fromtarget_ms(vis, target_source, caliblist_file=None, flux_thres=0.150, min_flux=0.025, ncalib=20, flux_df=None, sourcenames=None, hard_selection=False, metafolder=None):
     """
     TODO: change caliblist_file name to calibrator catalog file
     """
@@ -1078,7 +1081,7 @@ def identify_sources_fromtarget_ms(vis, target_source, caliblist_file=None, flux
         s                                   =   identify_sources_fromtarget(scanlist_seq, sourcenames, target_source, other_sources, c_target, c_others, 
                                                     band=band, flux_thres=flux_thres, min_flux=min_flux, ncalib=ncalib, caliblist_file=caliblist_file, verbose=True, flux_df=flux_df, hard_selection=hard_selection)
         s_dict[band]                        =   s
-    
+    print(flux_thres)
     meta['s_dict']                          =   s_dict
     save_metafile(metafile, meta)
     return s_dict
@@ -1257,15 +1260,23 @@ def get_axs(vis, ret_sel_idx=False):
     """
     Returns avg_amp, avg_phase, time, antenna
     uvdist is taken assuming UVW is taken from a reference origin at (0,0,0)
-    # TODO: take nchan, nspw and create amp/flux for each, that way we can do average laterm and consider flag for each nchan, nspw etc
+    # TODO: take nchan, nspw and create amp/flux for each, that way we can do average later and consider flag for each nchan, nspw etc
     """
     from vasco.ms import get_tb_data
     time, field, data, weight, an1, an2, uvw, flag = get_tb_data(vis, axs=['TIME', 'FIELD_ID', 'DATA', 
                                                                       'WEIGHT','ANTENNA1','ANTENNA2','UVW',
                                                                       'FLAG_ROW'])
+    
+    mean_freq                  =   np.mean(get_tb_data(f"{vis}/SPECTRAL_WINDOW", axs=['CHAN_FREQ']))
     amp, ph                  = get_avg_amp_phase(data, weight)
     weight_idx               =  weight>=0.0
     sel_idx                  = np.argwhere(~np.isnan(amp)).T[0] 
+        
+    wavelength = 299792458.0 / mean_freq
+    
+    # is_not_nan = ~np.isnan(amp)
+    # is_notnegweighted = weight >= 0.0
+    # sel_idx = np.where(is_not_nan & is_notnegweighted)[0]
     
     if (sel_idx is not None) and len(sel_idx):
         amp, ph                        = amp[sel_idx], ph[sel_idx]
@@ -1275,11 +1286,14 @@ def get_axs(vis, ret_sel_idx=False):
     an1                               = an1[sel_idx]
     an2                               = an2[sel_idx]
     uvdist                            = np.sqrt((uvw[0].T*uvw[0])+(uvw[1].T*uvw[1]))
-    uvdist                            = uvdist[sel_idx]
+    uvdist                            = uvdist[sel_idx]/wavelength
     field                             = field[sel_idx]
     
     # unflagged                         = ((~flag).sum(axis=0)).astype(int)[0][sel_idx] # for tb.getcol('FLAG') which operates on spw etc
     unflagged                         = (~flag).astype(int).T
+    if (unflagged==0).sum()>0:
+        unflagged                   = unflagged[sel_idx]
+    
     data_dict                         = {'time':time.T, 'unflagged':unflagged.T, 'uvdist':uvdist,
                                          'an1':an1.T,'an2':an2.T, 'field':field.T, 
                                          'amp':amp.T, 'phase':ph.T,
@@ -1380,9 +1394,41 @@ def flag_d(vis, target,flag=True):
             success=False
     return flagged_perc, success
 
+def flag_byweights(vis, nomodify=True):
+    tb.open(vis, nomodify=nomodify)
+        
+    size =  df_vis.index.max() + 1  
+    idx_int = df_vis[idx_non_autocorr][idx_field][flaggable_idx].index
+    
+    
+    
+    flaggable_data = tb.getcol('FLAG_ROW')
+    if len(flaggable_data)!= len(df_vis.index): raise TypeError("The flag row column is not the same as column data")
+
+    flaggable_data[idx_int] = True
+
+    # flag= tb.getcol('FLAG')
+    # flag.T[idx_int] = ~tb.getcol('FLAG').T[idx_int]
+    
+    try:
+        
+        tb.putcol('FLAG_ROW', flaggable_data)
+        # tb.putcol('FLAG', flag)
+        success = tb.flush()
+        tb.close()
+        tb.done()
+        
+        flagged_perc = np.round(len(idx_int)/len(flaggable_data)*100,3)
+        overall_flagged = np.round(sum(flaggable_data)/len(flaggable_data)*100,3)
+        print(f"Flagged successfully: {flagged_perc} % | overall flagged: {overall_flagged} %")
+        
+    except:
+        traceback.print_exc()
+        success=False
+
 def find_phasecenter_inms(fitsfile, vis, class_searchcoord_file, sep=0.85 ):
     """
-    uses the coordinate, fits_target columns in the dataframe from class_searchcoord_file to find fields need phaseshift when separation >{sep}"
+    uses the coordinate, fits_target columns in the dataframe from class_searchcoord_file to find fields need phaseshift when separation in arcsec >{sep}"
     """
     from vasco.util import read_df_out
     from vasco.fitsio import df_source_fits
@@ -1433,3 +1479,56 @@ def find_phasecenter_inms(fitsfile, vis, class_searchcoord_file, sep=0.85 ):
                 dic_phase_center[str(field_idx)] = 'ICRS ' + str(coord)
 
     return dic_phase_center
+
+from itertools import product
+
+def get_alluniquecomb_spws(vis):
+    """
+    when there are similar band for multiple spws
+    """
+    tbfo = table()
+    
+    tbfo.open(f'{vis}/SPECTRAL_WINDOW')
+    freqs = tbfo.getcol('CHAN_FREQ')
+    tbfo.close()
+    spws_freq_list = freqs.mean(axis=0)
+    unique_freqs_cen = np.unique(spws_freq_list)
+
+    spw_for_freq=[]
+    for freq in unique_freqs_cen:
+        spw_for_freq.append(np.where(spws_freq_list==freq))
+    
+    spwscomb = list(product(*(t[0] for t in spw_for_freq)))
+    
+    return spwscomb
+    
+
+def get_best_spws(vis):
+    bestspws = []
+    countscans = 0
+    countants = 0
+    spwscomb = get_alluniquecomb_spws(vis)
+    
+    msmd = msmetadata()
+    
+    msmd.open(vis)
+    scansforspws = msmd.scansforspws()
+    
+
+    for uniquespws in spwscomb:
+        allscans  = set()
+        antennacount = 0
+        for spw in uniquespws:
+            allscans.update(scansforspws[str(spw)])
+        for scan in allscans:
+            antennacount += len(msmd.antennasforscan(scan))
+            
+        has_morescans = countscans < len(allscans)
+        has_moreants = countants < antennacount
+        
+        if has_moreants and has_morescans:
+            bestspws = uniquespws
+            countants = antennacount
+            countscans = len(allscans)
+    msmd.close
+    return bestspws

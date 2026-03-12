@@ -40,6 +40,8 @@ parser.add_argument('--from-meta', help='useful to run operations without determ
 parser.add_argument('--from-snr', help='to find sources from snr data second input in --input-file is the snr metafile; should have .vasco in path; also needs --output-file else only prints output', action='store_true', required=False)
 parser.add_argument('-o','--output-file', help='Give the output file path.', required=False)
 parser.add_argument('--gen-antab', help='Generate ANTAB', action='store_true', required=False)
+parser.add_argument('--modify', help='Generate ANTAB', action='store_true', required=False)
+
 
 op=parser.add_argument_group('operations',"""
                              use operations based on file type e.g., .FITS .MS
@@ -47,6 +49,7 @@ op=parser.add_argument_group('operations',"""
 op.add_argument('-l','--list-observation',help="lists all the useful details similar to listobs in CASA or listr in AIPS.", required=False, action="store", const="SCAN", nargs='?')
 op.add_argument('-t','--identify-targets',help="find targets for phasecal, science and bright cal for FF", required=False, action="store_true")
 op.add_argument('-r', '--find-refant', help="find refant by checking TSYS info", required=False, action="store_true")
+op.add_argument('--fix-dupltb', help="find duplicates in tables after the concat task and remove unnencessary rows", required=False, action="store_true")
 op.add_argument('-s', '--split-source', help='comma separated values of SOURCE_ID/SOURCE_NAME is used to select Sources to create a new FITS file/ MS.')
 op.add_argument('--to-B', help='Convert to B1920')
 
@@ -287,6 +290,13 @@ def cli():
     else:
         from vasco.fits import _listobs, Targets as t, find_refant, split, fits
         from vasco.fitsio import listobs, IdentifySource as IdS, identify_sources_fromtarget
+        if args.fix_dupltb:
+            from vasco.ms.tables import fix_duplicatedrows
+            nomodify = not args.modify
+            refvis = input_file[0]
+            newvis = input_file[1]
+            
+            fix_duplicatedrows(refvis=refvis,newvis=newvis, nomodify=nomodify)
         if args.list_observation:
             cardname=args.list_observation.split(',')
             for fitsfile in input_file: 

@@ -123,12 +123,13 @@ def get_vis_summary(vis, target,wo_nchan=True, **kwargs):
     
         chwidth = (spw_table.getcol('CHAN_WIDTH')[spwid]/1e03).min() # FIXME: correct way is to use from dictionary 
     for band in dic_band_dscid:
-        print(band)
+        # print(band)
         dscids = dic_band_dscid[band]
         d = get_unflagged_data(tb, fid, dscids, **kwargs)
         
         flags = d.getcol('FLAG')
         flagged = np.count_nonzero(flags)
+        # print(np.shape(flags))
         nrow,nchan,ncorr = np.shape(flags)
         nvis = nrow*nchan*ncorr
         unflagged_nvis = nvis - flagged

@@ -10,6 +10,12 @@ from pathlib import Path
 import json
 import subprocess
 
+
+
+# -----------
+
+
+
 def save_metafile(metafile, metad):
     with open(str(metafile), 'w') as mf: json.dump(metad, mf)
     print("saved", str(metafile))
@@ -178,7 +184,7 @@ def read_inputfile(folder,inputfile='config.inp',):
     return params, files, input_folder
 
 
-def create_config(params, out='config.inp', lj=1, rj=1):
+def create_config(params, out='config.inp', lj=1, rj=1, verbose=True):
     with open(out, 'w') as o:
         for k,v in params.items():
             
@@ -190,6 +196,7 @@ def create_config(params, out='config.inp', lj=1, rj=1):
             if type(v) is str():
                 v = f"{v.rjust(rj)}"
             o.write(f'{k.ljust(lj)} = {v}\n')
+    if verbose:print("created", f'{out}' )
     return out
 
 def read_txt_file(filename):
@@ -281,14 +288,14 @@ def search_source(sources, filename, concat, j2colname='J2000 name', ivscolname=
         nsources = [source[:txt_count] for source in sources]
     jsources = []
     for source in nsources:
-        
-        if source[0]!='J': 
-            jsources.extend([f'J{source}'])
-            
-        else: 
-            jsources.extend([source])
-            nsources.remove(source)
-            nsources.extend([source[1:]])
+        if source:
+            if source[0]!='J': 
+                jsources.extend([f'J{source}'])
+                
+            else: 
+                jsources.extend([source])
+                nsources.remove(source)
+                nsources.extend([source[1:]])
     res = concat([df_rfc.loc[df_rfc[ivscolname].str.startswith(tuple(nsources))], df_rfc.loc[df_rfc[j2colname].str.startswith(tuple(jsources))]])
     return res
 
@@ -312,9 +319,14 @@ def search_sources(sources, filename, j2colname='J2000 name', ivscolname='IVS na
     from pandas import concat
 
     res = search_source([sources[0]], filename=filename, concat=concat, j2colname=j2colname, ivscolname=ivscolname)
+    res['orig_sourcename'] = sources[0]
+    
     if len(sources)>1:
         for source in sources[1:]:
-            res = concat([res, search_source([source], filename=filename, concat=concat)], axis=0)
+            temp_res = search_source([source], filename=filename, concat=concat)
+            temp_res['orig_sourcename'] = source
+            res = concat([res, temp_res], axis=0)
+            
     return res
 
 def latest_file(path: Path, pattern: str = "*"):

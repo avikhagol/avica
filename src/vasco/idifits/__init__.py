@@ -7,7 +7,7 @@ from vasco import vascodir
 from pathlib import Path
 
 from datetime import datetime, timedelta
-
+import numpy as np
 
 
 class ANTAB:
@@ -53,6 +53,8 @@ class ANTAB:
         ant_header_count            =   0
         ant_header                  =   False
         end_file                    =   False
+        antenna_changed             =   False
+        gain_header                 =   ""
         
         this_an_gain_processed      =   False
         mount                       =   ''
@@ -62,12 +64,15 @@ class ANTAB:
         yyyy                        =   yday_start.split(':')[0]
         tsys_lines = self.tsystxt.split('\n')
         tsys_lines.append('__END__')
+        pols_global, freq_range_global = [], []
+        dic_header_an               =   {}
         with open(outfile, "w") as oa: 
             for ti,t in enumerate(tsys_lines):
                 
                 # --------- Check working Station/Antenna
                 if 'tsys information for' in t.lower():
                     an=t.lower().replace('tsys information for','').replace(' ','').replace('-','').replace('!','').upper()
+                    antenna_changed = True
                     allans.append(an)
                     this_an_gain_processed = False
                     ant_header = False
@@ -79,9 +84,13 @@ class ANTAB:
                         if all(v in hv for v in [':', '-', '/']):                                                           # HACK: looks for the timestamp pattern unique to header
                             hv = hv.split('/')
                             timv = [f"{yyyy}:{t_hv.replace('-', ':')}" for t_hv in hv if t_hv]                        
-                            if last_pcol_td is None or last_pcol_td <= (Time(yday_start)- Time(timv[0])).value:             # checking closest timestamp
+                            if last_pcol_td is None or antenna_changed:#or last_pcol_td <= 999: #(Time(yday_start)- Time(timv[0])).value:             # checking closest timestamp
+                                antenna_changed = False
                                 last_pcol_td = (Time(yday_start)- Time(timv[0])).value
+                                # print(last_pcol_td, "was last time diff", "timestamp from header:", timv)
                                 pols, freq_range = [], []
+                            # else:
+                            #     print(last_pcol_td, "REJECTED: was last time diff", "timestamp from header:", timv)
                 if any(pol in t.lower() for pol in ['rcp', 'lcp']):
                     p = [pol for pol in ['rcp', 'lcp'] if pol in t.lower()]
                     if p:
@@ -98,11 +107,20 @@ class ANTAB:
                         if ti+1<len(tsys_lines) and not any(pol in tsys_lines[ti+1].lower() for pol in ['rcp', 'lcp']):     # checking last row with freq in TSYS header
                             freq_range.append(str(float(line[-2].replace('MHz',''))+bw))                                                   # HACK: hardcoded "MHz" can be avoided
                         if freq_range and not this_an_gain_processed:
-                            freq = float(freq_range[0])
-                            mount, dpfu, poly       =   find_gain(vlbagainfile, an, self.dateobs, freq)
+                            ## TODO: we should store R{nrcp},L{nlcp} in a dict 
+                            # for freq in freq_range:
+                                # band = check_band(freq/1e3) # as freq in MHz -> GHz
+                                # ---> change indent for following:
+                            freq = abs(float(freq_range[0]))
+                            
+                            mount, dpfu, poly           =   find_gain_fromgaintable(fitsfile=self.fitsfile, vlbagainfile=vlbagainfile, an=an, date=self.dateobs, freq=freq)
+                            if mount is None:
+                                mount, dpfu, poly       =   find_gain(vlbagainfile, an, self.dateobs, freq)
                             this_an_gain_processed = True
                             if not mount:
                                 gain_missing.append(an)
+                                # if band not in dic_header_an: dic_header_an[band] = {an:{}}
+                                # dic_header_an[band][an] = {"mount":mount, "dpfu":dpfu, "poly":poly, 'pols': pols, 'freq' :freq}                            
                             
                 # ---------- Gathering TSYS header info
                 if 'TSYS ' in t:
@@ -136,10 +154,11 @@ class ANTAB:
                 elif tsys_found:                                                # HACK: Using elif (instead of if) avoids finding 'TSYS:'
 
                     if t and t[0]!='!':
-                        if mount:
+                        if mount and an in _tsys_head:
                             if not ant_header:
                                 if pols:
-                                    rc,lc=0,0
+                                    rc,lc       =   0,0
+                                    # print(f"pols={pols} {an} , {len(ind)}")
                                     for i,pol in enumerate(pols):
 
                                         if 'rcp' in pol:
@@ -162,7 +181,7 @@ class ANTAB:
                                     
                                 main_antab_txt         +=  antab_header
                                 ant_header_count       +=  1
-                                ant_header = True
+                                ant_header              =   True
                             rowv = [v for v in t.split('!')[0].split(' ') if v]
                             if len(rowv)>1: 
                                 if '.' in rowv[1]:
@@ -175,7 +194,8 @@ class ANTAB:
                                 
                                 fixed_time = (datetime.strptime("0:0:0.0", "%H:%M:%S.%f") + timedelta(hours=float(hh_strp), minutes=float(mm_strp),seconds=float(ss_strp))).strftime("%H:%M:%S.%f")
                                 yday_row                    =   Time(f"{yyyy}:{rowv[0]}:{fixed_time}")
-                                row_validation              =   yday_start < yday_row < yday_end
+                                row_validation              =   True#yday_start < yday_row < yday_end
+                                #idx_freq                   =   [idxf for idxf in range(ind) freq_start < freq_ro]
                                 if row_validation:
 
                                     row_vv                  =   [v for v in t.split('!')[0].split(' ') if v]
@@ -195,6 +215,142 @@ class ANTAB:
                             oa.write('/')
                             
         return allans, _tsys_head, gain_missing
+    
+
+
+def parse_equals(gain_dic, antb_line_cols):
+    key                             =   "undefined"
+    for val in antb_line_cols:
+        val                         =   val.replace("'", "")
+        val                         =   val.replace('"', "")
+        
+        if "=" in val:
+            key, firstvalue         =   val.split("=")
+            gain_dic[key]  =    []
+            if firstvalue.strip():
+                gain_dic[key]  =   [firstvalue.strip()]
+        else:
+            if not "," in val:
+                gain_dic[key].append(val)
+            else:
+                gain_dic[key].extend(val.split(','))
+    return gain_dic
+                    
+def parse_gain_from_antab(gain_dic, antb_line_cols):
+    gain_dic           =   {}
+    gain_dic['MOUNT']  =   antb_line_cols[2].strip()
+    rest                        =   antb_line_cols[3:-1]
+    gain_dic                    =   parse_equals(gain_dic, rest)
+    return gain_dic
+
+def parse_tsys_from_antab(tsys_dic, antb_line_cols):
+    rest               =    antb_line_cols[2:-1]
+    tsys_dic           =   parse_equals(tsys_dic, rest)
+    tsys_dic['data']   =   []
+    return tsys_dic
+    
+
+def parse_antab(antabfile, fitsfile):
+    with open(antabfile) as antb:
+        gain_dic                =   {}
+        tsys_dic                =   {}
+        tsys_row                =   False
+        tsys_head_recorded      =   False
+        mintime, maxtime        =   "", ""
+        for antb_line in antb.readlines():
+            antb_line_cols      =   antb_line.split(" ")
+            firstcol            =   antb_line_cols[0].strip()
+            
+            if firstcol in ["GAIN", "TSYS"]:
+                antenna         =   antb_line_cols[1].strip()
+                if firstcol == "GAIN":                                          # Record gain header
+                    tsys_row    =   False   
+                    gain_dic[antenna]    =   {}
+                    gain_dic[antenna]    =   parse_gain_from_antab(gain_dic[antenna], antb_line_cols)
+                    
+                elif firstcol == "TSYS":                                        # Record tsys header
+                    tsys_row            =   True
+                    tsys_head_recorded  =   True
+                    if not antenna in tsys_dic:  tsys_dic[antenna]   =   {}
+                    tsys_dic[antenna]   =   parse_tsys_from_antab(tsys_dic[antenna], antb_line_cols)
+                    
+            if tsys_row:
+                if tsys_head_recorded:
+                    tsys_head_recorded  =   False
+                else:
+                    if firstcol != "/":                                         # Record tsys Data
+                        antb_line_cols[-1]  =   antb_line_cols[-1].replace("\n", "")
+                        # tsys_dic[antenna]['data'].append(antb_line_cols)
+                        
+                        s               =   " ".join(antb_line_cols[:2])
+                        tsys_values     =   [float(v) for v in antb_line_cols[2:]]
+                        yy              =   get_dateobs(fitsfile=fitsfile).year
+                        # dt              =   datetime.strptime(s, "%j %H:%M:%S.%f").replace(year=yy) # does not consider leap year
+                        dt              =   datetime.strptime(f"{yy} {s}", "%Y %j %H:%M:%S.%f")
+                        if not mintime or mintime> dt: mintime = dt
+                        if not maxtime or maxtime< dt: maxtime = dt
+                            
+                        tsys_dic[antenna]['data'].append([str(dt), tsys_values])
+                        tsys_dic["start_time"] = mintime
+                        tsys_dic["end_time"] = maxtime
+    return {"gain_dic": gain_dic, "tsys_dic": tsys_dic}
+
+
+def find_gain_fromgaintable(fitsfile, vlbagainfile, an, freq, gaintbname="GAIN_CURVE", date="", verbose=True):
+    """
+    assumes DATE-OBS wont change anything.
+    
+    """
+    from astropy.io import fits
+    hdul    = fits.open(fitsfile, mode="readonly")
+    mount, sensitivity, poly = None, None, None
+    
+    if gaintbname in hdul:
+        
+        tb_ant  = hdul['ANTENNA'].data
+
+        idx_tba =   list(tb_ant['ANNAME']).index(an)
+        anid    =   tb_ant['ANTENNA_NO'][idx_tba]
+        pola    =   tb_ant['POLTYA'][idx_tba]
+
+        gaintb  =   hdul[gaintbname].data
+        idx_tbg = gaintb['ANTENNA_NO']==anid
+
+        reffreq = hdul['FREQUENCY'].header['REF_FREQ']
+        freqtb  = hdul['FREQUENCY'].data
+        ntab    = hdul[gaintbname].header['NO_TABS']
+        dic_band = {}
+
+        for i,freqid in enumerate(freqtb['FREQID']):
+            bandfreq                    = reffreq + freqtb['BANDFREQ'][i]
+            for j,freq_sel in enumerate(bandfreq):
+                band                    = check_band(freq_sel/1e9)
+                if not band in dic_band: 
+                    dic_band[band]      =  {j:freq_sel}
+                else:
+                    dic_band[band][j]   = freq_sel
+
+        freq_given_Hz           = freq*1e6           # because freq is in MHz
+        given_band              = check_band(freq_given_Hz/1e9)
+        
+        idx_band_seq            = list(dic_band[given_band].keys())
+
+        pol1g                   =   np.max(gaintb[idx_tbg]['SENS_1'][0][idx_band_seq])                                      # HACK : hardcoded index 0 of the array result
+        pol2g                   =   np.max(gaintb[idx_tbg]['SENS_2'][0][idx_band_seq]) if 'SENS_2' in list(gaintb.dtype.fields.keys()) else pol1g
+
+        sensitivity             = [pol1g, pol2g] if pola =='R' else [pol2g, pol1g]
+        an_gain                 = parse_vlbagain(vlbagainfile,an, freq=freq)
+        mount                   = an_gain['MOUNT'].values[-1] if not an_gain.empty else "ALTAZ"
+
+        nchan                   = len(freqtb['BANDFREQ'][0])                                                                   # HACK: assumes freqid 0
+        polytb                  = gaintb[idx_tbg]['GAIN_1'][0].reshape(nchan,ntab)[idx_band_seq][0]
+        poly                    = []
+        for polyv in polytb:
+            if polyv==0:break
+            poly.append(polyv)
+        if mount is not None and verbose:
+            print(f"\t{gaintbname} found! values registered for {an}")
+    return mount, sensitivity, poly
 
 def find_gain(vlbagainfile, an, obsdate, freq):
     """

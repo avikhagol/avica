@@ -226,26 +226,16 @@ def id_flux_for_sources(sourcenames, sources_list,  caliblist_file, band='C'):
     from vasco.util import search_sources
     
     res = search_sources(sources_list, caliblist_file)
-    if band:
-        res = res[['IVS name', 'J2000 name', f'{band}_T-', f'{band}_Tot']]
-#     print(res.to_string())
-    nsources = [source_name[:9] for source_name in sources_list] # source[:9] is already used in search_sources
-    ivsname, j2name, m, flux = res.values.T
-#     j2name = [j2n[1:] if j2n[0]=='J' else j2n for j2n in j2name]
-#     print(j2name)
+    if band and f'{band}_T-' in res.columns:
+        res = res[['IVS name', 'J2000 name', f'{band}_T-', f'{band}_Tot', 'orig_sourcename']]
+    _, _, m, flux, orig_srcs = res.values.T if not res.empty else ([], [], [], [], [])
     dic = {}
-    for s,source in enumerate(nsources):
-        
-        sid = get_sources_id(sourcenames, [sources_list[s]])
-
-        idx = None
-        for i, isource in enumerate(ivsname):
-            if source in isource: idx = i
-        for j, jsource in enumerate(j2name):
-            if source in jsource: idx = j
-        if idx: 
-            if m[idx]!='-': dic[sid[0]] = {'flux':float(flux[idx])}
-        
+    sids = get_sources_id(sourcenames, orig_srcs)
+    
+    for s,sid in enumerate(sids):
+        if m[s]!='-':
+            dic[sid] = {'flux':float(flux[s])}
+    
     return df.from_dict(dic, orient='index', columns=['flux'])
 
 def choose_calib_for_snr_rating(all_sci_ant, calibrator_df_sorted_desc, n_ant=9):
@@ -288,12 +278,15 @@ def choose_calib_for_snr_rating(all_sci_ant, calibrator_df_sorted_desc, n_ant=9)
     return _sel_calibrator, _remain_ant
     
 
-def identify_calibrators(t, target, ps, flux_thres, flux_df, min_flux=0.025, ncalib=9, calib_ids=[], hard_selection=False):
+def identify_calibrators(t, target, ps, flux_thres, flux_df, min_flux=0.025, ncalib=9, calib_ids=[], hard_selection=False, flux_comparison_factor=1.8):
     """
     write dictionary after finding calib from TSYS and flux info
 
     assumes df_flux 
     has correct field ids as index and `flux` column
+    
+    :flux_comparison_factor:    (float)
+                                currently not used
     """
     target_bright               =   False
     calib,least_calib           =   {}, 1
@@ -306,12 +299,12 @@ def identify_calibrators(t, target, ps, flux_thres, flux_df, min_flux=0.025, nca
     if target_flux >= flux_thres :
         target_bright           =   True
         least_calib             =   2                       # we can increase this to 1 or 2
-        chk_flux                =   target_flux*1.8         # to check if there is calibrator with higher flux present; 1.8 is random;
+        # chk_flux                =   target_flux*flux_comparison_factor         # to check if there is calibrator with higher flux present; 1.8 is random; # This creates problem when there are calibrators with refant missing. Using similar SNR calibrator e.g 30 is fine
     calib_df                    =   calib_df.loc[calib_ids]
     calib_df                    =   calib_df.sort_values(by=['flux'], ascending=[False])
     bright_calib_df             =   calib_df.loc[calib_df['flux']>chk_flux]         # even if target is bright if there is a brighter calib let's choose that as intr/bandpass calib.
     
-    calib_df_selected           =   calib_df.loc[calib_df['flux']>chk_flux] if (len(calib_df['source_name'])>=least_calib and (hard_selection or len(calib_df['source_name'])>ncalib)) else calib_df
+    calib_df_selected           =   calib_df.loc[calib_df['flux']>chk_flux] if (len(calib_df['source_name'])>=least_calib and (hard_selection or len(calib_df['source_name'])>ncalib)) else calib_df        # if hard_selection select 2 calib only
     list_calib                  =   list(calib_df_selected['source_name'][:ncalib]) if not calib_df_selected.empty else list(calib_df['source_name'][:ncalib])
     
     if target_bright:        
@@ -401,7 +394,9 @@ def identify_sources_fromtarget(scanlist_seq, sourcenames, target_source, other_
     
     calib_from_seq   = list(calib_from_seq).copy()
     calib_candidates = allsources.copy()
-    calib_candidates.remove(target_source)
+    
+    if target_source in calib_candidates:
+        calib_candidates.remove(target_source)
     alls             = list(allsources).copy()
     
     if len(allsources)>=2:
@@ -409,6 +404,8 @@ def identify_sources_fromtarget(scanlist_seq, sourcenames, target_source, other_
         if (flux_df is None): 
             # HACK:        to get None values back from id_flux_for_sources using caliblist_file=True
             flux_df  = id_flux_for_sources(sourcenames, alls, caliblist_file, band) if caliblist_file else id_flux_for_sources(sourcenames, alls, True, band)
+        flux_df = flux_df.sort_values(by=['flux'], ascending=False)
+        print(flux_df)
 #         print(flux_df)
         if IdS.isphref: # check whether science target is a phaseref calibrator
             if verbose: print('is phref')            
@@ -443,11 +440,14 @@ def identify_sources_fromtarget(scanlist_seq, sourcenames, target_source, other_
                     s['calibrators_phaseref'] = [ps]
                     if ps in s['calibrators_instrphase']:
                         s['calibrators_instrphase'].remove(ps)
+                    # s['phaseref_ff_science'] = False # for weak science target, setting true means, `the science targets are strong enough for a residual fringe-fit`
+                    
             if verbose: print(f'target is in phref but {msg}')
         
     if target_source in s['calibrators_instrphase']:    s['calibrators_instrphase'].remove(target_source)
     
     id_calib_candidates = get_sources_id(sourcenames, calib_candidates)
+    
     calib               = identify_calibrators(t=IdS, target=target_source, ps=ps, flux_thres=flux_thres, min_flux=min_flux, ncalib=ncalib, flux_df=flux_df , calib_ids=id_calib_candidates, hard_selection=hard_selection)
     
     s.update(calib)

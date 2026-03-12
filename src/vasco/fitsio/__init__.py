@@ -37,7 +37,7 @@ def sources_fio(hdul):
     _, lids   = _gethduname_fio(hdul,['SOURCE'])
     sourced=hdul[lids[0]]
     sourcename={}
-    _, cid=_getcolname_fio(sourced,['SOURCE_ID', 'ID_NO.', 'ID_NO'])
+    _, cid=_getcolname_fio(sourced,['SOURCE_ID', 'SOURCE ID', 'ID_NO.', 'ID_NO'])
     _, sid=_getcolname_fio(sourced,['SOURCE'])
     alls = sourced.read_column(sid)
     for i,sid in enumerate(sourced.read_columns(cid)):
@@ -183,14 +183,14 @@ def find_calibrators_from_tsys(t, calib_ids=[]):
     calids       =  calib_ids if len(calib_ids) else list(sources_dict.keys())
     tsys2, sids_present, tsys1_std,tsys2_std        =  None, [], [], []
     if hid:
-        sid_colname,scid  =   _getcolname_fio(t.hdul[hid[0]],['SOURCE_ID', 'ID_NO.', 'ID_NO'])
+        sid_colname,scid  =   _getcolname_fio(t.hdul[hid[0]],['SOURCE_ID', 'SOURCE ID', 'ID_NO.', 'ID_NO'])
 
         tsys_arr     =   t.hdul[hid[0]]
         
         str_ts1, str_ts2 = 'TSYS_1', 'TSYS_2'
         tsys1        =   tsys_arr[str_ts1]
         tsys2        =   tsys_arr[str_ts2] if str_ts2 in tsys_arr.get_colnames() else None
-        sids_present = tsys_arr.read()['SOURCE_ID']
+        sids_present = tsys_arr.read()['SOURCE_ID', 'SOURCE ID']
 
     for c in calids:
         if len(np.shape(tsys_arr[tsys_arr.where(f"{sid_colname}=={c}")][str_ts1]))>1:           # HACK: For Mult-IF : This condition makes it work on datasets with single and multiple IF
@@ -496,7 +496,7 @@ class IdentifySource:
         """
         _, lids                     =   _gethduname_fio(self.hdul,['SOURCE'])
         SOURCE                      =   self.hdul[lids[0]]
-        sid_colname,scid            =   _getcolname_fio(SOURCE,['SOURCE_ID', 'ID_NO.', 'ID_NO'])
+        sid_colname,scid            =   _getcolname_fio(SOURCE,['SOURCE_ID', 'SOURCE ID', 'ID_NO.', 'ID_NO'])
         
         other_sources               =   SOURCE.read()[SOURCE.read()['SOURCE']!=target_source]
         id_target                   =   get_sources_id(self.sourcenames, [target_source])[0]
@@ -655,7 +655,7 @@ def df_source_fits(fitsfile, frame='icrs', coord_col= 'fits_coordinate'):
     target_names    =   source_hdu.read()['SOURCE']
     idx_found       =   np.zeros(np.shape(target_names), dtype=bool)        # i.e not found
 
-    sid_colname     =   get_colnames(source_hdu, ['ID_NO', 'SOURCE_ID'])[0]
+    sid_colname     =   get_colnames(source_hdu, ['ID_NO','ID_NO.', 'SOURCE_ID', 'SOURCE ID'])[0]
 
     sids            =   source_hdu[sid_colname].read()
     ra              =   source_hdu['RAEPO'].read()*u.deg
@@ -678,7 +678,7 @@ def df_search_brightcalib_rfc(fitsfile, rfc_filepath, class_filepath, scanlist_a
     hdu = fo[shdu-1]
 
 
-    sid_colname = get_colnames(hdu, ['ID_NO', 'SOURCE_ID'])[0]
+    sid_colname = get_colnames(hdu, ['ID_NO', 'ID_NO.','SOURCE_ID', 'SOURCE ID'])[0]
     sids = hdu[sid_colname].read()
     stargets = hdu['SOURCE'].read()
     dic_targets = dict(zip(stargets, sids))
@@ -744,23 +744,31 @@ def df_search_brightcalib_rfc(fitsfile, rfc_filepath, class_filepath, scanlist_a
 
 def catalog_search_from_fits(fitsfile, df_catalog, seplimit, thres_sep, source_name_col='Obsname', 
                              frame='icrs', include_not_found=False, verbose=False, outdir=''):
+    from astropy.table import Table
+    from astropy.io import fits
     if source_name_col in df_catalog.columns:
         df_catalog      =   df_catalog.drop_duplicates(subset=source_name_col, keep='first')
     
-    fo              =   FITS(fitsfile, mode='r')
-    shdu            =   fo.movnam_hdu('SOURCE')
+    fo              =   FITS(fitsfile, mode='r', encodeing='latin-1')
+    shdu            =   fo.movnam_hdu('SOURCE', hdutype=2)
     source_hdu      =   fo[shdu-1]
     
     target_names    =   source_hdu.read()['SOURCE']
+    # hdu_astropy = fits.open(fitsfile)
+    # target_names = hdu_astropy['SOURCE'].data['SOURCE']
+    # target_names = [tn for tn in target_names]
+    
     idx_found       =   np.zeros(np.shape(target_names), dtype=bool)        # i.e not found
     
-    sid_colname     =   get_colnames(source_hdu, ['ID_NO', 'SOURCE_ID'])[0]
+    sid_colname     =   get_colnames(source_hdu, ['ID_NO','ID_NO.', 'SOURCE_ID', 'SOURCE ID'])[0]
     
     sids            =   source_hdu[sid_colname].read()
+    # sids            =   hdu_astropy['SOURCE'].data[sid_colname]
     ra              =   source_hdu['RAEPO'].read()*u.deg
     dec             =   source_hdu['DECEPO'].read()*u.deg
     target_coords   =   SkyCoord(ra,dec, frame=frame)
     epoch           =   np.unique(source_hdu.read()['EPOCH'])
+    # epoch           =   np.unique(hdu_astropy['SOURCE'].data['EPOCH'])
     
     if not len(epoch)==1: raise ValueError(f'Multiple EQUINOX values are not supported yet : {epoch}')
     
@@ -815,3 +823,25 @@ def catalog_search_from_fits(fitsfile, df_catalog, seplimit, thres_sep, source_n
         match_res = concat([match_res, df(dic_df)])
     return match_res
 
+def count_tsys_in_fitsfile(fitsfile, target=None):
+    fo              =   FITS(fitsfile, mode='r', 
+                            #  encodeing='latin-1'
+                             )
+    shdu            =   fo.movnam_hdu('SOURCE', hdutype=2)
+    source_hdu      =   fo[shdu-1]
+    
+    count_tsys      =   0
+    if any(['SYSTEM_TEMPERATURE' in [hdu.get_extname() for hdu in fo]]):
+        thdu            =   fo.movnam_hdu('SYSTEM_TEMPERATURE', hdutype=2)
+        tsys_hdu        =   fo[thdu-1]
+        sid_colname     =   get_colnames(source_hdu, ['ID_NO', 'ID_NO.', 'SOURCE_ID', 'SOURCE ID', 'SOURCE_ID.'])[0]
+
+
+        count_tsys      =   tsys_hdu.get_nrows()
+
+        if target:
+            target_names    =   source_hdu['SOURCE'].read()
+            sid             =   source_hdu.read()[target_names==target][sid_colname][0]
+            sid_colname     =   get_colnames(tsys_hdu, ['ID_NO','ID_NO.', 'SOURCE_ID', 'SOURCE ID', 'SOURCE_ID.'])[0]
+            count_tsys      =   len(tsys_hdu.read()[tsys_hdu.read()[sid_colname]==sid])
+    return count_tsys

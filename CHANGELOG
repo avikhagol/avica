@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- `vasco.idifits.ANTAB.gen_antab` if GAIN_CURVE is available try finding gain values from the table.
 
 ### Fixed
 

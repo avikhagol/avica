@@ -280,52 +280,152 @@ def add_antenna_for_freqid(hdu):
         hdu = add_rows_for_freqid(hdu, tab='ANTENNA')
     return hdu
 
-def choose_correct_id_forduplicate_fields(hdu):
-    chosen_id, rem_ids = None, None
-    from dask import array as da
-    shdu, shduids   = _gethduname(hdu, ['SOURCE'])
-    source_data     =   hdu[shdu].data
-    source_col = _getcolname(source_data,['SOURCE'])
-    id_col = _getcolname(source_data,['SOURCE_ID', 'ID_NO.', 'ID_NO'])
+def choose_correct_id_forduplicate_fields(hdu, fix=False):
+    """
+    if duplicates in SOURCE['SOURCE']:
+        - remove the duplicate source name if no rows in uv_data
+        else:
+            - replace the duplicate source name in uv_data for the ones with count(rows)>0 IF the duplicates have no difference in coord and frequency in the SOURCE table
+            else:
+                - change the source name in the SOURCE table with the rule "{duplicate_name}_{ncount}"
+    """
+    list_chosen_ids, list_dupl_ids, list_repl_names = [], [], []
+    
+    
+    chosen_id, dupl_ids = None, None
+    # from dask import array as da
+    shdu, shduids           = _gethduname(hdu, ['SOURCE'])
+    source_data             =   hdu[shdu].data
+    source_col              = _getcolname(source_data,['SOURCE'])
+    id_col                  = _getcolname(source_data,['SOURCE_ID', 'ID_NO.', 'ID_NO'])
+    
+    validation_sourcecols   =  ['FREQOFF', 'RAEPO', 'DECEPO', 'EPOCH', 'RAAPP', 'DECAPP', 'RESTFREQ', 'PMRA', 'PMDEC']
 
     snames = list(hdu[shdu].data[source_col])
 
     if len(snames)!=len(np.unique(snames)):
-        duplicates = [k for k,v in Counter(snames).items() if v>1]
-        duplicate_ids = hdu[shdu].data[id_col][np.where(hdu[shdu].data[source_col]==duplicates[0])]
+        duplicates          =   [k for k,v in Counter(snames).items() if v>1]
         
-        uvhdu, uvhduids   = _gethduname(hdu, ['UV_DATA'])
-        for hduid in uvhduids:
-            src = da.from_array(hdu[hduid].data['SOURCE'])
+        for duplicate_source in duplicates:
+            rejected_ids        =   []
+            repl_names          =   []
+            dupl_ids            =   []
+            nonzero_rows        =   []
+            duplicate_ids       =   hdu[shdu].data[id_col][np.where(hdu[shdu].data[source_col]==duplicate_source)]
+            preferred_inpairs   =   {}
+            
+            rec =hdu['SOURCE'].data[np.isin(hdu['SOURCE'].data[id_col],duplicate_ids)]
 
-            compare = -1
-            chosen_id = None
-            rem_ids = []
-            non_zero_rowsc = 0
-            for id in duplicate_ids:
-                rows_val=src[np.where(src==5)].compute()
-                
-                if rows_val.shape[0]>compare:
-                    non_zero_rowsc+=1
-                    chosen_id=id
-                    compare=rows_val.shape[0]
+            df_rec = df(rec.tolist(), columns=rec.dtype.names)
+            df_nunique = df_rec.apply(lambda col: col.astype(str).nunique())
+            non_unique_series = df_nunique[df_nunique>1]
+            
+            source_names_replaceable = bool(sum(non_unique_series.index.isin(validation_sourcecols)))
+            non_zero_rowsc      =   0
+            if source_names_replaceable:
+                print(f"both source names have different column values in the table SOURCE for {validation_sourcecols}")
+                repl_names = [f"{duplicate_source}_{d}" for d, did in enumerate(df_rec[non_unique_series.index][id_col]) if d]
+                chosen_id = duplicate_ids[0]
+            else:
+                _, uvhduids     =   _gethduname(hdu, ['UV_DATA'])
+                this_new_hduid_with_nrows   =   False
+                for hduid in uvhduids:
+                    src             =   hdu[hduid].data['SOURCE']
 
-                if non_zero_rowsc>1:        # TODO: replace the row values for SOURCE_ID with the chosenid
-                    raise NameError("There are duplicate fields with data in the FITS! ")
-        rem_ids = [rmid for rmid in duplicate_ids if rmid!=chosen_id]
+                    compare         =   -1
+                    chosen_id       =   None
+                    
+                    
+                    for d, did in enumerate(duplicate_ids):
+                        idx_did     =   np.where(src==did)
+                        rows_val    =   src[idx_did]
+                        
+                        if len(rows_val):
+                            non_zero_rowsc+=1
+                        else:
+                            this_new_hduid_with_nrows   =   False
+                        
+                        if rows_val.shape[0]>compare:
+                            oth_id     =   did
+                            chosen_id   =   chosen_id or did     # only chooses did when chosen_id has initialized value
+                            if not oth_id in preferred_inpairs:
+                                preferred_inpairs[chosen_id]    =   chosen_id
+                                preferred_inpairs[oth_id]    =   chosen_id
+                                for id_remain in duplicate_ids:
+                                    if id_remain!=oth_id and id_remain!=chosen_id:
+                                        preferred_inpairs[id_remain] = chosen_id
+                                this_new_hduid_with_nrows   =   False
+                            else:
+                                
+                                if len(rows_val):
+                                    this_new_hduid_with_nrows = True
+                                        
+                            
+                            # compare     =   rows_val.shape[0]
+                        
+                        modify_value_hdul = len(idx_did) and non_zero_rowsc>1 and this_new_hduid_with_nrows and did!=preferred_inpairs[chosen_id]
+                        # print(modify_value_hdul, hduid, len(rows_val), did, duplicate_source, preferred_inpairs[chosen_id] , (len(idx_did[0]) , non_zero_rowsc>1 , this_new_hduid_with_nrows, chosen_id , did!=preferred_inpairs[chosen_id]))
 
-    return chosen_id, rem_ids
+                        if modify_value_hdul and fix:        # TODO: replace the row values for SOURCE_ID with the chosenid
+                            print(f"There are duplicate fields with data in the FITS! count({duplicate_source})=={non_zero_rowsc} IDs: {duplicate_ids} (choosing {preferred_inpairs[chosen_id]})")
+                            
+                            prefid  = preferred_inpairs[chosen_id]
+                            hdu[hduid].data['SOURCE'][idx_did]   =  prefid           # next hduid should also correct for this;
+        
+            dupl_ids = [rmid for i,rmid in enumerate(duplicate_ids) if rmid!=chosen_id]
+            
+            
+            list_repl_names.append(repl_names)
+            list_chosen_ids.append(chosen_id)
+            list_dupl_ids.append(dupl_ids)
+
+    return list_chosen_ids, list_dupl_ids, list_repl_names, hdu
+
+def check_missing_ant(hdul, table_name="FLAG", col="ANTS"):
+    """returns index where the ants is missing"""
+    hdul['ANTENNA'].data['ANTENNA_NO']
+    set_flag = set()
+    rm_rows = np.array([])
+    multidimcol = len(hdul[table_name].data[col].shape)>1
+    if multidimcol:
+        set_flag.update([an for an in hdul[table_name].data[col][:,0]])
+    else:
+        set_flag.update([an for an in hdul[table_name].data[col]])
+
+    for an in set_flag:
+        if not sum(np.isin(hdul['ANTENNA'].data['ANTENNA_NO'], [an])):
+            print(f"an {an} not present, in {table_name}")
+            if multidimcol:
+                rm_rows = np.isin(hdul[table_name].data[col][:,0], [an])
+            else:
+                rm_rows = np.isin(hdul[table_name].data[col], [an])        
+    return rm_rows
+
+def fix_missing_ant(hdul, table_name, col):
+    rm_rows         =   check_missing_ant(hdul, table_name, col)
+    fhdu, fhduids   = _gethduname(hdul, [table_name])
+    
+    table_data       =   hdul[fhdu].data
+    hdul[fhdu].data  =   table_data[~rm_rows]
+    return hdul
 
 def fix_duplicate_fields(hdu):
-
-    chosen_id, rem_ids = choose_correct_id_forduplicate_fields(hdu)
-    shdu, shduids   = _gethduname(hdu, ['SOURCE'])
+    
+    chosen_id, dup_ids, repl_names, hdu = choose_correct_id_forduplicate_fields(hdu, fix=True)
+    shdu, shduids   =   _gethduname(hdu, ['SOURCE'])
     source_data     =   hdu[shdu].data
-    source_col = _getcolname(source_data,['SOURCE'])
-    id_col = _getcolname(source_data,['SOURCE_ID', 'ID_NO.', 'ID_NO'])
-
-    hdu[shdu].data = source_data[np.where(source_data[id_col]!=rem_ids)]
-    # print(hdu[shdu].data)
+    source_col      =   _getcolname(source_data,['SOURCE'])
+    id_col          =   _getcolname(source_data,['SOURCE_ID', 'ID_NO.', 'ID_NO'])
+    rem_ids         =   []
+    for c, dup_id in enumerate(dup_ids):
+        if not chosen_id[c] is None:
+            if dup_id != chosen_id[c]:
+                rem_ids.extend(dup_id)
+        else:
+            raise NotImplementedError("duplicate source names but have distinct coordinate or frequency offset values")
+    print("removing ...", rem_ids)
+    
+    hdu[shdu].data = source_data[~np.isin(source_data['ID_NO.'],rem_ids)]
 
     return hdu
 

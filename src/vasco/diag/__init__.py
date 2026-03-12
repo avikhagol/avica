@@ -1,5 +1,7 @@
 from os import path, makedirs
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 from matplotlib import rcParams
 from astropy.time import Time
@@ -10,7 +12,7 @@ from matplotlib import cm
 
 DPI = rcParams["figure.dpi"]= 360
 rcParams['lines.markersize'] = 0.2
-plt.rcParams['font.size'] = 4
+plt.rcParams['font.size'] = 6
 plt.rcParams['font.family'] = 'sans-serif' 
 
 def pl_diag(axs_df, eps=0.005, n_cores=15, kind='png', autocorr=False, prefix=''):
@@ -20,7 +22,7 @@ def pl_diag(axs_df, eps=0.005, n_cores=15, kind='png', autocorr=False, prefix=''
     print("plotting...")
     dic_pl_scatter={
         'x_labels':[ 'time', 'time'],
-        'y_labels':[ 'phase', 'amp'],
+        'y_labels':[ 'amp (Jy)', 'phase (deg)'],
         'color_axs':'uvdist',
         'cmap':'jet',
         'select':'*',
@@ -30,8 +32,8 @@ def pl_diag(axs_df, eps=0.005, n_cores=15, kind='png', autocorr=False, prefix=''
     pl_scatter(axs_df, kind=kind, output=output, **dic_pl_scatter)
 
     dic_pl_scatter={
-        'x_labels':[ 'uvdist', 'uvdist'],
-        'y_labels':[ 'phase', 'amp'],
+        'x_labels':[ 'uvdist (λ)', 'uvdist (λ)'],
+        'y_labels':[ 'amp (Jy)', 'phase (deg)'],
         'color_axs':'an1',
         'cmap':'jet',
         'select':'*',
@@ -40,8 +42,8 @@ def pl_diag(axs_df, eps=0.005, n_cores=15, kind='png', autocorr=False, prefix=''
     output=f"{prefix}_vs_uvdist.jpg"
     pl_scatter(axs_df, kind=kind, output=output, **dic_pl_scatter)
     dic_pl_scatter={
-        'x_labels':['amp'],
-        'y_labels':['phase'],
+        'x_labels':['amp (Jy)'],
+        'y_labels':['phase (deg)'],
         'color_axs':'uvdist',
         'cmap':'jet',
     }
@@ -61,8 +63,8 @@ def pl_diag(axs_df, eps=0.005, n_cores=15, kind='png', autocorr=False, prefix=''
     
     #     plotting and printing results
     dic_pl_scatter={
-        'x_labels':['amp'],
-        'y_labels':['phase'],
+        'x_labels':['amp (Jy)'],
+        'y_labels':['phase (deg)'],
         'color_axs':'labels',
         'cmap':'jet',
     }
@@ -72,7 +74,7 @@ def pl_diag(axs_df, eps=0.005, n_cores=15, kind='png', autocorr=False, prefix=''
 
     dic_pl_scatter={
         'x_labels':['time', 'time'],
-        'y_labels':['phase', 'amp'],
+        'y_labels':[ 'amp (Jy)', 'phase (deg)'],
         'color_axs':'labels',
         'cmap':'jet',
     }
@@ -82,8 +84,8 @@ def pl_diag(axs_df, eps=0.005, n_cores=15, kind='png', autocorr=False, prefix=''
     
 
     dic_pl_scatter={
-        'x_labels':['uvdist', 'uvdist'],
-        'y_labels':['phase', 'amp'],
+        'x_labels':['uvdist (λ)', 'uvdist (λ)'],
+        'y_labels':[ 'amp (Jy)', 'phase (deg)'],
         'color_axs':'labels',
         'cmap':'jet',
     }
@@ -184,24 +186,43 @@ def calcscatter_fromlabels_df(axs_df, labels, x_label, y_label):
         axs_df.loc[idx_label,f'{y_label}_scatter'] = y_scatter
     return axs_df
 
-def pl_scatter(vis_df, x_labels, y_labels, color_axs, cmap, select='*', kind='plot', output='output.jpg'):
+def pl_scatter(vis_df, x_labels, y_labels, color_axs, cmap, select='*', kind='plot', output='output.jpg', new=True, fill_colorbars=None):
     if select and not '*' in select:
         vis_df = vis_df.query(select)
     
     unique_labels = vis_df[color_axs].unique()
     
-    # mx_label = vis_df[color_axs].max()
     if color_axs=='labels':
         vis_df[color_axs] = vis_df[color_axs].where(vis_df[color_axs] != -1, vis_df[color_axs].max() + 10)
     
+    if fill_colorbars:
+        mapping = {name: i for i, name in enumerate(fill_colorbars)}
+        vis_df[f"{color_axs}_str"] = vis_df[color_axs].map(mapping)
+        unique_labels = np.array(list(mapping.values()))
+        tick_labels = tick_label_names = fill_colorbars
+    else:
+        unique_labels = np.sort(vis_df[color_axs].unique())
+        tick_labels = unique_labels[::max(1, len(unique_labels)//10)] # at most 10 ticks
+        
+        if 'time' in color_axs:
+            tick_label_names = [f"{Time(label, format='decimalyear').datetime.strftime('%H:%M:%S')}" for label in tick_labels]
+            tick_label_names[0] = f"{tick_label_names[0]}\n\n{Time(tick_labels[0], format='decimalyear').datetime.strftime('%Y-%m-%d')}"
+        else:
+            tick_label_names = [f"{label:.1e}" if len(str(label)) > 4 else f"{label}" for label in tick_labels]
+            
+        
     norm = plt.Normalize(vmin=unique_labels.min(), vmax=unique_labels.max())
     cmap = plt.get_cmap(cmap, len(unique_labels))        
-    
-    fig, ax = plt.subplots(1,len(x_labels), layout='constrained')
+    if new:
+        fig, ax = plt.subplots(len(y_labels),1, layout='constrained')
+    else:
+        fig, ax = plt.subplots(1,len(x_labels), layout='constrained')
     if len(x_labels)<2: ax = [ax]
     for i,(xlabel,ylabel) in enumerate(zip(x_labels, y_labels)):
+        xlabelv, ylabelv = xlabel.split(' ')[0], ylabel.split(' ')[0]
+        xlabel, ylabel = xlabelv.upper()+ ' '.join(xlabel.split(' ')[1:]), ylabelv.upper() + ' '.join(ylabel.split(' ')[1:])
         title = f"{ylabel}_{xlabel}"
-        ax[i].scatter(vis_df[xlabel],vis_df[ylabel], 
+        ax[i].scatter(vis_df[xlabelv],vis_df[ylabelv], 
                         c=vis_df[color_axs], 
                         cmap=cmap, norm=norm, marker=',',
                           label=color_axs,
@@ -209,8 +230,18 @@ def pl_scatter(vis_df, x_labels, y_labels, color_axs, cmap, select='*', kind='pl
         ax[i].set_xlabel(xlabel)
         ax[i].set_ylabel(ylabel)
         ax[i].set_title(title)
-    cbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax[-1], shrink=0.4)
+    # cbar = fig.colorbar(cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax[-1], shrink=0.4)
+    # cbar.set_label(f"{color_axs}")
+    mappable = cm.ScalarMappable(norm=norm, cmap=cmap)
+    cbar = fig.colorbar(mappable, ax=ax, shrink=0.6)
     cbar.set_label(f"{color_axs}")
+    
+    
+    # tick_locs = np.arange(len(tick_labels))
+    tick_locs   = tick_labels
+    cbar.set_ticks(tick_locs)
+    cbar.set_ticklabels(tick_label_names)
+    
 #     plt.colorbar(ax=ax[0])
     save_fig(plt, fig, kind=kind, output=output)
 
@@ -286,7 +317,7 @@ def save_fig(plt, fig, kind='base64', output='output.jpg', dpi=300):
         fig.savefig(newPath, format=kind, bbox_inches='tight',
                     pad_inches=0, dpi=dpi)
         print("saved {}".format(newPath))
-        plt.close()
+        plt.close("all")
         return newPath
 
 # def pl_x_y(x, y, xlabel='', ylabel='', kind='plot', output='output.png'):

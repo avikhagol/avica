@@ -860,7 +860,7 @@ def mpi_fringefit(vis, fid, scannos, refant, ff_caltable, gt, spws, antenna=[], 
                     + """callib='{0}',""".format('')
                     + """gaintable={0},""".format(str(gaintable_fp))
                     + """gainfield={0},""".format(str(gainfield))
-                    + """corrdepflags={0},""".format('False')
+                    + """corrdepflags={0},""".format('True')
                     + """concatspws={0},""".format('True')
                     + """corrcomb='{0}',""".format(str(corrcomb))
                     + """parang={0}""".format('True')
@@ -934,6 +934,32 @@ def short_fringe_fit_mpi(vis, dic_ant_with_scans, annames, caltable, gt, spws, i
 # all_selected_scans
 
 
+def getremovableant_fromtarget(vis, target):
+    tb1 = table()
+    tb1.open(f"{vis}/FIELD")
+    idx_target = list(tb1.getcol("NAME")).index(target)
+    tb1.close()
+
+    tb1.open(vis)
+    anids = set()
+    anids.update(np.unique(tb1.query(f"FIELD_ID=={idx_target}").getcol('ANTENNA1')))
+    anids.update(np.unique(tb1.query(f"FIELD_ID=={idx_target}").getcol('ANTENNA2')))
+    tb1.close()
+
+    tb1.open(f"{vis}/ANTENNA")
+    annames = tb1.getcol("NAME")
+    tb1.close()
+    
+    anids_list = list(anids)
+    rm_anids = []
+
+    target_annames = annames[anids_list]
+    for anid in range(len(annames)):
+        if not anid in anids:
+            rm_anids.append(list(range(len(annames))).pop(anid))
+    return list(rm_anids), list(annames[rm_anids])
+
+
 def an_dic(vis, target=None, antenna=[], notantenna=[]):
 
     tsys_anid, tsys_vals  = get_tb_data(f"{vis}/SYSCAL", axs=['ANTENNA_ID', 'TSYS'])
@@ -941,16 +967,19 @@ def an_dic(vis, target=None, antenna=[], notantenna=[]):
     pos = pos.compute()
     xyz = list(zip(*pos))
     tsys_anid = tsys_anid.compute()
-    # if target is not None: 
+    if target is not None: 
+        _, rm_ants = getremovableant_fromtarget(vis, target)
+        notantenna = notantenna + rm_ants    
+    
     tsys_vals = tsys_vals.compute()
     an_dict = {}
 
     ans_seq = []
 
     for anid,an in enumerate(annames.compute()):
-        if not antenna: antenna = list(range(len(annames)))
-        antenna = [antv for antv in antenna if antv not in notantenna]
-        if anid in antenna:                
+        if not antenna: antenna = list(range(len(annames)))         # here, in case something changes within loop
+        antenna = [antv for antv in antenna if annames[antv] not in notantenna]
+        if anid in antenna:       
             an_dict[anid]={'ANNAME': an}
             # measuring centroid distance
             d=[]
@@ -1034,25 +1063,25 @@ def select_df_refant_sources(tbls, an_dict, autocorr=False, minsnr=3.0, calib_sn
         """Selects the antenna with the lower distance based on the dictionary."""
         a1, a2 = row["ANTENNA1"], row["ANTENNA2"]
         
-        return an_dict[int(a1)]['ANNAME'] if an_dict[int(a1)]['d']<an_dict[int(a2)]['d'] else an_dict[int(a2)]['ANNAME']
+        return an_dict[int(a1)]['ANNAME'] if (int(a1) in an_dict and int(a2) in an_dict and an_dict[int(a1)]['d']<an_dict[int(a2)]['d']) else an_dict[int(a2)]['ANNAME']
 
     def select_antenna_id(row):
         """Selects the antenna with the lower distance based on the dictionary."""
         a1, a2 = row["ANTENNA1"], row["ANTENNA2"]
         
-        return a1 if an_dict[int(a1)]['d']<an_dict[int(a2)]['d'] else a2
+        return a1 if (int(a1) in an_dict and int(a2) in an_dict and an_dict[int(a1)]['d']<an_dict[int(a2)]['d']) else a2
 
     def select_refant_d(row):
         """Selects the antenna with the lower distance based on the dictionary."""
         a1, a2 = row["ANTENNA1"], row["ANTENNA2"]
         
-        return an_dict[int(a1)]['d'] if an_dict[int(a1)]['d']<an_dict[int(a2)]['d'] else an_dict[int(a2)]['d']
+        return an_dict[int(a1)]['d'] if (int(a1) in an_dict and int(a2) in an_dict and an_dict[int(a1)]['d']<an_dict[int(a2)]['d']) else an_dict[int(a2)]['d']
 
     def select_tsys_d(row):
         """Selects the antenna with the lower distance based on the dictionary."""
         a1, a2 = row["ANTENNA1"], row["ANTENNA2"]
         
-        return an_dict[int(a1)]['STD_TSYS'] if an_dict[int(a1)]['d']<an_dict[int(a2)]['d'] else an_dict[int(a2)]['STD_TSYS']
+        return an_dict[int(a1)]['STD_TSYS'] if (int(a1) in an_dict and int(a2) in an_dict and an_dict[int(a1)]['d']<an_dict[int(a2)]['d']) else an_dict[int(a2)]['STD_TSYS']
 
 
     # ddf_tbl["a1"] = ddf_tbl["ANTENNA1"].map(lambda x: an_dict[int(x)]["ANNAME"], meta=("a1", "str"))
@@ -1113,12 +1142,14 @@ def find_refant_fromdf(tbls, an_dict, sources_dict, autocorr=False, minsnr=3.0, 
     if len(ddf_tbl_18['FIELD_ID'].unique())<n_calib+1:
         ddf_tbl_18 = ddf_tbl.dropna().query(f'SNR>{calib_snr_thres}')
     df_field = ddf_tbl_18[['FIELD_ID','SCAN', 'SNR']].groupby(['FIELD_ID','SCAN']).mean().compute().sort_values(by=['SNR'], ascending=False).reset_index()
+    
+    pp_out += df_refant.to_string() + "\n"
+    pp_out += "\n"
+    pp_out += df_field.groupby(by=['FIELD_ID']).max().reset_index()[['FIELD_ID','SNR']].sort_values(by=['SNR'], ascending=False).to_string() + "\n"
+    
     df_field = df_field.groupby(by=['FIELD_ID']).max().reset_index()[['FIELD_ID','SNR']].sort_values(by=['SNR'], ascending=False)[:n_calib]          # taking first n_calib considering scans
     
     df_field['NAME'] = df_field['FIELD_ID'].map(sources_dict)
-    pp_out += df_refant.to_string() + "\n"
-    pp_out += "\n"
-    pp_out += df_field.to_string() + "\n"
     if verbose: print(pp_out)
     dic_field                       =   df_field.reset_index()[['FIELD_ID','NAME', 'SNR']].groupby(['FIELD_ID']).max().reset_index().to_dict('list')
     return dic_field, refants, pp_out
