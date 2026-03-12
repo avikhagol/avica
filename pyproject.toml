@@ -1,0 +1,73 @@
+[build-system]
+requires = [
+    "scikit-build-core>=0.3.3", 
+    "pybind11", 
+    "setuptools"
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "vasco"
+version = "0.3.0"
+description = "VASCO: VLBI and SMILE source based CASA Optimizations (includes fitsidiutil)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "BSD-3-Clause" }
+authors = [
+  { name = "Avinash Kumar", email = "avialxee@gmail.com" }
+]
+urls = { "Homepage" = "https://github.com/avikhagol/vasco"}
+classifiers = [
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "License :: OSI Approved :: BSD License",
+  "Intended Audience :: Science/Research"
+]
+
+dependencies = [
+  "astropy",
+  "numpy",
+  "ipython",
+  "pyvirtualdisplay",
+  "pandas",
+  "scipy",
+  "scikit-learn",
+  "polars",
+  "protobuf==3.20.3",
+  "typer",      # fitsidiutil
+  "fitsio",     # fitsidiutil
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
+testpaths = ["tests"]
+
+[project.optional-dependencies]
+dev = ["pytest>=3.8"]
+all = ["casatools", "casatasks", "python-casacore"]
+test = ["pytest"]
+
+[project.scripts]
+vasco = "vasco:cli"
+fitsidiutil = "vasco.fitsidiutil.cli:fitsidiutil_cli"
+
+[tool.scikit-build]
+cmake.source-dir = "."
+wheel.install-dir = "."
+build.tool-args = ["-j4"]    # should keep all packages e.g cfitsio/fitsidiutil in cmake to use maximum of 4 cores
+
+cmake.define.CMAKE_INSTALL_RPATH = "${CMAKE_INSTALL_PREFIX}/lib"
+cmake.define.CMAKE_BUILD_WITH_INSTALL_RPATH = "TRUE"
+cmake.define.CMAKE_INSTALL_RPATH_USE_LINK_PATH = "TRUE"
+wheel.expand-macos-universal-tags = true
+
+[tool.cibuildwheel]
+build-frontend = "build[uv]"
+test-command = "pytest {project}/tests"
+test-extras = ["test"]
+
+[tool.ruff]
+src = ["src"]

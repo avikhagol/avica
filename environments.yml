@@ -1,0 +1,9 @@
+name: py310
+dependencies:
+  - python=3.10
+  - openssl=1.1.1
+  - libcurl
+  - cfitsio
+  - sofa
+  - pip:
+    - -r requirements.txt
