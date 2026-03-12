@@ -1,0 +1,61 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [unreleased]
+
+### Added
+
+### Fixed
+
+### Changed
+
+### Removed
+
+
+## [0.0.4] - 2025-09-08
+
+### Added
+
+- support for removing table
+- `split-x`: command in the which uses the `split` method with `vasco.fitsio.df_search_brightcalib_rfc`
+- `rmhdu`: remove an HDU table by its 0-indexed number.
+
+### Fixed
+
+- split fixes values/header in multiple uv_data table
+
+### Changed
+- Improvmentes in `listobs`
+- post split header fixes are done with `fitstio` library
+
+### Removed
+- `SOFA` dependency is removed from CMake.
+
+## [0.0.3] - 2025-04-21
+
+### Added
+
+- CHANGELOG
+- `typer` in requirements
+- `expression`, `verbose`, `reindex` in `split`
+- `freqids` can be used for filtering data
+
+### Fixed
+
+- improvement and fixes in how logical expression for filtering rows in the fitsfile is formed.
+
+### Changed
+
+- `sids` is not a required argument.
+
+### Removed
+
+- unnecessary verbose and reduntant comments.
+
+[unreleased]: https://gitlab.ia.forth.gr/smile/fitsidiutil/compare/v0.0.4...HEAD
+[0.0.4] : https://gitlab.ia.forth.gr/smile/fitsidiutil/compare/v0.0.4...v0.0.4
+[0.0.3] : https://gitlab.ia.forth.gr/smile/fitsidiutil/compare/v0.0.3...v0.0.3

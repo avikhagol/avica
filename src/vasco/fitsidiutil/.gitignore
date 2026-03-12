@@ -1,0 +1,7 @@
+build/
+*.egg*
+*_pycache*
+*/*_pycache*
+*/*/*_pycache*
+*/*/*/*_pycache*
+out.fits
