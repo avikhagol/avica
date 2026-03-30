@@ -3,50 +3,49 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-vasco documentation
-===================
+
 
 .. toctree::
-   :maxdepth: 2
+   :hidden:
+   :maxdepth: 4
    :caption: Contents:
-
-**************************************
-            VASCO
-**************************************
+   
+   pipeline
+   api
+   examples
+   genindex
 
 Getting started
 ===============
 
+About
+=====
+VLBI and SMILE-based CASA optimizations using rPICARD pipeline.
 
+
+Installation
+======
    
 .. code-block:: bash
 
-   $ pip install vasco
-    
-
-.. jupyter-execute::
-   
-   ff = 'tests/tes2.fits'
-
-   from vasco.fitsidiutil.obs import ListObs
-
-   lobs = ListObs(ff)
-
-   print(lobs.df_listobs)
-   
+   $ pip install vasco[all]
 
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+Setup
+=====
+.. code-block:: bash
 
-   vasco
-   examples
+   $ vasco setup vasco_pipe
 
+Configuration
+=========
+.. code-block:: toml
 
-Indices and tables
+   [vasco_pipe]
+   rpicard_path = /path/to/rPicard
+
+Index
 ==================
 
 * :ref:`genindex`
-* :ref:`modindex`
 * :ref:`search`

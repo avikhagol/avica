@@ -8,9 +8,9 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('.'))
-sys.path.insert(0, os.path.abspath("../../src"))
-package_path = os.path.abspath('../../src')
-os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
+# sys.path.insert(0, os.path.abspath("../../src"))
+# package_path = os.path.abspath('../../src')
+# os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
@@ -39,5 +39,11 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-# html_theme = 'alabaster'
+html_theme = 'sphinx_book_theme'
 html_static_path = ['_static']
+html_theme_options = {
+    "home_page_in_toc": True,
+    "show_navbar_depth": 4,
+    "show_toc_level": 2,
+    "collapse_navigation": False,
+}
