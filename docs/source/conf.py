@@ -26,7 +26,7 @@ release = '0.0.1'
 
 extensions = ['sphinx.ext.napoleon',
     'sphinx.ext.autodoc',
-    'sphinx.ext.viewcode',
+    # 'sphinx.ext.viewcode',
     'sphinx.ext.coverage',
     'sphinx.ext.autosectionlabel',
     'jupyter_sphinx',
