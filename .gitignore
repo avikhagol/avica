@@ -2,6 +2,11 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.ms/
+*.ms
+table.f*_TSM1
+casa*log_*
+diag*/
 
 # C extensions
 *.so
