@@ -73,6 +73,9 @@ wheel.expand-macos-universal-tags = true
 build-frontend = "build"
 test-command = "pytest {project}/tests"
 test-extras = ["test"]
+manylinux-x86_64-image = "manylinux_2_34"
+environment = { CMAKE_POLICY_VERSION_MINIMUM = "3.5" }
+before-all = "yum install -y curl-devel"
 
 [tool.ruff]
 src = ["src"]
