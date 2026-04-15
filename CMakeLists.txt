@@ -30,6 +30,9 @@ set(PYBIND11_NEWPYTHON ON)
 find_package(pybind11 CONFIG REQUIRED)
 
 # CFITSIO
+set(USE_CURL OFF CACHE BOOL "" FORCE)
+set(USE_PTHREADS ON CACHE BOOL "" FORCE)
+set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
 FetchContent_Declare(cfitsio URL https://github.com/HEASARC/cfitsio/archive/refs/tags/cfitsio-${CFITSIO_VERSION}.tar.gz)
 FetchContent_MakeAvailable(cfitsio)
 
@@ -70,18 +73,16 @@ set_target_properties(${FITSIDIUTIL_MODULE} PROPERTIES INSTALL_RPATH "\$ORIGIN:\
 
 if(APPLE)
     set_target_properties(${FITSIDIUTIL_MODULE} PROPERTIES
-        INSTALL_RPATH "@loader_path:@loader_path/../lib/:@loader_path/../lib64/")
+        INSTALL_RPATH "@loader_path")
 else()
     set_target_properties(${FITSIDIUTIL_MODULE} PROPERTIES
-        INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib/:\$ORIGIN/../lib64/")
+        INSTALL_RPATH "$ORIGIN")
 endif()
 
 if(UNIX AND NOT APPLE)
-    target_link_options(${FITSIDIUTIL_MODULE} PRIVATE 
-        -static-libstdc++ 
-        -static-libgcc
-    )
+    target_link_options(${FITSIDIUTIL_MODULE} PRIVATE -static-libstdc++ -static-libgcc)
 endif()
+
 target_link_libraries(${FITSIDIUTIL_MODULE} PRIVATE cfitsio Python3::Module)
 target_include_directories(${FITSIDIUTIL_MODULE} PRIVATE ${cfitsio_SOURCE_DIR} ${cfitsio_SOURCE_DIR}/include)
 install(TARGETS ${FITSIDIUTIL_MODULE} 
