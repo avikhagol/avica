@@ -7,7 +7,7 @@ __pycache__/
 table.f*_TSM1
 casa*log_*
 diag*/
-
+wheelhouse/*
 # C extensions
 *.so
 
