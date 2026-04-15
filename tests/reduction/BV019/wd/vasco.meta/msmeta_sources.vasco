@@ -1,1 +1,0 @@
-{"bands_dict": {"C": {"spws": [0], "reffreqs": [4991490000.0], "nobs": 1, "obs=0": {"scans": {"0": [1, 2, 3, 4, 5, 6, 7, 8]}}}, "bands_known": ["C"]}}

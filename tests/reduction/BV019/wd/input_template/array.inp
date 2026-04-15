@@ -1,9 +1,0 @@
-array_type = generic
-refant = LA,FD,KP,PT,OV
-fringe_delay_window_initial = None
-fringe_rate_window_initial = None
-fringe_delay_window_mb_sci_short = 0.05
-fringe_rate_window_mb_sci_short = 0.05
-fringe_solint_optimize_search_cal = estimate
-fringe_solint_optimize_search_sci = estimate
-fringe_solint_mb_reiterate = estimate

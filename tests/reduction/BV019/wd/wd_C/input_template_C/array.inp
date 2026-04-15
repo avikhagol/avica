@@ -1,9 +1,0 @@
-array_type = VLBA
-refant = LA,PT,OV,KP,FD
-fringe_delay_window_initial = None
-fringe_rate_window_initial = None
-fringe_delay_window_mb_sci_short = 0.05
-fringe_rate_window_mb_sci_short = 0.05
-fringe_solint_optimize_search_cal = 56;60;84;108;120;180;240;360;420;480;520
-fringe_solint_optimize_search_sci = estimate
-fringe_solint_mb_reiterate = 600;900;99999
