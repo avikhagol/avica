@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.18...3.30)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX VERSION ${SKBUILD_PROJECT_VERSION})
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 
@@ -28,15 +29,6 @@ set(PYBIND11_NEWPYTHON ON)
 find_package(pybind11 CONFIG REQUIRED)
 
 # CFITSIO
-FetchContent_Declare(cfitsio URL https://github.com/HEASARC/cfitsio/archive/refs/tags/cfitsio-${CFITSIO_VERSION}.tar.gz)
-FetchContent_MakeAvailable(cfitsio)
-if(TARGET cfitsio)
-    set_target_properties(cfitsio PROPERTIES 
-        JOB_POOL_COMPILE one_jobs
-        JOB_POOL_LINK one_jobs
-    )
-endif()
-
 FetchContent_Declare(cfitsio URL https://github.com/HEASARC/cfitsio/archive/refs/tags/cfitsio-${CFITSIO_VERSION}.tar.gz)
 FetchContent_MakeAvailable(cfitsio)
 
@@ -74,6 +66,14 @@ if(NOT TARGET cfitsio::cfitsio)
 endif()
 
 set_target_properties(${FITSIDIUTIL_MODULE} PROPERTIES INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib/:\$ORIGIN/../lib64/")
+
+if(APPLE)
+    set_target_properties(${FITSIDIUTIL_MODULE} PROPERTIES
+        INSTALL_RPATH "@loader_path:@loader_path/../lib/:@loader_path/../lib64/")
+else()
+    set_target_properties(${FITSIDIUTIL_MODULE} PROPERTIES
+        INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib/:\$ORIGIN/../lib64/")
+endif()
 
 target_link_libraries(${FITSIDIUTIL_MODULE} PRIVATE cfitsio Python3::Module)
 target_include_directories(${FITSIDIUTIL_MODULE} PRIVATE ${cfitsio_SOURCE_DIR} ${cfitsio_SOURCE_DIR}/include)
