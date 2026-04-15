@@ -36,8 +36,7 @@ if(TARGET cfitsio)
         JOB_POOL_LINK one_jobs
     )
 endif()
-# find_package(PkgConfig REQUIRED)
-# pkg_check_modules(CFITSIO REQUIRED IMPORTED_TARGET cfitsio) 
+
 FetchContent_Declare(cfitsio URL https://github.com/HEASARC/cfitsio/archive/refs/tags/cfitsio-${CFITSIO_VERSION}.tar.gz)
 FetchContent_MakeAvailable(cfitsio)
 
