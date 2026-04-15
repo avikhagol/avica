@@ -29,9 +29,8 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: "cp {wheel} {dest_dir}"
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "cp {wheel} {dest_dir}"
           CIBW_BEFORE_ALL_LINUX: >
-            yum install -y centos-release-scl-rh openssl-devel keyutils-libs-devel libffi-devel &&
-            yum install -y devtoolset-9-gcc devtoolset-9-gcc-c++ devtoolset-9-binutils &&
-            source /opt/rh/devtoolset-9/enable
+            dnf install -y gcc-toolset-9 openssl-devel libffi-devel keyutils-libs-devel &&
+            source /opt/rh/gcc-toolset-9/enable
           CIBW_ENVIRONMENT_LINUX: >
             CMAKE_POLICY_VERSION_MINIMUM=3.5
             CC=gcc
