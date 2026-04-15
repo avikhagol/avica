@@ -74,6 +74,9 @@ src = ["src"]
 
 [tool.cibuildwheel]
 before-all = "uname -a"
-# manylinux-x86_64-image = "manylinux2014_x86_64"
-manylinux-x86_64-image = "manylinux_2_34"
-repair-wheel-command = "auditwheel repair --plat manylinux_2_34_x86_64 -w {dest_dir} {wheel}"
+manylinux-x86_64-image = "manylinux_2_28"
+build = "cp39-* cp310-* cp311-* cp312-*"
+skip = "pp*"
+
+[tool.cibuildwheel.linux]
+repair-wheel-command = "cp {wheel} /project/debug_wheel.whl; auditwheel show {wheel}; cp {wheel} {dest_dir}"
