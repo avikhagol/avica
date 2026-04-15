@@ -27,7 +27,7 @@ jobs:
           CIBW_ARCHS_LINUX: x86_64
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
           CIBW_BEFORE_ALL_LINUX: >
-                apk add --no-cache openssl-dev libffi-dev keyutils-libs-dev
+            yum install -y openssl-devel libffi-devel keyutils-libs-devel
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "cp {wheel} {dest_dir}"
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: "cp {wheel} {dest_dir}"
           CIBW_BEFORE_ALL_MACOS: >
