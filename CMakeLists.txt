@@ -36,8 +36,19 @@ if(TARGET cfitsio)
         JOB_POOL_LINK one_jobs
     )
 endif()
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(CFITSIO REQUIRED IMPORTED_TARGET cfitsio) 
+# find_package(PkgConfig REQUIRED)
+# pkg_check_modules(CFITSIO REQUIRED IMPORTED_TARGET cfitsio) 
+FetchContent_Declare(cfitsio URL https://github.com/HEASARC/cfitsio/archive/refs/tags/cfitsio-${CFITSIO_VERSION}.tar.gz)
+FetchContent_MakeAvailable(cfitsio)
+
+if(TARGET cfitsio)
+    set_target_properties(cfitsio PROPERTIES 
+        JOB_POOL_COMPILE one_jobs
+        JOB_POOL_LINK one_jobs
+    )
+else()
+    message(FATAL_ERROR "cfitsio target not found after FetchContent")
+endif()
 
 # Build Executable
 set(FITSIDIUTIL_MODULE _core)
@@ -65,8 +76,8 @@ endif()
 
 set_target_properties(${FITSIDIUTIL_MODULE} PROPERTIES INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib/:\$ORIGIN/../lib64/")
 
-target_link_libraries(${FITSIDIUTIL_MODULE} PRIVATE cfitsio::cfitsio Python3::Module)
-target_include_directories(${FITSIDIUTIL_MODULE} PRIVATE ${cfitsio_SOURCE_DIR})
+target_link_libraries(${FITSIDIUTIL_MODULE} PRIVATE cfitsio Python3::Module)
+target_include_directories(${FITSIDIUTIL_MODULE} PRIVATE ${cfitsio_SOURCE_DIR} ${cfitsio_SOURCE_DIR}/include)
 install(TARGETS ${FITSIDIUTIL_MODULE} 
         LIBRARY DESTINATION ${SKBUILD_PROJECT_NAME}/fitsidiutil
         RUNTIME DESTINATION ${SKBUILD_PROJECT_NAME}/fitsidiutil)
