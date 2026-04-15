@@ -24,9 +24,10 @@ jobs:
         uses: pypa/cibuildwheel@v2.22.0
         env:
           CIBW_BUILD: cp310-* cp311-* cp312-*
-          # Linux - FIXED
           CIBW_ARCHS_LINUX: x86_64
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: "cp {wheel} {dest_dir}"
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "cp {wheel} {dest_dir}"
           CIBW_BEFORE_ALL_LINUX: >
             yum install -y centos-release-scl-rh openssl-devel keyutils-libs-devel libffi-devel &&
             yum install -y devtoolset-9-gcc devtoolset-9-gcc-c++ devtoolset-9-binutils &&
