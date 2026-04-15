@@ -113,5 +113,5 @@ foreach my $item (@cmd_list_json){
 
 }
 
-my %result = (success => 1, message => "all tasks completed");
-print encode_json(\%result) . "\n";
+# my %result = (success => 1, message => "all tasks completed");
+# print encode_json(\%result) . "\n";

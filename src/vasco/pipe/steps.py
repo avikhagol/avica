@@ -251,6 +251,7 @@ class FitsIdiToMS(PipelineStepBase):
                         wds_ifolder_for_payload.append(wd_ifolder)
                 else:
                     self.result.desc.append(f"vis exists! {Path(vis).name}")
+                    self.result.success.append(True)
                 used_wd_ifolder.append(wd_ifolder)
                 used_ff_wd_ifolder.append(fitsfiles)
                 
@@ -278,6 +279,7 @@ class FitsIdiToMS(PipelineStepBase):
                             wds_ifolder_for_payload.append(wd_ifolder_freqid)
                         else:
                             self.result.desc.append(f"vis exists! {Path(vis_freqid).name}")
+                            self.result.success.append(True)
                         used_wd_ifolder.append(wd_ifolder_freqid)
                         used_ff_wd_ifolder.append(ff_freqid)
                         
@@ -290,6 +292,7 @@ class FitsIdiToMS(PipelineStepBase):
                             wds_ifolder_for_payload.append(wd_ifolder)
                         else:
                             self.result.desc.append(f"vis exists! {Path(vis).name}")
+                            self.result.success.append(True)
                             
                         used_wd_ifolder.append(wd_ifolder)
                         used_ff_wd_ifolder.append(otherfitsfile)
@@ -326,6 +329,7 @@ class FitsIdiToMS(PipelineStepBase):
                 if not all([Path(ff).exists() for ff in casastep.cmd.args['fitsidifile']]):
                     self.result.desc.append(f"input fitsidifile not found! {casastep.cmd.args['fitsidifile']}")
                 self.result.success.append(False)
+                
                 
         self.result.end_stamp                   =   datetime.now()
         del_fl(metafolder, 0, "available_wd_ifolder.vasco", rm=True)
@@ -619,7 +623,11 @@ class AverageMS(PipelineStepBase):
                                     
                                     payload             =   MpiCasaPayload(tasks_list=tasks_list)
                                     payload.run()
-                                    self.result.detail[band]     =   f"check {errcasalogfile}" if not Path(outvis).exists() else str(Path(outvis).name)
+                                    if not Path(outvis).exists():
+                                        self.result.detail[band]     =   f"check {errcasalogfile}"  
+                                        self.result.success.append(False)
+                                    else: 
+                                        str(Path(outvis).name)
                                     
                                     # --------------------------------------------------------------------
                                 
@@ -637,15 +645,19 @@ class AverageMS(PipelineStepBase):
                         if succeed  == 1:
                             # success_val =   lf.get_value(col) + ' ' + success_val if lf.get_value(col) else success_val
                             comment_val                     =   lf.get_value(self.colnames.comment_col) + ' ' + comment_val if lf.get_value(self.colnames.comment_col) else comment_val
-                            self.result.success_count       =   lf.put_value(success_val, self.colnames.working_col, self.result.success_count)        
+                            self.result.success_count       +=  1
+                            _                               =   lf.put_value(success_val, self.colnames.working_col, self.result.success_count)        
                             _                               =   lf.put_value(comment_val, self.colnames.comment_col)
                             
                         elif succeed>0:
                             _                               =   lf.put_value(success_val, self.colnames.working_col, self.result.success_count)
                             failed_band                     =   " ".join([f"{b}: failed" for b,w in band_chwidth.items() if b not in success_band])
-                            self.result.failed_count        =   lf.put_value(f'{comment_val} {failed_band}', self.colnames.comment_col, self.result.failed_count)
+                            self.result.failed_count        +=  1
+                            _                               =   lf.put_value(f'{comment_val} {failed_band}', self.colnames.comment_col, self.result.failed_count)
                         else:
-                            self.result.failed_count        =   lf.put_value('failed', self.colnames.working_col, self.result.failed_count)
+                            self.result.failed_count        +=  1
+                            _                               =   lf.put_value('failed', self.colnames.working_col, self.result.failed_count)
+                            
                     except Exception as e:
                         traceback.print_exc()
                 
@@ -706,14 +718,17 @@ class VascoMetaMS(PipelineStepBase):
                     
                     iwd_b_new           = f"{wd_b.absolute()}/input_template_{band}"
                     obs_b, _, _         = read_inputfile(iwd_b_new, "observation.inp")
-                    vis_b           = str(Path(iwd_b_new).parent / obs_b['ms_name']) \
-                                          if 'ms_name' in obs_b and obs_b['ms_name'] else None
+                    
+                    vis_b           = str(Path(iwd_b_new).parent / obs_b['ms_name']) if 'ms_name' in obs_b and obs_b['ms_name'] else None
                     
                     errf = ""
-                    s_dict              =   identify_sources_fromtarget_ms(vis_b, target_source=target, caliblist_file=rfc_catalogfile,
-                                                   flux_thres=0.150, min_flux=0.025, ncalib=20, flux_df=None, 
-                                                   sourcenames=None, hard_selection=False, metafolder=str(metadir_b))
-                    
+                    try:
+                        s_dict              =   identify_sources_fromtarget_ms(vis_b, target_source=target, caliblist_file=rfc_catalogfile,
+                                                    flux_thres=0.150, min_flux=0.025, ncalib=20, flux_df=None, 
+                                                    sourcenames=None, hard_selection=False, metafolder=str(metadir_b))
+                    except Exception:
+                        traceback.print_exc()
+                        
                     if not Path(metadir_b / 'msmeta_sources.vasco').exists():
                         success = False
                     else:
@@ -754,7 +769,7 @@ class VascoMetaMS(PipelineStepBase):
 
             except Exception:
                 traceback.print_exc()
-
+        self.result.desc = success_band
         self.result.end_stamp = datetime.now()
         return self.result
 

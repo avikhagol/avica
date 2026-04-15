@@ -22,7 +22,14 @@ with as_file(ref) as perl_script_path:
 ref = files("vasco.pipe") / "perl" / "phaseshift.pl"
 with as_file(ref) as perl_script_path:
     PHASESHIFT_PERL_SCRIPT = str(perl_script_path)
+
+ref = files("vasco.pipe") / "data" / "rfc_2024a_cat.txt"
+with as_file(ref) as rfc_filepath:
+    RFC_CATALOG_ASCII = str(rfc_filepath) 
     
+ref = files("vasco.pipe") / "data" / "smile_complete_table.txt"
+with as_file(ref) as smile_sample_filepath:
+    SMILE_SAMPLE_CATALOG_ASCII = str(smile_sample_filepath) 
     
 try:
     import pandas as pd
@@ -35,6 +42,10 @@ try:
     HAS_POLARS = True
 except ImportError:
     HAS_POLARS = False
+    
+CSV_POPULATED_STEPS = ['preprocess_fitsidi','fits_to_ms',
+                    #    'phaseshift',
+                       'vasco_avg','vascometa_ms','vasco_snr','vasco_fill_input','vasco_split_ms','rpicard']
     
     
 class LogFramework:
@@ -332,16 +343,22 @@ class LogFramework:
         self._t0 = time.time()
         
         
+def populate_default_csv():
+    import csv
+    start_default_colnames = ['TARGET_NAME', 'FILENAMES']
+    steps_colnames = list(CSV_POPULATED_STEPS) 
+    final_colnames = ["last_update"]
+    all_headers = start_default_colnames + steps_colnames + final_colnames
+    empty_row = [''] * len(all_headers)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(all_headers) 
+    writer.writerow(empty_row)   
+    
+    return output.getvalue()
 
-
-csv_content = """TARGET_NAME,FILENAMES,preprocess_fitsidi,fits_to_ms,phaseshift,vasco_avg,vascometa_ms,vasco_snr,vasco_fill_input,vasco_split_ms,rpicard,last_update
-target1,["VLBA_VSN001540_file10.uvfits"],,,,,,,,,,
-target2,a,,,,,,,,,,
-target3,demo,,,,,,,,,,"""
-
-csvio = io.StringIO(csv_content)
+csvio = io.StringIO(populate_default_csv())
 lf = LogFramework(csv_file=csvio, polars=False)
-# lf.csvmode
 
 DEFAULT_PARAMS: dict = {
     "lf"                        :   lf,          # LogFrame instance, set at runtime
@@ -355,8 +372,8 @@ DEFAULT_PARAMS: dict = {
     "picard_input_template"     :   f"{Path(__file__).parent}/input_template",
     "csv_file"                  :   "",
     "accor_solint"              :   10.0,
-    "class_search_asciifile"    :   None,
-    "rfc_catalogfile"           :   None,
+    "class_search_asciifile"    :   SMILE_SAMPLE_CATALOG_ASCII,
+    "rfc_catalogfile"           :   RFC_CATALOG_ASCII,
     "separation_thres"          :   850.0,
     "count"                     :   0,
     "failed"                    :   0,
@@ -375,7 +392,8 @@ DEFAULT_PARAMS: dict = {
 
 class PipeConfig:
     def __init__(self, configfile):
-        self.configfile = configfile
+        self.configfile = Path(configfile).name if configfile is not None else None
+        self.folder = Path(configfile).parent if configfile is not None else None
         
     def to_dict(self):
-        return read_inputfile(self.configfile)
+        return read_inputfile(self.folder, self.configfile)[0]

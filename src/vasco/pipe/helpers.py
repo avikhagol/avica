@@ -22,7 +22,6 @@ from vasco.fitsidiutil import read_idi
 
 def get_targets_filenames(lf, filename_col, targetname_col):
     alltargets                  =   list(lf.df_sheet0[lf.df_sheet0[filename_col]==lf.get_value(filename_col)][targetname_col].values)
-    print(alltargets)
     target                      =   lf.get_value(targetname_col)
     parsed_filenames            =   lf.get_value(filename_col).replace('[', '').replace(']', '').replace('"', '').replace("'", '').replace('"""', '').replace("'''", '')
     fitsfilenames               =   parsed_filenames.split(',')
@@ -69,13 +68,7 @@ def get_wd_ifolder_multiplefits(fitsfiles, target_dir, ifolder):
     
     return wd_ifolder
 
-
-def setup_workdir(lf, target_dir, fitsfilenames, allfitsfile, picard_input_template):
-    ff_path_existing            =   [fpe for fpe in allfitsfile for ff in fitsfilenames if ff in fpe]
-    ifolder = []
-    if not Path(picard_input_template).exists():
-        raise FileNotFoundError(f"{picard_input_template}")
-    def search_input_template(picard_input_template, ifolder, depth=4):
+def search_input_template(picard_input_template, ifolder, depth=4):
         pattern = ""
         ifolder = picard_input_template
         if "input_template" not in picard_input_template:
@@ -91,9 +84,14 @@ def setup_workdir(lf, target_dir, fitsfilenames, allfitsfile, picard_input_templ
         
         # warnings.warn(f"could not find the input_template folder in {picard_input_template}", UserWarning)
         return ifolder
-            
-    ifolder                     =   search_input_template(picard_input_template, ifolder)
+
+def setup_workdir(lf, target_dir, fitsfilenames, allfitsfile, picard_input_template):
+    ff_path_existing            =   [fpe for fpe in allfitsfile for ff in fitsfilenames if ff in fpe]
+    ifolder = []
+    if not Path(picard_input_template).exists():
+        raise FileNotFoundError(f"{picard_input_template}")
     
+    ifolder                     =   search_input_template(picard_input_template, ifolder)
     wd_ifolder                  =   get_wd_ifolder_multiplefits(ff_path_existing, target_dir, ifolder=ifolder)
     
     filepaths                   =   []
@@ -445,10 +443,13 @@ def get_allfitsfiles(folder_for_fits, depth=3):
     allfiles = []
     # Find all files for operation
     pattern = ""
+    prev_dir = ""
     for i in range(depth):
-        allfiles.extend(glob.glob(f"{folder_for_fits}{pattern}*fits"))
+        matched_files = glob.glob(f"{folder_for_fits}{pattern}*fits")
+        allfiles.extend(matched_files)
         pattern += "*/"
-        
+        if "." in folder_for_fits:
+            break
     if not allfiles:
         allfiles.extend(glob.glob(f"{folder_for_fits}/*fits"))
     return allfiles

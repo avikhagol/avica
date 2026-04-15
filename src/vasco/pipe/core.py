@@ -44,7 +44,7 @@ import threading
 
 from vasco.pipe.helpers import find_tsys, FileSize, tsys_exists, tsys_exists_in_fitsfiles, overlap_percentage, del_fl, parse_params, get_allfitsfiles
 from vasco.pipe.helpers import get_targets_filenames, setup_workdir, add_O, get_logfilename
-from vasco.pipe.config import DEFAULT_PARAMS
+from vasco.pipe.config import DEFAULT_PARAMS, CSV_POPULATED_STEPS
 
 from copy import deepcopy
 
@@ -56,8 +56,6 @@ from collections import UserList
 import inspect
 import traceback
 import logging
-
-from alfrd.lib import LogFrame
 
 import warnings
 
@@ -646,7 +644,7 @@ class InitVariables(PipelineStepValidatorBase):
     run_once = False
     desc = "Uses the provided parameters to initialize the variables"
     
-    def run(self, lf, init_params):
+    def run(self, lf, target, targets, init_params):
         if init_params:
             PipelineContext.params.update(init_params)
         parsed = parse_params(lf, PipelineContext.params)
@@ -678,13 +676,14 @@ class InitVariables(PipelineStepValidatorBase):
         
         allfitsfile                          = get_allfitsfiles(folder_for_fits=folder_for_fits)
         
-        if lf.is_googlesheet:
-            print("connected to sheet, using sheet column values.")
-        primary_target, alltargets, fitsfilenames = get_targets_filenames(lf, filename_col, targetname_col)
-        # if "fitsfilenames" in PipelineContext.params:
-        #     fitsfilenames      = PipelineContext.params['fitsfilenames']
-        fitsfilenames = init_params.get('fitsfilenames') or fitsfilenames
-        wd_ifolder, filepaths                   = setup_workdir(lf, target_dir, fitsfilenames, allfitsfile, picard_input_template=picard_input_template)
+        
+        
+        primary_target, alltargets, fitsfilenames   = get_targets_filenames(lf, filename_col, targetname_col) if lf.is_googlesheet else target, targets, init_params.get('fitsfilenames') or fitsfilenames
+        
+        if isinstance(fitsfilenames, str):
+            fitsfilenames = fitsfilenames.split(",")
+        
+        wd_ifolder, filepaths                       = setup_workdir(lf, target_dir, fitsfilenames, allfitsfile, picard_input_template=picard_input_template)
         if not filepaths:
             return PipelineStepValidatorResult(success=[False], msg="no fitsfiles found")
         
@@ -884,7 +883,7 @@ def _art(title: str) -> str:
 class VascoPipelineCore:
 
     def __init__(self, pipe_params, steps):
-        self.lf: LogFrame | None                    = None
+        self.lf                    = None
         self._steps: Dict[str, PipelineStepBase]    = {}
         self.steps                                  = steps
         self.pipe_params                            = pipe_params
@@ -980,7 +979,6 @@ class VascoPipelineCore:
         log.info("Pipeline started")
         log.info(f"Steps to run: {[s.name for s in self._steps.values()]}")
         log.info("=" * 60)
-        
         first_step = next(iter(self._steps.values()))
         if hasattr(first_step, 'colnames'):
             PipelineContext.params['first_col'] = first_step.colnames.working_col

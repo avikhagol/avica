@@ -60,11 +60,11 @@ def test_preprocess_fitsidi():
     """
     # # testfits =   "test_VLBA_VSN001540_file10.uvfits"
     # fitsfile = "data/VLBA_VSN001024_file33.uvfits"
-    testfits =   "vlba_VSN001024_file33.uvfits"
-    # # fitsfile = "/mnt/6438D98627D1388F/Intelligence/jupyter/BW034/wd_1/raw/VLBA_VSN001540_file10.uvfits"
+    # testfits =   "vlba_VSN001024_file33.uvfits"
+    # fitsfile = "/mnt/6438D98627D1388F/Intelligence/jupyter/BW034/wd_1/raw/VLBA_VSN001540_file10.uvfits"
     
     # from vasco.fitsidiutil import ObservationSummary, SplitData, fitsidi_check, read_idi
-    # # from vasco.fitsidiutil.io import FITS_TYPE_MAP
+    # from vasco.fitsidiutil.io import FITS_TYPE_MAP
     
     # s = SplitData(
     #     inpfits =   fitsfile,
@@ -86,24 +86,24 @@ def test_preprocess_fitsidi():
     # ________________________________________
     
     
-    pipe_params={
-                "folder_for_fits": ".",
-                 "target_dir" : "reduction/", 
-                # "folder_for_fits": "/mnt/6438D98627D1388F/Intelligence/jupyter/BW034/wd_1/raw/",
-                 "primary_value": "1124+571", 
-                #  "picard_dir":"/mnt/6438D98627D1388F/Intelligence/env/rPicard/picard",
-                 "casadir":"/home/avi/intelligence/env/casa-6.7.0-31-py3.10.el8/",
-                 "rfc_catalogfile":"rfc_2024a_cat.txt",
-                #  "csv_file":"/home/avi/intelligence/jupyter/vscode/100test.csv",
-                 "fitsfilenames": [Path(testfits).name],
-                 }
+    # pipe_params={
+    #             "folder_for_fits": ".",
+    #              "target_dir" : "reduction/", 
+    #             # "folder_for_fits": "/mnt/6438D98627D1388F/Intelligence/jupyter/BW034/wd_1/raw/",
+    #              "primary_value": "1124+571", 
+    #             #  "picard_dir":"/mnt/6438D98627D1388F/Intelligence/env/rPicard/picard",
+    #              "casadir":"/home/avi/intelligence/env/casa-6.7.0-31-py3.10.el8/",
+    #              "rfc_catalogfile":"rfc_2024a_cat.txt",
+    #             #  "csv_file":"/home/avi/intelligence/jupyter/vscode/100test.csv",
+    #              "fitsfilenames": [Path(testfits).name],
+    #              }
     
-    main_pipeline = VascoPipeline(pipe_params=pipe_params)
+    # main_pipeline = VascoPipeline(pipe_params=pipe_params)
 
-    # main_pipeline.filter_steps("preprocess_fitsidi","fits_to_ms")
-    # main_pipeline.filter_steps("vasco_fill_input","vasco_split_ms","rpicard")
-    result = main_pipeline.execute()
-    print(result)
+    # # main_pipeline.filter_steps("preprocess_fitsidi","fits_to_ms")
+    # # main_pipeline.filter_steps("vasco_fill_input","vasco_split_ms","rpicard")
+    # result = main_pipeline.execute()
+    # print(result)
     
     # _____________________________
     
