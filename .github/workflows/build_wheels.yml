@@ -19,23 +19,36 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+      - name: Show Linux environment
+        run: |
+          uname -a
+          cat /etc/os-release || true
+          which yum || true
+          which dnf || true
+          which apk || true
+          python --version || true
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22.0
         env:
           CIBW_BUILD: cp310-* cp311-* cp312-*
           CIBW_ARCHS_LINUX: x86_64
-          # CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014
           CIBW_BEFORE_ALL_LINUX: >
-            dnf install -y openssl-devel libffi-devel keyutils-libs-devel
+            which gcc || true &&
+            which g++ || true &&
+            which cc || true &&
+            which c++ || true &&
+            rpm -qa | sort | head -200 || true
+            yum install -y openssl-devel libffi-devel keyutils-libs-devel
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: "cp {wheel} {dest_dir}"
-          CIBW_REPAIR_WHEEL_COMMAND_MACOS: "cp {wheel} {dest_dir}"
+
           CIBW_BEFORE_ALL_MACOS: >
             brew install openssl libffi
           CIBW_ARCHS_MACOS: universal2
           CIBW_BUILD_VERBOSITY: 1
           CIBW_TEST_SKIP: "*"
-          
+
       - uses: actions/upload-artifact@v5
         with:
           name: wheels-${{ matrix.os }}
