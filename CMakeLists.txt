@@ -19,7 +19,8 @@ set(CFITSIO_VERSION 4.5.0)
 if(DEFINED ENV{VIRTUAL_ENV})
     set(Python3_EXECUTABLE "$ENV{VIRTUAL_ENV}/bin/python3")
 endif()
-find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
 
 # pybind11
 # execute_process(COMMAND ${Python3_EXECUTABLE} -c "import pybind11; print(pybind11.get_cmake_dir())" OUTPUT_VARIABLE pybind11_DIR OUTPUT_STRIP_TRAILING_WHITESPACE) #for manual
@@ -36,7 +37,7 @@ if(TARGET cfitsio)
     )
 endif()
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(CFITSIO REQUIRED IMPORTED_TARGET cfitsio)
+pkg_check_modules(CFITSIO REQUIRED IMPORTED_TARGET cfitsio) 
 
 # Build Executable
 set(FITSIDIUTIL_MODULE _core)
@@ -64,7 +65,7 @@ endif()
 
 set_target_properties(${FITSIDIUTIL_MODULE} PROPERTIES INSTALL_RPATH "\$ORIGIN:\$ORIGIN/../lib/:\$ORIGIN/../lib64/")
 
-target_link_libraries(${FITSIDIUTIL_MODULE} PRIVATE cfitsio::cfitsio Python3::Python)
+target_link_libraries(${FITSIDIUTIL_MODULE} PRIVATE cfitsio::cfitsio Python3::Module)
 target_include_directories(${FITSIDIUTIL_MODULE} PRIVATE ${cfitsio_SOURCE_DIR})
 install(TARGETS ${FITSIDIUTIL_MODULE} 
         LIBRARY DESTINATION ${SKBUILD_PROJECT_NAME}/fitsidiutil
