@@ -25,21 +25,21 @@ jobs:
         env:
           CIBW_BUILD: cp310-* cp311-* cp312-*
           CIBW_ARCHS_LINUX: x86_64
-          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
-          CIBW_REPAIR_WHEEL_COMMAND_MACOS: "cp {wheel} {dest_dir}"
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "cp {wheel} {dest_dir}"
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux2014  # Keep this
           CIBW_BEFORE_ALL_LINUX: >
-            dnf install -y gcc-toolset-9 openssl-devel libffi-devel keyutils-libs-devel &&
-            source /opt/rh/gcc-toolset-9/enable
+            yum install -y centos-release-scl-rh &&
+            yum install -y devtoolset-9-gcc devtoolset-9-gcc-c++ devtoolset-9-binutils openssl-devel libffi-devel keyutils-libs-devel &&
+            source /opt/rh/devtoolset-9/enable
           CIBW_ENVIRONMENT_LINUX: >
             CMAKE_POLICY_VERSION_MINIMUM=3.5
             CC=gcc
             CXX=g++
-          # macOS (unchanged)
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: "cp {wheel} {dest_dir}"
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: "cp {wheel} {dest_dir}"
+          # macOS unchanged
           CIBW_BEFORE_ALL_MACOS: >
-            brew install cfitsio openssl libffi
+            brew install openssl libffi
           CIBW_ARCHS_MACOS: universal2
-          # General (unchanged)
           CIBW_BUILD_VERBOSITY: 1
           CIBW_TEST_SKIP: "*"
           
