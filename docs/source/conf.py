@@ -11,7 +11,8 @@ import sys
 sys.path.insert(0, os.path.abspath("../../src"))
 autodoc_mock_imports = [
     "casampi", "casatools", "casatasks",   "pandas",
-  "scipy",  "scikit-learn",  "polars",  "protobuf==3.20.3",   "typer",]
+  "scipy",  "scikit-learn",  "polars",  "protobuf==3.20.3",   "typer",
+    "vasco.fitsidiutil._core", "_core",]
 
 
 package_path = os.path.abspath('../../src')
