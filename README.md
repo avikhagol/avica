@@ -1,10 +1,8 @@
 # vasco
 VASCO: VLBI and SMILE source based CASA Optimizations
 
-This is a helper tool for CASA based optimizations to use rPICARD and CASA for VLBI in general and in particular for the SMILE sources.
+> submitted to A&A
 
-
-> UNDER DEVELOPMENT : Version 0.3.0 releasing soon.
 
 # Installation
 
