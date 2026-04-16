@@ -1116,6 +1116,22 @@ def identify_sources_fromsnr_ms(vis, target_source, caliblist_file=None, snr_met
     save_metafile(outfile, sd)
     return sd
 
+def get_antenna_name(vis):
+    tb.open(f"{vis}/OBSERVATION")
+    telescope_names = tb.getcol('TELESCOPE_NAME')
+    tb.close()
+    return str(telescope_names[0])
+
+def has_table(vis, *tbl):
+    table_found = [len(glob.glob(f"{vis}/{tblname}"))>0 for tblname in tbl]
+    return table_found
+
+def get_reffreq(vis):
+    tb.open(f"{vis}/SPECTRAL_WINDOW")
+    
+    reffreq = float(np.mean(tb.getcol("REF_FREQUENCY")))
+    tb.close()
+    return reffreq
 
 # ----------------------------------------------------------------
 

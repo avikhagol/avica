@@ -359,14 +359,17 @@ def update_obsfrom_vascometa(wd_ifolder, sources_dict=None, new_wd=None, band=No
     create_config(obs, f'{wd_ifolder}/observation.inp')
 
 
-def fill_input_byvalues(wd_ifolder, iwd_b, ms_name, target,flux_thres, n_calib,  caliblist_file, sourcesf,
-                        refantsf, sourcesf_snr , band=None, edgeflagging=True, pipe_params=None):
+def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  caliblist_file, sourcesf,
+                        refantsf, sourcesf_snr , band=None, edgeflagging=True, pipe_params=None, hi_freq_ref=11):
     success                             =   False
-    from vasco.ms import identify_sources_fromsnr_ms
+    from vasco.ms import identify_sources_fromsnr_ms, get_antenna_name, has_table, get_reffreq
+    
+           
+    
     
     try:
         sources_with_snr                =   read_vascometa(vascometafile=sourcesf)
-        s                               =   identify_sources_fromsnr_ms(vis=ms_name, target_source=target, 
+        s                               =   identify_sources_fromsnr_ms(vis=vis, target_source=target, 
                                                                 caliblist_file=caliblist_file ,
                                                                         snr_metafile=sourcesf, outfile=sourcesf_snr,
                                                                         flux_thres=flux_thres, min_flux=flux_thres, ncalib=n_calib)
@@ -385,20 +388,12 @@ def fill_input_byvalues(wd_ifolder, iwd_b, ms_name, target,flux_thres, n_calib, 
         refants_d                       =   read_vascometa(vascometafile=refantsf)
         if 'refants' in refants_d: refants_d['refant'] = refants_d['refants']
         
-        refants_d['array_type'] =   'VLBA'
+        refants_d['array_type']             =   get_antenna_name(vis)
+        if get_reffreq(vis)>hi_freq_ref and all(has_table(vis, "WEATHER", "SYSTEM_TEMPERATURE")):
+            refants_d['array_type']         =   refants_d['array_type'] + 'hi'
         
-        if band:
-            if band[0] in ['K', 'U', 'Q']:
-                refants_d['array_type'] =   'VLBAhi'
-        
-        refants_d['fringe_solint_optimize_search_cal'] = "56;60;84;108;120;180;240;360;420;480;520"
-        refants_d['fringe_solint_optimize_search_sci'] = "estimate"
-        refants_d['fringe_solint_mb_reiterate']        =    "600;900;99999"
         update_from_vascometa(wd_ifolder, val_dict=refants_d, new_wd=iwd_b, inpfile='array.inp')
 
-        # Update array_finetune.inp
-        # update_from_vascometa(wd_ifolder, val_dict=defaultdict(), new_wd=iwd_b, inpfile='array_finetune.inp')
-        # afdic = {'minblperant_cmplx_bandpass' : 1}
         dict_arr_ft = {}
         
         if pipe_params and 'accor_solint' in pipe_params and pipe_params['accor_solint'] : 
