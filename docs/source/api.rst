@@ -9,10 +9,7 @@ This section covers the internal modules of the VASCO pipeline.
 
    api/fitsidiutil
    api/ms
-   api/plotting
-
-
-
+   api/pipe
 
 
 Indices and tables

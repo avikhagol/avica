@@ -1,15 +1,18 @@
-Measurement Set
+VASCO Pipeline 
 ===================
 
-vasco.ms
+vasco.pipe
 ^^^^^^^
 
-.. automodule:: vasco.ms.tables
+.. automodule:: vasco.pipe
    :members:
    :no-undoc-members:
    :show-inheritance:
 
-.. automodule:: vasco.ms.fringefit
+vasco.pipe.steps
+^^^^^^^^^^^^^
+
+.. automodule:: vasco.pipe.steps
    :members:
    :no-undoc-members:
    :show-inheritance:

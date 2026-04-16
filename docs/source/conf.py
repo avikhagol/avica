@@ -7,10 +7,10 @@
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath('.'))
-
-# sys.path.insert(0, os.path.abspath("../../src"))
-# package_path = os.path.abspath('../../src')
+# sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath("../../src"))
+autodoc_mock_imports = ["casampi", "casatools", "casatasks"]
+package_path = os.path.abspath('../../src')
 # os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
 
 # -- Project information -----------------------------------------------------
@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath('.'))
 project = 'vasco'
 copyright = '2026, Avinash Kumar'
 author = 'Avinash Kumar'
-release = '0.0.1'
+release = '0.3.0.2'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

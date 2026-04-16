@@ -1,13 +1,27 @@
+FITS-IDI Utility
+================
 
-fitsidiutil
-===================
 
-vasco.fitsidiutil.obs
+.. fitsidiutil
+.. -------------
+
+.. vasco.fitsidiutil
+.. ~~~~~~~~~~~~~~~~~~~~~~~~~
+.. .. automodule:: vasco.fitsidiutil
+..    :members:
+   
+Read/Write
+-------------
+
+vasco.fitsidiutil.io
 ~~~~~~~~~~~~~~~~~~~~~~~~~
-.. automodule:: vasco.fitsidiutil.obs
+
+.. automodule:: vasco.fitsidiutil.io
    :members:
-   :undoc-members:
+   :no-undoc-members:
    :show-inheritance:
+
+   
 
 vasco.fitsidiutil.split
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -16,17 +30,20 @@ vasco.fitsidiutil.split
 
 .. automodule:: vasco.fitsidiutil.split
    :members:
-   :undoc-members:
+   :no-undoc-members:
    :show-inheritance:
 
 
-Sources
---------------------------
 
-vasco.sources
+
+Operations
+-------------
+
+vasco.fitsidiutil.op
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. automodule:: vasco.sources
+.. automodule:: vasco.fitsidiutil.op
    :members:
-   :undoc-members:
+   :no-undoc-members:
    :show-inheritance:
+

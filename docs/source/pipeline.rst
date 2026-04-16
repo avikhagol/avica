@@ -2,8 +2,6 @@
 VASCO Pipeline
 =======
 
-
-
 Flowchart
 --------------
 .. raw:: html
@@ -20,7 +18,7 @@ Pre-process FITSIDI
 Sanity checks on the FITSIDI
 ~~~~~~~~~~~~
 
-Checks the FITSIDI file for the known problems using ``vasco.fits.fitsidi_check``.
+Checks the FITSIDI file for the known problems using ``vasco.fitsidiutil.fitsidi_check``.
 
 .. list-table:: FITSIDI Known Problems & Identifiers
    :widths: 25 75
@@ -28,68 +26,74 @@ Checks the FITSIDI file for the known problems using ``vasco.fits.fitsidi_check`
 
    * - Problem Code
      - Description
+   * - primary
+     - primary header check for fitsidi standards
    * - binary
-     - Binary data (e.g., unexpected backslashes or encoding issues) found in string columns.
-   * - bytesize
-     - Extra bytes found at the end of the file (detected via ``fitsverify``).
+     - Binary data (e.g., unexpected backslashes or encoding issues) found in string columns of the HDU table data.
+   * - extra_byte
+     - Extra bytes found at the end of the file (detected via ``vasco.fitsidiutil.FITSIDI.check_extrabytes``).
    * - empty
      - Null or empty values found in required columns (e.g., missing Polarization types).
    * - date
      - Date format is incorrect or non-standard in headers like ``DATE-OBS`` or ``RDATE``.
-   * - naxis
-     - Incorrect ``NAXIS`` value found in the Primary Header (expected 0 for FITS-IDI).
    * - duplicates
-     - Duplicate source entries or IDs found within the ``SOURCE`` table.
+     - Duplicate source entries or IDs found within the ``SOURCE`` or ``ANTENNA`` HDU tables.
    * - zeros
-     - Leading zeros found in source names which can cause indexing issues.
-   * - spfreqid
-     - The ``FREQID`` column name is malformed (e.g., contains spaces or dots).
+     - Leading zeros found in source names which can cause indexing issues in the current _CASA_ version.
+   * - col_spell
+     - The column names in the HDU tables such as ``FREQID`` if malformed.
    * - multifreqid
-     - Multiple Frequency IDs detected when a single ID is expected for the calibration set.
-   * - spantno
-     - The Antenna Number column name is incorrect (e.g., not matching ``ANTENNA_NO``).
+     - Multiple Frequency IDs detected when a single ID is expected.
    * - anmap
      - Incorrect antenna mapping detected in ``FLAG`` or ``PHASE-CAL`` tables.
-   * - array
-     - The required ``ARRAY`` column is missing from the table.
 
-Generate ANTAB file
+Pre-Process FITS-IDI
 ~~~~~~~~~~~~
 
-uses ```vasco.fits.antab``` to generate an ANTAB calibration file downloading the tables containing the `SYSTEM_TEMPERATURE` and `GAIN_CURVE` data from the VLBA archive.
+  - Fixes known problems in the fits.
+  - Check scanlist, print listobs if scanlist output file not found in metadata.
+  - Split sources to contain only desired sources.
+  - Split in frequency id and attach missing tsys, gain curve table.
+  - Fill optional metadata in the calibration input files.
 
 
 FITSIDI to Measurement Set
 ----------------
 
-Converts the FITSIDI file(s) to a Measurement Set (MS) format.
+  - Uses the last used fitsfiled to run ``importfitsidi``.
+  - Runs iteratively for files requiring different vis output.
+  - Appropriate Casa task is triggered with the correct python environment using ``payload service``.
+  - Logs "vis exists!" when the visiblity file is already present.
 
 
 Phaseshift
 ----------------
 
-If configured, checks the Measurement Set for the true source coordinates for a possible phase offset from the center, and applies a phase shift to the MS.
+  - Works if coordinate file was provided e.g `class_search_coord.ascii`.
+  - Match sources by coordinate and phaseshift if not coordinates within ``1 arcmin``.
 
 
 Average Measurement Set
 ----------------
 
-The input MS is averaged in time and frequency to the specified time and frequency resolution.
+  - When required average data to ``2s`` and ``500KHz`` in time and frequency resolution.
+  - Split the averaged data by removing filtered anenna.
 
 
 SNR Rating
 ----------------
 
-For each band separated Measurement Set, the FFT SNR is calculated for each scan and baseline, using the solution interval of scan length.
-The SNR values are then used to rate the Sources, and antennas to select the best scans and antennas for fringe fitting.
+  - For each band separated Measurement Set, 
+  - The FFT SNR is calculated for each scan and baseline, using the solution interval of scan length.
+  - The SNR values are then used to rate the Sources, and antennas to select the best scans and antennas for fringe fitting.
 
 Final Split in MS
 ----------------
 
-The final configuration file is used to split the data to contain only the necessary sources.
+  - The final configuration file is used to split the data to contain only the necessary sources.
 
 Calibration
 ----------------
 
-The final split MS data is used for the calibration.
-The calibration is performed using the rPicard framework.
+  - The final split MS data is used for the calibration.
+  - The calibration is performed using the rPicard framework.
