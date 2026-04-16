@@ -9,7 +9,11 @@ import os
 import sys
 # sys.path.insert(0, os.path.abspath('.'))
 sys.path.insert(0, os.path.abspath("../../src"))
-autodoc_mock_imports = ["casampi", "casatools", "casatasks"]
+autodoc_mock_imports = [
+    "casampi", "casatools", "casatasks",   "pandas",
+  "scipy",  "scikit-learn",  "polars",  "protobuf==3.20.3",   "typer",]
+
+
 package_path = os.path.abspath('../../src')
 # os.environ['PYTHONPATH'] = ':'.join((package_path, os.environ.get('PYTHONPATH', '')))
 
