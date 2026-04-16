@@ -1,8 +1,8 @@
-VASCO Pipeline 
+Pipeline Library
 ===================
 
 vasco.pipe
-^^^^^^^
+^^^^^^^^^^
 
 .. automodule:: vasco.pipe
    :members:
@@ -10,7 +10,7 @@ vasco.pipe
    :show-inheritance:
 
 vasco.pipe.steps
-^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
 
 .. automodule:: vasco.pipe.steps
    :members:

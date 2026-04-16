@@ -1,9 +1,28 @@
 
 VASCO Pipeline
-=======
+==============
+
+Execution
+---------
+
+The pipeline steps can be invoked using the following command:
+
+.. code-block:: bash
+
+  vasco pipe run --t TARGET_NAME --f fitsfilenames
+
+
+::
+
+   CWD (with vasco.inp)
+   └── reductions/
+       └── PROJECT_CODE/
+           └── wd/
+               └── wd_{BAND}/
+                   └── wd_{BAND}_{TARGET_NAME}/
 
 Flowchart
---------------
+---------
 .. raw:: html
 
    <object data="_static/images/pipeline-workflow.svg" type="image/svg+xml" width="100%">
@@ -13,10 +32,10 @@ Flowchart
     The pipeline worflow. The workflow is managed by <a href="#" >ALFRD</a>.
 
 Pre-process FITSIDI
-----------------
+-------------------
 
 Sanity checks on the FITSIDI
-~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Checks the FITSIDI file for the known problems using ``vasco.fitsidiutil.fitsidi_check``.
 
@@ -48,7 +67,7 @@ Checks the FITSIDI file for the known problems using ``vasco.fitsidiutil.fitsidi
      - Incorrect antenna mapping detected in ``FLAG`` or ``PHASE-CAL`` tables.
 
 Pre-Process FITS-IDI
-~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 
   - Fixes known problems in the fits.
   - Check scanlist, print listobs if scanlist output file not found in metadata.
@@ -58,7 +77,7 @@ Pre-Process FITS-IDI
 
 
 FITSIDI to Measurement Set
-----------------
+--------------------------
 
   - Uses the last used fitsfiled to run ``importfitsidi``.
   - Runs iteratively for files requiring different vis output.
@@ -67,33 +86,33 @@ FITSIDI to Measurement Set
 
 
 Phaseshift
-----------------
+----------
 
   - Works if coordinate file was provided e.g `class_search_coord.ascii`.
   - Match sources by coordinate and phaseshift if not coordinates within ``1 arcmin``.
 
 
 Average Measurement Set
-----------------
+-----------------------
 
   - When required average data to ``2s`` and ``500KHz`` in time and frequency resolution.
   - Split the averaged data by removing filtered anenna.
 
 
 SNR Rating
-----------------
+----------
 
   - For each band separated Measurement Set, 
   - The FFT SNR is calculated for each scan and baseline, using the solution interval of scan length.
   - The SNR values are then used to rate the Sources, and antennas to select the best scans and antennas for fringe fitting.
 
 Final Split in MS
-----------------
+-----------------
 
   - The final configuration file is used to split the data to contain only the necessary sources.
 
 Calibration
-----------------
+-----------
 
   - The final split MS data is used for the calibration.
   - The calibration is performed using the rPicard framework.

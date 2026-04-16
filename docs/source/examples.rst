@@ -1,18 +1,20 @@
 
 Examples
-=======
+========
 
 
 
 **1. Pipeline**
-^^^^
+^^^^^^^^^^^^^^^
+
+Use ``pipe run`` command to execute pipeline steps.
 
 .. code-block:: bash
    :caption: bash
 
    vasco pipe run --t TARGET_NAME --f example.idifits
 
-.. code-block:: jupyter
+.. code-block:: text
    :caption: out
 
    +--------------------+---------------+--------------+----------------------------+-----------------------------------+-----------------------------------+--------------+------------------+
@@ -31,7 +33,7 @@ Examples
 
 
 **2. Print observation summary**
-^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Use ``listobs`` command to get a summary of the observation for multiple files. This is enabled using ``CFITSIO``.
 
@@ -41,7 +43,7 @@ Use ``listobs`` command to get a summary of the observation for multiple files. 
 
    vasco listobs ex1.idifits ex2.idifits
 
-.. code-block:: jupyter
+.. code-block:: text
    :caption: [out]
    
    +-------------------------+-------------------------+-------+-------------+------------------------------+------+-----------+
@@ -71,7 +73,7 @@ To reproduce the above in python, one can import the ``ObservationSummary`` clas
    obs            = ObservationSummary(fitsfilepaths)
    print(obs.to_polars())
 
-.. code-block:: jupyter
+.. code-block:: text
    :caption: [out]
 
       +-------------------------+-------------------------+-------+-------------+------------------------------+------+-----------+

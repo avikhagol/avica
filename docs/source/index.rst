@@ -14,7 +14,7 @@
    api
    examples
    genindex
-   
+
 Getting Started
 ===============
 
@@ -67,7 +67,7 @@ The pipeline is configured via a plain-text file in the current working director
 
 
 Usage
-==========
+======
 
 The pipeline steps can be invoked from the terminal as follows:
 
