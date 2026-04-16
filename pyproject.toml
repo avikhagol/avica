@@ -7,7 +7,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "vasco"
-version = "0.3.0.2"
+version = "0.3.0.3"
 description = "VASCO: VLBI and SMILE-based CASA Optimizations"
 readme = "README.md"
 requires-python = ">=3.9"

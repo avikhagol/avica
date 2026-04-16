@@ -51,7 +51,7 @@ fringe_rate_window_mb_sci_short = 0.05
 #For each scan, the optimal solution interval for fringe-fitting will be determined:
 #The search will try to find a solint value for the most detections and the optimal SNR based on
 #fft_solint_estimation (see below) within the coherence time of as most baslines as possible.
-fringe_solint_optimize_search_cal = estimate
+fringe_solint_optimize_search_cal = 56;60;84;108;120;180;240;360;420;480;520
 fringe_solint_optimize_search_sci = estimate
 
 #Fringe-fitting solution intervals to be searched over for a re-iteration for detections.
@@ -66,6 +66,6 @@ fringe_solint_optimize_search_sci = estimate
 #Or, it can be set to 'estimate', to let the code determine reasonable search ranges within the
 #atmospheric coherence time, which is determined from the observing frequency.
 #Set to None to disable this feature.
-fringe_solint_mb_reiterate = estimate
+fringe_solint_mb_reiterate = 600;900;99999
 
 ### End of fringe parameters.  ###

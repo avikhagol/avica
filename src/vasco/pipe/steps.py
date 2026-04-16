@@ -32,12 +32,12 @@ class PreProcessFitsIdi(PipelineStepBase):
     """
         _______________________________________________________
         
-        1. fix minor problems in the fits
-        2. check scanlist, print listobs if scanlist output file not found in metadata
-        3. split sources to contain only desired sources
-        4. fix remaining problems
-        5. split in frequency id and attach missing tsys, gain curve table
-        6. fill optional metadata in the calibration input files
+        1. Fix minor problems in the fits.
+        2. Check scanlist, print listobs if scanlist output file not found in metadata.
+        3. Split sources to contain only desired sources.
+        4. Fix remaining problems.
+        5. Split in frequency id and attach missing tsys, gain curve table.
+        6. Fill optional metadata in the pipeline input files.
         
         _________________________________________________________
         
@@ -940,7 +940,7 @@ class FillInputMs(PipelineStepBase):
     
     # ----------------------------------------------------------
     
-    def run(self, lf, wd_ifolder, rfc_catalogfile, target, n_calib=6, verbose=True):
+    def run(self, lf, wd_ifolder, rfc_catalogfile, target, n_calib=6, hi_freq_ref=11, verbose=True):
         
         log                             =   logging.getLogger("vasco.pipeline")
         
@@ -976,7 +976,8 @@ class FillInputMs(PipelineStepBase):
                                                                             caliblist_file=rfc_catalogfile, 
                                                                             sourcesf=sourcesf, refantsf=refantsf, sourcesf_snr=sourcesf_snr, 
                                                                             band=band[0], edgeflagging=True, 
-                                                                            pipe_params=PipelineContext.params) # TODO: complete population of input parameters from user provided config file
+                                                                            pipe_params=PipelineContext.params,
+                                                                            hi_freq_ref=hi_freq_ref) # TODO: complete population of input parameters from user provided config file
                     else:
                         success                 =   False
                         errf                    =   "check prev"
