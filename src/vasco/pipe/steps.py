@@ -907,12 +907,16 @@ class SnRating(PipelineStepBase):
                         refants_str                         =   ','.join(refants)
                         col_value                           =   f'{lf.get_value(colname=self.colnames.working_col)} {f"{band}:{refants_str}"}'.strip()
                         if not success:
-                            self.result.failed_count        =   lf.put_value(col_value, self.colnames.working_col, 
-                                                                             self.result.failed_count)
+                            self.result.failed_count        +=   1
+                            _                               =   lf.put_value(col_value, self.colnames.working_col, self.result.failed_count)
+                            self.result.success.append(False)
                         else:
                             
-                            self.result.success_count       =   lf.put_value(col_value,self.colnames.working_col, 
+                            self.result.success_count       +=   1
+                            _                               =   lf.put_value(col_value,self.colnames.working_col, 
                                                                              self.result.success_count)
+                            self.result.success.append(True)
+            self.result.desc = desc[band]
         self.result.end_stamp   =   datetime.now()
         return self.result
 
