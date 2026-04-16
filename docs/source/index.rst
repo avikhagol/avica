@@ -75,6 +75,17 @@ The pipeline steps can be invoked from the terminal as follows:
 
    vasco pipe run --t TARGET_NAME --f FITSFILE_NAME [STEPS]
 
+The output folder structure follows the following convention:
+
+::
+
+   CWD (with vasco.inp)
+   └── reductions/
+       └── PROJECT_CODE/
+           └── wd/
+               └── wd_{BAND}/
+                   └── wd_{BAND}_{TARGET_NAME}/
+
 using ``--help`` will print the pipeline steps and usage instructions as follows:
 
 .. code-block:: bash
