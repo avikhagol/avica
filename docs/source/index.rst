@@ -36,7 +36,7 @@ Installation
 Setup
 =====
 
-The pipeline functionality for calibration depends on `rPicard`_. Follow the setup instructions linked below before proceeding.
+The pipeline functionality for calibration depends on `rPicard`_. Follow the setup instructions following the link.
 Once rPicard has been successfully configured, only a minimal **vasco** configuration file is required.
 
 .. _rPicard: https://bitbucket.org/M_Janssen/picard/src/master/
