@@ -456,11 +456,8 @@ def build_path(filepath):
         while Path(filepath).exists():
             filepath = "{0}_{2}{1}".format(
                 *(Path(opt).parent / Path(opt).stem, Path(opt).suffix,numb))
-            try :
-                if Path(filepath).exists():
+            if (filepath is not None) and (Path(filepath).exists()):
                     numb += 1 
-            except:
-                pass
     return filepath
 
 class   FileSize:
@@ -593,16 +590,20 @@ def split_and_stack_multiple_cols(dfsheet, cols):
     Returns:
         pd.DataFrame: A DataFrame with split and stacked rows for all specified columns.
     """
-    from pandas import DataFrame as df
-    result_df = df()
+    # from pandas import DataFrame as df
+    import pandas as pd
+    result_df = pd.DataFrame()
 
     for col_name in cols:
         split_df = dfsheet[col_name].str.strip().str.split(" ", expand=True).stack().reset_index(level=1, drop=True).reset_index(name=col_name)
         split_df[['band', col_name]] = split_df[col_name].apply(split_band_and_data)
-        try:
-          split_df[col_name] = split_df[col_name].astype(float)
-        except:
-          split_df[col_name] = split_df[col_name].astype(str)
+        
+        split_df[col_name] = split_df[col_name].str.strip()
+        converted = pd.to_numeric(split_df[col_name], errors='ignore')
+        if pd.api.types.is_numeric_dtype(converted):
+            split_df[col_name] = converted
+        else:
+            split_df[col_name] = split_df[col_name].astype(str)
 
         if result_df.empty:
             result_df = split_df
@@ -850,7 +851,9 @@ def proj_search(url, proj):
 
     for r in res:
         row_text = re.sub(r'<[^>]+>', ' ', r)
-        row_res  = row_text.split()[0] if row_text.split() else ''
+        
+        row_text_sep = row_text.split()
+        row_res  = row_text_sep[0] if row_text_sep else ''
 
         link_match = re.search(r'<a[^>]+href=["\']([^"\'?]+)["\']', r, re.IGNORECASE)
         link_text  = link_match.group(1).strip('/') if link_match else ''

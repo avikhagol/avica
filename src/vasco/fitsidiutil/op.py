@@ -85,7 +85,12 @@ def get_hduname(hdul, hdu_names:List[str])-> tuple[str, List]:
 
 
 def _getcolname(hdu, cols:List[str]):
-    return [col_found for col_found in hdu.cols for col_given in cols if col_given in col_found][0]
+    colfound = [col_found for col_found in hdu.cols for col_given in cols if col_given in col_found]
+    if len(colfound):
+        colfound=colfound[0]
+    else:
+        raise NameError(f"column not found for {cols}")
+    return colfound
 
 def get_colname(hdu, cols:List[str])->str:
     """fuzzy search for hdu column name.
