@@ -12,7 +12,7 @@ VASCO: VLBI and SMILE source based CASA Optimizations.
 
 ```bash
 
-pip install vasco
+pip install vasco[all]
 ```
 
 ## Manual
