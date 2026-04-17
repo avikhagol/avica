@@ -29,7 +29,7 @@ flag_edge_channels = True
 file_edge_channels = EC.CFG
 aply_edge_channels = True
 perc_edge_channels = True
-numo_edge_channels = 5,5
+numo_edge_channels = 7,7
 
 
 #Flag uncalibrated scans explicitly.

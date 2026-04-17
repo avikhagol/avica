@@ -28,20 +28,21 @@ Usage: vasco pipe run [OPTIONS] [STPS]...
                                                                                                                                                                                                                                                                                                                               
  _______________________                                                                                                                                                                                                                                                                                                      
                                                                                                                                                                                                                                                                                                                               
- pipeline steps:                                                                                                                                                                                                                                                                                                              
- -   preprocess_fitsidi                                                                                                                                                                                                                                                                                                       
- -   fits_to_ms                                                                                                                                                                                                                                                                                                               
- -   phaseshift                                                                                                                                                                                                                                                                                                               
- -   vasco_avg                                                                                                                                                                                                                                                                                                                
- -   vascometa_ms                                                                                                                                                                                                                                                                                                             
- -   vasco_snr                                                                                                                                                                                                                                                                                                                
- -   vasco_fill_input                                                                                                                                                                                                                                                                                                         
- -   vasco_split_ms                                                                                                                                                                                                                                                                                                           
- -   rpicard                                                                                                                                                                                                                                                                                                                  
-                                                                                                                                                                                                                                                                                                                              
-                                                                                                                                                                                                                                                                                                                              
- ________________________                                                                                                                                                                                                                                                                                                     
-                                                                                                                                                                                                                                                                                                                              
+ pipeline steps:
+ 
+ -  preprocess_fitsidi
+ -  fits_to_ms
+ -  phaseshift
+ -  vasco_avg
+ -  vascometa_ms
+ -  vasco_snr
+ -  vasco_fill_input
+ -  vasco_split_ms
+ -  rpicard
+ 
+ ________________________                                                     
+ 
+      
 ╭─ Arguments ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │   stps      [STPS]...  steps for execution [default: preprocess_fitsidi, fits_to_ms, vasco_avg, vascometa_ms, vasco_snr, vasco_fill_input, vasco_split_ms, rpicard]                                                                                                                                                        │
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
@@ -80,7 +81,7 @@ To check known FITS-IDI issues run the following:
 #### Example
 
 ```
-vasco validate VLBA_VSN005412_file3.uvfits
+vasco fitsidi_check VLBA_VSN005412_file3.uvfits
 +--------------------+---------+-------+-------+----------------+----------+
 | hdu                | fixable | total | fixed | problem_code   | affected |
 +==========================================================================+

@@ -387,6 +387,7 @@ DEFAULT_PARAMS: dict = {
     "filename_col"              :   "FILENAMES",
     "targetname_col"            :   "TARGET_NAME",
     "mpi_cores_rpicard"         :   10,
+    "hi_freq_ref"               :   11,         # in GHz
 }
     
 

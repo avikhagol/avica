@@ -11,6 +11,7 @@ import json
 import subprocess
 import numpy as np
 import shutil
+import warnings
 
 # ------ read ASCII
 
@@ -51,7 +52,7 @@ def check_band(freq, bands=None):
 
         https://science.nrao.edu/facilities/vlba/docs/manuals/oss/bands-perf
         """   
-        band = freq
+        band = None
         if not bands:
             bands = {
             'S' : np.array([2.0, 2.6]),
@@ -69,6 +70,8 @@ def check_band(freq, bands=None):
             if compare > val: 
                 band = k
                 compare = val
+        if band is None:
+            warnings.warn(f"no matching band was found", UserWarning)
         return band
 
 def read_inputfile(folder,inputfile='.inp'):
@@ -103,15 +106,15 @@ def read_inputfile(folder,inputfile='.inp'):
                             else:
                                 try:
                                     v=int(v)
-                                except:
+                                except (ValueError, TypeError):
                                     try:
                                         v=float(v)
-                                    except:
+                                    except (ValueError, TypeError):
                                         v=str(v).strip()
                                         if "*" in v:
                                             try:
                                                 v = glob.glob(f'{v}', recursive=True)
-                                            except:
+                                            except (ValueError, TypeError):
                                                 v = str(v)
                                         else:
                                             v = v.lower() == 'true' if (any(boolv == v.lower() for boolv in ['true', 'false'])) else v
@@ -196,7 +199,7 @@ def create_df_fromrfcfile(rfc_filepath):
     return df_filtered
 
 def search_rfc_catalog(targets, rfc_filepath, reset=False, seplimit=10, columns=[]):
-    rfcbuff = None
+    # rfcbuff = None
     rfc_dfpath = Path(rfc_filepath).parent / f'{Path(rfc_filepath).stem}.pkl'
     if rfc_dfpath.exists() and not reset:
         df_rfc = read_parquet(rfc_dfpath)
@@ -253,7 +256,7 @@ def create_config(params, out='config.inp', lj=1, rj=1, verbose=True):
                 v = f'{",".join(v)}'
             elif isinstance(v, range):
                 v = f"{v.start}~{v.stop}"
-            if type(v) is str():
+            if isinstance(v, str):
                 v = f"{v.rjust(rj)}"
             o.write(f'{k.ljust(lj)} = {v}\n')
     if verbose:print("created", f'{out}' )
@@ -339,25 +342,19 @@ def df_fromtxt(filename):
     return df_rfc
 
 def search_source(sources, filename, concat, j2colname='J2000 name', ivscolname='IVS name'):
-    """
-    
-    """
-    
     df_rfc = df_fromtxt(filename)
-    for txt_count in [10,9]:          
-        nsources = [source[:txt_count] for source in sources]
-    jsources = []
-    for source in nsources:
-        if source:
-            if source[0]!='J': 
-                jsources.extend([f'J{source}'])
-                
-            else: 
-                jsources.extend([source])
-                nsources.remove(source)
-                nsources.extend([source[1:]])
-    res = concat([df_rfc.loc[df_rfc[ivscolname].str.startswith(tuple(nsources))], df_rfc.loc[df_rfc[j2colname].str.startswith(tuple(jsources))]])
-    return res
+    ivs_search_terms = set()
+    j20_search_terms = set()
+
+    for s in sources:
+        base = s[1:] if s.startswith('J') else s
+        for length in [9, 10]:
+            short_name = base[:length]
+            ivs_search_terms.add(short_name)
+            j20_search_terms.add(f"J{short_name}")
+    res_ivs = df_rfc[df_rfc[ivscolname].str.startswith(tuple(ivs_search_terms), na=False)]
+    res_j20 = df_rfc[df_rfc[j2colname].str.startswith(tuple(j20_search_terms), na=False)]
+    return concat([res_ivs, res_j20]).drop_duplicates()
 
 def search_sources(sources, filename, j2colname='J2000 name', ivscolname='IVS name'):
     """
@@ -398,6 +395,8 @@ def latest_file(path: Path, pattern: str = "*"):
     
     try:
         lastf = max(files, key=lambda x: x.stat().st_ctime)
+    except Exception:
+        return Path('')
     finally:
         return lastf
 
@@ -601,26 +600,26 @@ def create_df_fromrfcfile(rfc_filepath):
     df_filtered.to_parquet(rfc_dfpath,engine='pyarrow')
     return df_filtered
 
-def search_rfc_catalog(targets, rfc_filepath, reset=False, seplimit=10, columns=[]):
-    rfcbuff = None
-    rfc_dfpath = Path(rfc_filepath).parent / f'{Path(rfc_filepath).stem}.pkl'
-    if rfc_dfpath.exists() and not reset:
-        df_rfc = read_parquet(rfc_dfpath)
-    else:
-        df_rfc = create_df_fromrfcfile(rfc_filepath=rfc_filepath)
-        
-    catalog = SkyCoord(df_rfc['RA_J2000'].values*u.deg, df_rfc['DEC_J2000'].values*u.deg, frame='fk5')
-    idxsearcharound, idxself, sep2d, dist3d =  catalog.search_around_sky(targets, seplimit=seplimit*u.milliarcsecond)
-    df_res = df_rfc.loc[idxself]
-    df_res['sep(mas)'] = sep2d.milliarcsecond
-    df_res['coordinate'] = SkyCoord(df_res['RA_J2000'].values*u.hourangle, df_res['DEC_J2000'].values*u.deg).to_string('hmsdms')
-    
-    df_res.insert(0, 'sep(mas)', df_res.pop('sep(mas)'))
-    df_res.insert(1, 'coordinate', df_res.pop('coordinate'))
+# def search_rfc_catalog(targets, rfc_filepath, reset=False, seplimit=10, columns=[]):
 
-    cols= '|'.join(columns)
-    df_res = df_res[df_res.filter(regex=rf'RA|DEC|{cols}').columns]
-    return df_res
+#     rfc_dfpath = Path(rfc_filepath).parent / f'{Path(rfc_filepath).stem}.pkl'
+#     if rfc_dfpath.exists() and not reset:
+#         df_rfc = read_parquet(rfc_dfpath)
+#     else:
+#         df_rfc = create_df_fromrfcfile(rfc_filepath=rfc_filepath)
+        
+#     catalog = SkyCoord(df_rfc['RA_J2000'].values*u.hourangle, df_rfc['DEC_J2000'].values*u.deg, frame='fk5')
+#     idxsearcharound, idxself, sep2d, dist3d =  catalog.search_around_sky(targets, seplimit=seplimit*u.milliarcsecond)
+#     df_res = df_rfc.loc[idxself]
+#     df_res['sep(mas)'] = sep2d.milliarcsecond
+#     df_res['coordinate'] = SkyCoord(df_res['RA_J2000'].values*u.hourangle, df_res['DEC_J2000'].values*u.deg).to_string('hmsdms')
+    
+#     df_res.insert(0, 'sep(mas)', df_res.pop('sep(mas)'))
+#     df_res.insert(1, 'coordinate', df_res.pop('coordinate'))
+
+#     cols= '|'.join(columns)
+#     df_res = df_res[df_res.filter(regex=rf'RA|DEC|{cols}').columns]
+#     return df_res
 
 def format_coord(coord_str):
     parts = coord_str.strip().split()
@@ -686,7 +685,11 @@ def casadir_find(vasco_data_dir, write: bool = True):
     casadir = ''
     if Path(casa_path).exists():
         with open(casa_path, "r") as cp:
-            cp_txt = cp.readlines()[0]
+            lines = cp.readlines()
+            if not lines:
+                raise ValueError(f'Empty calibrator file: {cp.name}')
+            cp_txt = lines[0]
+            
             if cp_txt:
                 auto = 'no'
                 casadir = cp_txt

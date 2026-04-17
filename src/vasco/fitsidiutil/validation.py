@@ -438,7 +438,7 @@ class HeaderPrimaryValidator(IdiValidatorBase):
         
     def fix(self, hdu_name: str, key: str, hdul, result: ValidationResult) -> bool:
         for i, dict_corrected in enumerate(result.detail):
-            for key, new_val in dict_corrected[i].items():
+            for key, new_val in dict_corrected.items():
                 if result.bad_data[i]=='':
                     warnings.warn((f"{key} not found: check results"), UserWarning, stacklevel=2)
                 hdul[hdu_name].update_key(key, new_val)
