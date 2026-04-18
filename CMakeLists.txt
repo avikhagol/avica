@@ -44,10 +44,6 @@ pybind11_add_module(${FITSIDIUTIL_MODULE} MODULE src/vasco/fitsidiutil/bindings.
 set_target_properties(${FITSIDIUTIL_MODULE} PROPERTIES OUTPUT_NAME _core JOB_POOL_COMPILE one_jobs JOB_POOL_LINK two_jobs)
 target_link_libraries(${FITSIDIUTIL_MODULE} PRIVATE $<TARGET_FILE:cfitsio> Python3::Module)
 target_include_directories(${FITSIDIUTIL_MODULE} PRIVATE ${cfitsio_SOURCE_DIR} ${cfitsio_SOURCE_DIR}/include)
- 
-if(UNIX AND NOT APPLE)
-    target_link_options(${FITSIDIUTIL_MODULE} PRIVATE -static-libstdc++ -static-libgcc)
-endif()
 
 install(TARGETS ${FITSIDIUTIL_MODULE}
     LIBRARY DESTINATION ${SKBUILD_PROJECT_NAME}/fitsidiutil
