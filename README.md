@@ -20,9 +20,21 @@ pip install vasco[all]
 
 ## Manual
 
+1. Clone the repository to the desired destination.
+
 ```
 git clone --recurse-submodules https://github.com/avikhagol/vasco.git
 ```
+
+2. Install using `pip`
+
+```bash
+cd vasco/
+
+pip install .[all]
+
+```
+
 
 # Usage
 
