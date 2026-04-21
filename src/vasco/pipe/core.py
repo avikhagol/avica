@@ -1695,17 +1695,6 @@ class MpiCasaPayload(SubprocessPayload):
         inp_data    =   CasaConfigGen(tasks_list=tasks_list).to_dict()
         super().__init__(inp_data=inp_data, host=host, port=port)
 
-class MpiVascoPayload(SubprocessPayload):
-    mode = "stdin"
-    clean_env = True
-    def __init__(self,
-                cmd:        VascoSnRatinCMD,
-                casadir:    str,
-                mpi_cores:  int,
-                python_bin: str = sys.executable,):
-        super().__init__(inp_data = asdict(cmd), 
-                        cmd_list = cmd.to_cmd_list(casadir=casadir, mpi_cores=mpi_cores, python_bin=python_bin))
-
 @dataclass
 class PicardTask:
     input:      str
