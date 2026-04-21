@@ -35,6 +35,13 @@ pip install .[all]
 
 ```
 
+>Important : 
+    Because monolithic `casa` ships with its own python3 installation. It is recommended to install `vasco` in a python environment, with either the same version of python as `casa`, or use the `casa` python itself to create a virtual environment first. This is needed if "all" is not used for installation:   
+    
+    /path/to/casadir/bin/python3 -m venv MY_ENV_DIR
+    source MY_ENV_DIR/bin/activate
+    pip install vasco
+
 
 # Usage
 
