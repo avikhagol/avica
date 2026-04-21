@@ -674,7 +674,7 @@ class AverageMS(PipelineStepBase):
                 
         global_bands_dict['bands_known'] = bands_known
         save_metafile(wd_meta.metafile_msmeta_sources, {'bands_dict': global_bands_dict})
-        
+        self.result.desc = bands_known
         self.result.end_stamp   =   datetime.now()
         
         return self.result
@@ -771,21 +771,25 @@ class VascoMetaMS(PipelineStepBase):
                 success_val         = " ".join([f"{b}:{'ok' if s else e}" for b, (s, e) in vasco_b.items()])
 
                 if succeed == 1:
-                    self.result.success_count   = lf.put_value(success_val, self.colnames.working_col,
+                    self.result.success_count   += 1
+                    _                           = lf.put_value(success_val, self.colnames.working_col,
                                                                self.result.success_count)
                 elif succeed > 0:
                     failed_band                 = " ".join([f"{b}:failed" for b, (s, _) in vasco_b.items() if not s])
+                    self.result.failed_count    +=  1
                     _                           = lf.put_value(success_val, self.colnames.working_col,
                                                                self.result.success_count)
-                    self.result.failed_count    = lf.put_value(failed_band, self.colnames.comment_col,
+                    _                           = lf.put_value(failed_band, self.colnames.comment_col,
                                                                self.result.failed_count)
+
                 else:
-                    self.result.failed_count    = lf.put_value('failed', self.colnames.working_col,
+                    self.result.failed_count    +=  1
+                    _                           = lf.put_value('failed', self.colnames.working_col,
                                                                self.result.failed_count)
 
             except Exception:
                 traceback.print_exc()
-        self.result.desc = success_band
+        self.result.detail = success_band
         self.result.end_stamp = datetime.now()
         return self.result
 
