@@ -401,7 +401,11 @@ class VascoResult(UserList[StepResult]):
         if df.is_empty():
             print("Empty results.")
             return df
-        return df
+        
+        return df.with_columns([
+            pl.col("start_stamp").cast(pl.Datetime).dt.round("1ms"),
+            pl.col("end_stamp").cast(pl.Datetime).dt.round("1ms")
+        ])
 
     def __repr__(self) -> str:
         df = self.to_polars()
