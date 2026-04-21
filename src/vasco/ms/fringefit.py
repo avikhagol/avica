@@ -5,7 +5,7 @@ from vasco.ms.mpiclient import get_mpi_client
 from vasco.ms.tables import an_dic, get_ant_scans, get_name_dict, get_tb_data
 from vasco.config import Config, CONFIG_MAPPING
 
-from casatools import table
+from casatools import table, logsink
 import polars as pl
 import numpy as np
 
@@ -16,7 +16,9 @@ from pathlib import Path
 
 SNR_CLIP_DEFAULT = 600
 
-tb = table()
+vascolog=logsink('vasco.casa_log')
+vascolog.setlogfile='vasco.casa_log'
+vascolog.setglobal(True)
 
 
 class ObservationInp(Config):
@@ -107,16 +109,17 @@ class FringeDetectionRating:
         self.selected_good_scans    =   get_best_scans(df_scans, nscans)
         return self.selected_good_scans
     
-    def exec_FFT_fringefit(self, multiband=True):
+    def get_dic_ant_with_scans(self):
         dic_ant_with_scans = {}
-
         for antid in self.selected_ants:
             if antid not in dic_ant_with_scans:
                 dic_ant_with_scans[antid] = {'scans':[], 'name':str(self.dict_antenna[antid]['ANNAME'])}
                 for scs_in_source in self.select_good_scans(nscans=self.n_scans, anid=antid).values():
                     dic_ant_with_scans[antid]['scans'].extend(scs_in_source)
-        
-        
+        return dic_ant_with_scans
+    
+    def exec_FFT_fringefit(self, multiband=True):
+        dic_ant_with_scans                              =   self.get_dic_ant_with_scans()
         dic_result                                      =   task_fringefit_fft_only(self.vis, dic_ant_with_scans=dic_ant_with_scans, 
                                                                     iter_scan_count=self.iter_scan_count,
                                                                     caltable_folder=self.caltable_folder, gt=self.gaintables, interp=self.interp,
@@ -135,6 +138,9 @@ class FringeDetectionRating:
         save_metafile(self.metafolder / "refants.vasco", metad={"refant":self.refants})
         with open(str(self.metafolder / "snrating.out"), "w") as wbuff: wbuff.write(f"{self.pp_out}")
         return self.dic_field, self.refants, self.pp_out
+
+# -------------------------------------- Pipeline Specific injectors
+
 
 # -------------------------------------- CASA tasks
 
@@ -494,6 +500,7 @@ def get_scan_durations(vis:str, sids:List[int]):
     Returns:
         dict: dictionary containing scan duration. {scan_id:scan_duration}
     """
+    tb = table()
     tb.open(vis)
     subtb = tb.query(columns="DISTINCT SCAN_NUMBER,TIME", query=f'SCAN_NUMBER in {sids}')
     time = subtb.getcol('TIME')
@@ -543,7 +550,6 @@ def get_df_scans(vis:str, dict_field_ant_with_scans:dict):
     fids = list(dict_field_ant_with_scans.keys())
     sids = [sid for fid in fids for scans in dict_field_ant_with_scans.get(fid, {}).values() for sid in scans]
     scan_counts = Counter(sids)
-    
     
     dict_scan_durations = get_scan_durations(vis, list(set(sids)))
     
@@ -602,16 +608,17 @@ def get_best_scans(df_scans:pl.DataFrame, nscans:int)->dict:
     dict_res = {fid: result_df.filter(pl.col("fid") == fid)["scan"].to_list()[0] for fid in result_df["fid"]}
     return dict_res
 
-
 if __name__ == "__main__":
     import argparse
     import sys
     import json
-
+    mpiclient =  get_mpi_client()
+    print(dir(mpiclient))
     kwargs = {}
     if not sys.stdin.isatty():
         try:
             kwargs = json.load(sys.stdin)
+            print(kwargs)
         except json.JSONDecodeError as e:
             print(f"Error: Invalid JSON input - {e}", file=sys.stderr)
             sys.exit(1)

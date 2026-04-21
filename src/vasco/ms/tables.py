@@ -1,4 +1,4 @@
-from casatools import table, msmetadata
+from casatools import table, msmetadata, logsink
 import polars as pl
 import numpy as np
 from scipy.spatial import distance
@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import List
 from collections import defaultdict
 from vasco.util import check_band
+
+vascolog=logsink('vasco.casa_log')
+vascolog.setlogfile='vasco.casa_log'
+vascolog.setglobal(True)
 
 #  utilities
 tb = table()

@@ -1342,8 +1342,6 @@ def count_freqids(fitsfile):
     return freqids
 
 
-
-
 def check_target_in_ms(vis, target):
     from casatools import msmetadata
     msmd = msmetadata()

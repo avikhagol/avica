@@ -16,13 +16,14 @@ import numpy as np
 import json
 import subprocess
 
+from vasco.fitsidiutil.op import count_tsys_in_fitsfile
+
 from .helpers import del_fl, count_freqids, meta_from_fitsfile, meta_from_fitsfile_freqid, get_logfilename, single_ifcheck, fillinp_fromiwd, read_vasco_sources_msmeta
 from .helpers import alls_fromobs, update_from_vascometa, check_target_in_ms, fits_has_target, fill_input_byvalues
 
-from .core import PipelineStepBase, StepResult, VascoResult, ColName, PipelineContext
-from vasco.fitsidiutil.op import count_tsys_in_fitsfile
-from .core import step_stage, InitVariables, RunValidation, WorkDirMeta, UpdateResults, UpdateSheet
-from .core import ImportFITSIdi, MsTransform, CasaConfigGen, MpiVascoPayload,VascoSnRatinCMD, MpiCasaPayload, PicardPayload, GenerateAndAppendAntab, PicardTask
+from .core import PipelineStepBase, StepResult, VascoResult, ColName, PipelineContext, WorkDirMeta
+from .core import step_stage, InitVariables, RunValidation,  UpdateResults, UpdateSheet, CasaSetup
+from .core import ImportFITSIdi, MsTransform, MpiCasaPayload, PicardPayload, GenerateAndAppendAntab, PicardTask
 from .config import PHASESHIFT_PERL_SCRIPT
 
 log = logging.getLogger("vasco.pipeline")
@@ -60,7 +61,7 @@ class PreProcessFitsIdi(PipelineStepBase):
     # ----------------------------------------------------------
     
     def run(self, lf, fitsfiles, target, wd_ifolder, verbose=False):
-        
+        self.result.start_stamp   = datetime.now()
         from vasco.fitsidiutil.validation import fitsidi_check
         from vasco.fitsidiutil.obs import ObservationSummary
         from vasco.pipe.core import split_by_catalog_search, split_in_freqid
@@ -223,7 +224,7 @@ class FitsIdiToMS(PipelineStepBase):
     # ----------------------------------------------------------
     
     def run(self, lf, casadir, wd_ifolder):
-        
+        self.result.start_stamp   = datetime.now()
         wd_meta         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         fitsfiles       =   wd_meta.ff_used
         multifreqid     =   len([ff for ff in fitsfiles if "freqid" in ff])>0
@@ -362,13 +363,14 @@ class Phaseshift(PipelineStepBase):
     colnames        =   ColName('phaseshift', 'Comment_phaseshift', 'timestamp_phaseshift')
     py_env          =   "casa-6.7"
     description     =   """uses the coodinate search file result from previous step, performs phaseshift when source is off by 1 arcsecond"""
-    validate_by     =   [InitVariables, RunValidation, UpdateResults, UpdateSheet]
+    validate_by     =   [InitVariables, RunValidation,  UpdateResults, UpdateSheet]
     result          =   StepResult(name=name, detail={},
                                        success_count=0, failed_count=0, start_stamp=datetime.now())
     
     # ----------------------------------------------------------
     
     def run(self, lf, wd_ifolder, fitsfile, target, separation_thres, class_search_asciifile, verbose=False,):
+        self.result.start_stamp   = datetime.now()
         from vasco.util import parse_class_cat
         from vasco.fitsidiutil.op import catalog_search_from_fits
         
@@ -503,13 +505,14 @@ class AverageMS(PipelineStepBase):
     colnames        =   ColName('vasco_avg', 'Comment_avg', 'timestamp_avg')
     py_env          =   "casa-6.7"
     description     =   """Average the Measurement Set to have INTTIM=2sec, CHWIDTH=500KHz | uses CASA task mstransform"""
-    validate_by     =   [InitVariables, RunValidation, UpdateResults, UpdateSheet]
+    validate_by     =   [InitVariables, RunValidation, CasaSetup, UpdateResults, UpdateSheet]
     result          =   StepResult(name=name, detail={},
                                        success_count=0, failed_count=0, start_stamp=datetime.now())
     
     # ----------------------------------------------------------
     
     def run(self, lf, wd_ifolder, casadir, verbose=True):
+        self.result.start_stamp   = datetime.now()
         from vasco.ms.meta import BandInfoMS
         # log = logging.getLogger("vasco.pipeline")
         
@@ -692,13 +695,14 @@ class VascoMetaMS(PipelineStepBase):
     colnames    = ColName('vascometa_ms', 'Comment_metams', 'timestamp_metams')
     py_env      = "casa-6.7"
     description = """Creates MS metadata by identifying sources per band"""
-    validate_by     =   [InitVariables, RunValidation, UpdateResults, UpdateSheet]
+    validate_by     =   [InitVariables, RunValidation, CasaSetup, UpdateResults, UpdateSheet]
     result      = StepResult(name=name, detail={},
                              success_count=0, failed_count=0, start_stamp=datetime.now())
 
     # ----------------------------------------------------------
 
     def run(self, lf, wd_ifolder, init_params, rfc_catalogfile, target, verbose=True):
+        self.result.start_stamp   = datetime.now()
         from vasco.ms import identify_sources_fromtarget_ms
         
         
@@ -730,33 +734,37 @@ class VascoMetaMS(PipelineStepBase):
                     vis_b           = str(Path(iwd_b_new).parent / obs_b['ms_name']) if 'ms_name' in obs_b and obs_b['ms_name'] else None
                     
                     errf = ""
-                    try:
-                        s_dict              =   identify_sources_fromtarget_ms(vis_b, target_source=target, caliblist_file=rfc_catalogfile,
-                                                    flux_thres=0.150, min_flux=0.025, ncalib=20, flux_df=None, 
-                                                    sourcenames=None, hard_selection=False, metafolder=str(metadir_b))
-                    except Exception:
-                        traceback.print_exc()
-                        
-                    if not Path(metadir_b / 'msmeta_sources.vasco').exists():
-                        success = False
+                    if vis_b is not None and Path(vis_b).exists():
+                        try:
+                            s_dict              =   identify_sources_fromtarget_ms(vis_b, target_source=target, caliblist_file=rfc_catalogfile,
+                                                        flux_thres=0.150, min_flux=0.025, ncalib=20, flux_df=None, 
+                                                        sourcenames=None, hard_selection=False, metafolder=str(metadir_b))
+                        except Exception:
+                            traceback.print_exc()
+                            
+                        if not Path(metadir_b / 'msmeta_sources.vasco').exists():
+                            success = False
+                        else:
+                            msmeta_b    = read_metafile(str(metadir_b / 'msmeta_sources.vasco'))
+                            save_metafile(str(metafolder / f'msmeta_sources_{band}_{target}.vasco'), msmeta_b)
+                            
+                            for band, sources_d in s_dict.items():
+                                print(band, "band")
+                                save_metafile(str(metafolder / f'sources_ms_{band}_{target}.vasco'),     sources_d)
+                                update_from_vascometa(iwd_b_new, inpfile='observation.inp', val_dict=sources_d)
+                                    
+                            success_band.append(band)
+
+                        if Path(vis_b).exists():
+                            if not check_target_in_ms(vis_b, target):
+                                errf = 'target missing'
+
+                        vasco_b[band]               = (success, errf)
+                        self.result.detail[band]    = errf if not success else 'ok'
+                        self.result.success.append(success)
                     else:
-                        msmeta_b    = read_metafile(str(metadir_b / 'msmeta_sources.vasco'))
-                        save_metafile(str(metafolder / f'msmeta_sources_{band}_{target}.vasco'), msmeta_b)
-                        
-                        for band, sources_d in s_dict.items():
-                            print(band, "band")
-                            save_metafile(str(metafolder / f'sources_ms_{band}_{target}.vasco'),     sources_d)
-                            update_from_vascometa(iwd_b_new, inpfile='observation.inp', val_dict=sources_d)
-                                
-                        success_band.append(band)
-
-                    if Path(vis_b).exists():
-                        if not check_target_in_ms(vis_b, target):
-                            errf = 'target missing'
-
-                    vasco_b[band]               = (success, errf)
-                    self.result.detail[band]    = errf if not success else 'ok'
-                    self.result.success.append(success)
+                        self.result.success.append(False)
+                        self.result.detail[band] = f"missing"
 
                 vasco_sources_ms    = glob.glob(str(metafolder / f'sources_ms_*_{target}.vasco'))
                 succeed             = len(success_band) / len(bands) if bands else 0
@@ -797,14 +805,18 @@ class SnRating(PipelineStepBase):
     colnames        =   ColName('vasco_snr', 'Comment_vasco_snr', 'timestamp_vasco_snr')
     py_env          =   "casa-6.7"
     description     =   """To do a short fringefit to get the signal-to-noise rating"""
-    validate_by     =   [InitVariables, RunValidation, UpdateResults, UpdateSheet]
+    validate_by     =   [InitVariables, RunValidation, CasaSetup, UpdateResults, UpdateSheet]
     result          =   StepResult(name=name, detail={},
                                        success_count=0, failed_count=0, start_stamp=datetime.now())
     
     # ----------------------------------------------------------
     
-    def run(self, lf, wd_ifolder, init_params, casadir, target, n_refant=5, n_calib=6, multiband_snrating=True, n_scan_snrting=7, verbose=True):
+    def run(self, lf, wd_ifolder, init_params, casadir, target, n_refant=5, n_calib=6, multiband_snrating=True, snrating_mpi_cores=5, n_scan_snrting=7, verbose=True):
+        self.result.start_stamp   = datetime.now()
         from vasco.ms import get_best_spws
+        from vasco.pipe.tasks.fringefit import exec_FFT_fringefit
+        from vasco.ms.fringefit import FringeDetectionRating
+        
         log                             =   logging.getLogger("vasco.pipeline")
         band_count                      =   0
         
@@ -829,7 +841,7 @@ class SnRating(PipelineStepBase):
                     desc[band]                   =   []
                     
                     wd_b, iwd_b                 =   wd_meta.to_new_WD(band, target='', create=False)
-                    print(wd_b)
+                    
                     obs_b                       =   wd_meta.get_inp(band=band, inpfile="observation.inp")
                     
                     
@@ -857,33 +869,35 @@ class SnRating(PipelineStepBase):
                         
                         msg                             =   f"preparing run for fringefit on {Path(vis_b).name}"
                         log.info(msg)
+                        
                         with step_stage(msg):
-                                
-                            # fdr                             =   FringeDetectionRating(vis=vis_b, caltable_folder=str(caltable_folder), 
-                            #                                         n_refant=n_refant, n_calib=n_calib, n_scans=n_scan_snrting, iter_scan_count=iter_scan_count,
-                            #                                         selected_sources=allsources, selected_scans=[], selected_ants=[], selected_spws=goodspws,
-                            #                                         gaintables=[], interp=[], verbose=verbose)
-                            # success                         =   True
+                            casalogfile         =   f'{wd_b}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa")}'
+                            errcasalogfile      =   f'{wd_b}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa")}'
+                            # VascoSnRatinCMD(vis=str(vis_b), caltable_folder=str(caltable_folder), 
+                                                                        # n_refant=int(n_refant), n_calib=int(n_calib), n_scans=int(n_scan_snrting), 
+                                                                        # iter_scan_count=int(iter_scan_count),
+                                                                        # selected_sources=list(allsources), selected_scans=[], selected_ants=[], 
+                                                                        # selected_spws=goodspws,
+                                                                        # gaintables=[], interp=[], metafolder=str(metadir_b), verbose=verbose)
+                            fr = FringeDetectionRating(vis=str(vis_b), caltable_folder=str(caltable_folder), n_calib=n_calib, n_refant=n_refant, n_scans=int(n_scan_snrting), iter_scan_count=iter_scan_count,
+                                                        selected_sources=list(allsources), selected_scans=[], selected_ants=[], selected_spws=goodspws, gaintables=[], interp=[], 
+                                                        metafolder=str(metadir_b), 
+                                                        verbose=verbose)
+
                             
                             
-                            cmd                             =     VascoSnRatinCMD(vis=str(vis_b), caltable_folder=str(caltable_folder), 
-                                                                        n_refant=int(n_refant), n_calib=int(n_calib), n_scans=int(n_scan_snrting), 
-                                                                        iter_scan_count=int(iter_scan_count),
-                                                                        selected_sources=list(allsources), selected_scans=[], selected_ants=[], 
-                                                                        selected_spws=goodspws,
-                                                                        gaintables=[], interp=[], metafolder=str(metadir_b), verbose=verbose)
-                            
-                            payload                          =     MpiVascoPayload(cmd = cmd, casadir=str(casadir),mpi_cores=5)
                             msg                             =   f"running fringefit on {Path(vis_b).name}"
                             log.info(msg)
                             with step_stage(msg):
                                 try:
-                                    payload.run()
-                                    # dic_field, refants, pp_out  =   fdr.exec_FFT_fringefit(multiband=multiband_snrating)
+                                    dic_field, refants, pp_out      =   exec_FFT_fringefit(fr, casadir=casadir,logfile=casalogfile,errfile=errcasalogfile,
+                                                                                                mpi_cores=snrating_mpi_cores,multiband=multiband_snrating)
+
+                                    msg                             =   f"finished fringefit for {Path(vis_b).name}"
+                                    log.info(msg)
                                     
-                                    dic_field, refants, pp_out      =   cmd.get_result()
                                     log.info(f"\t\t{pp_out}")
-                                    if verbose: print(f"\t\t{pp_out}")
+                                    # if verbose: print(f"\t\t{pp_out}")
                                     vasco_sources               =   metadir_b / wd_meta.meta_sources_snrating
                                     vasco_refants               =   metadir_b / wd_meta.meta_refants_snrating
                                     vasco_snr_out               =   metadir_b / wd_meta.snrating_out
@@ -896,10 +910,13 @@ class SnRating(PipelineStepBase):
                                     save_metafile(vasco_sources_dest, dic_field)
                                     save_metafile(vasco_refants_dest, {"refant":refants})
                                     shutil.move(vasco_snr_out, vasco_snr_out_dest)
+                                    success = True
 
-                                except Exception:
+                                except Exception as e:
+                                    log.exception(e)
                                     traceback.print_exc()
                                     success=False
+                                
                         
                         print("success:", success)
                         if success:
@@ -910,7 +927,7 @@ class SnRating(PipelineStepBase):
                             else:
                                 success                 =   False
                         
-                        self.result.success.append(success)
+                        
                         print("success:", success)
                         refants_str                         =   ','.join(refants)
                         col_value                           =   f'{lf.get_value(colname=self.colnames.working_col)} {f"{band}:{refants_str}"}'.strip()
@@ -918,13 +935,14 @@ class SnRating(PipelineStepBase):
                             self.result.failed_count        +=   1
                             _                               =   lf.put_value(col_value, self.colnames.working_col, self.result.failed_count)
                             self.result.success.append(False)
+                            
                         else:
                             
                             self.result.success_count       +=   1
                             _                               =   lf.put_value(col_value,self.colnames.working_col, 
                                                                              self.result.success_count)
                             self.result.success.append(True)
-            self.result.desc = desc[band]
+            self.result.desc = desc
         self.result.end_stamp   =   datetime.now()
         return self.result
 
@@ -943,14 +961,14 @@ class FillInputMs(PipelineStepBase):
     colnames        =   ColName('vasco_fill_input', 'Comment fill_input', 'timestamp_fill_input')
     py_env          =   "casa-6.7"
     description     =   """fill the rPicard input using the metadata from the previous step"""
-    validate_by     =   [InitVariables, RunValidation, UpdateResults, UpdateSheet]
+    validate_by     =   [InitVariables, RunValidation, CasaSetup, UpdateResults, UpdateSheet]
     result          =   StepResult(name=name, detail={},
                                        success_count=0, failed_count=0, start_stamp=datetime.now())
     
     # ----------------------------------------------------------
     
     def run(self, lf, wd_ifolder, rfc_catalogfile, target, n_calib=6, hi_freq_ref=11, verbose=True):
-        
+        self.result.start_stamp         =   datetime.now()
         log                             =   logging.getLogger("vasco.pipeline")
         
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
@@ -1032,13 +1050,14 @@ class FinalSplitMs(PipelineStepBase):
     colnames        =   ColName('vasco_split_ms', 'Comment split ms', 'timestamp_split_ms')
     py_env          =   "casa-6.7"
     description     =   """Split the MS file to only contain selected sources."""
-    validate_by     =   [InitVariables, RunValidation, UpdateResults, UpdateSheet]
+    validate_by     =   [InitVariables, RunValidation, CasaSetup, UpdateResults, UpdateSheet]
     result          =   StepResult(name=name, detail={},
                                        success_count=0, failed_count=0, start_stamp=datetime.now())
     
     # ----------------------------------------------------------
     
     def run(self, lf, wd_ifolder, casadir, target, verbose=True):
+        self.result.start_stamp   = datetime.now()
         from vasco.ms import get_best_spws
         log                             =   logging.getLogger("vasco.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
@@ -1185,7 +1204,7 @@ class Calibration(PipelineStepBase):
     # ----------------------------------------------------------
     
     def run(self, lf, wd_ifolder, casadir, target, verbose=True):
-        from vasco.ms import get_best_spws
+        self.result.start_stamp         =   datetime.now()
         log                             =   logging.getLogger("vasco.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         metafolder                      =   Path(wd_meta.metafolder)
@@ -1202,61 +1221,64 @@ class Calibration(PipelineStepBase):
                 print(f"found {band} band..")
                 wd_t, iwd_b_t                       =   wd_meta.to_new_WD(band, target=target, create=False)
                 obs_b_t                             =   wd_meta.get_inp(band=band, target=target, inpfile="observation.inp")
-                allsources                          =   alls_fromobs(obs_b_t)
                 
-                exp_calibrated_files            =   [str(wd_t / f"{src}_calibrated.uvf") for src in allsources]
-                vis                             =   wd_t / obs_b_t['ms_name'] if obs_b_t['ms_name'] else None
-                if '_old' in str(vis):
-                    obs_b_t['ms_name']            =   str(vis.stem).replace('_old', '') + str(vis.suffix)
-                    create_config(obs_b_t, f'{iwd_b_t}/observation.inp')
-                    new_vis_path                =   vis.parent / obs_b_t['ms_name']
-                    vis                         =   vis.rename(new_vis_path)
-                
-                del_fl(wd_t,0, '*.ms.flagversions', rm=True)
-                del_fl(wd_t,0, '*ms.avg', rm=True)
-                del_fl(wd_t,0, '*tmp*', rm=True)
-                del_fl(wd_t, 0, '*.stored*', rm=True)
-                del_fl(wd_t, 0, '*fringe*', rm=True)
-                del_fl(wd_t,0, '*.uvf', rm=True)
-                del_fl(wd_t,0, '*calibration_tables', rm=True)
-                
-                
-                payload         =   PicardPayload(PicardTask(input=iwd_b_t, n=PipelineContext.params['mpi_cores_rpicard']))
-                payload.run()
-            
-                calibrated_files = glob.glob(f"{wd_t}/*_calibrated.uvf")
-                col                 =   self.colnames.working_col
-                comment_col = self.colnames.comment_col
-                calibrated_sources = [str(Path(calfile).name).replace("_calibrated.uvf", "") for calfile in calibrated_files]
-                missing_sources = list(set(allsources).difference(calibrated_files))
-                desc[band]                  =   f"calibrated {','.join(calibrated_sources)}"
-                target_calfile = [str(calfile) for calfile in calibrated_files if target in calfile]
-                self.result.detail[band] = target_calfile[0] if len(target_calfile) else "uvf not found"
-                
-                print("calibrated_files", calibrated_files)
-                
-                self.result.desc.append(desc[band])
-                
-                if len(exp_calibrated_files) > len(calibrated_files):    
+                if obs_b_t is not None:
+                    allsources                          =   alls_fromobs(obs_b_t)
                     
-                    print("expected calibrated_files", exp_calibrated_files)
-                if len(calibrated_files)==len(exp_calibrated_files):
-                    self.result.success.append(True)
-                    _   =   lf.put_value(f"{lf.get_value(colname=col)} {band}:{desc[band]}".strip(), col, self.result.success_count)
-                    self.result.success_count += 1
-                elif len(calibrated_files)>0:
-                    _   =   lf.put_value(f"{lf.get_value(colname=col)} {band}:{desc[band]}".strip(), col, self.result.success_count)
-                    _   =   lf.put_value(f"{lf.get_value(colname=comment_col)} {band}:missing {','.join(missing_sources)}".strip(), comment_col, self.result.success_count)
-                    self.result.success_count += 1
+                    exp_calibrated_files            =   [str(wd_t / f"{src}_calibrated.uvf") for src in allsources]
+                    vis                             =   wd_t / obs_b_t['ms_name'] if obs_b_t['ms_name'] else None
+                    if '_old' in str(vis):
+                        obs_b_t['ms_name']            =   str(vis.stem).replace('_old', '') + str(vis.suffix)
+                        create_config(obs_b_t, f'{iwd_b_t}/observation.inp')
+                        new_vis_path                =   vis.parent / obs_b_t['ms_name']
+                        vis                         =   vis.rename(new_vis_path)
+                    
+                    del_fl(wd_t,0, '*.ms.flagversions', rm=True)
+                    del_fl(wd_t,0, '*ms.avg', rm=True)
+                    del_fl(wd_t,0, '*tmp*', rm=True)
+                    del_fl(wd_t, 0, '*.stored*', rm=True)
+                    del_fl(wd_t, 0, '*fringe*', rm=True)
+                    del_fl(wd_t,0, '*.uvf', rm=True)
+                    del_fl(wd_t,0, '*calibration_tables', rm=True)
+                    
+                    
+                    payload         =   PicardPayload(PicardTask(input=iwd_b_t, n=PipelineContext.params['mpi_cores_rpicard']))
+                    payload.run()
+                
+                    calibrated_files = glob.glob(f"{wd_t}/*_calibrated.uvf")
+                    col                 =   self.colnames.working_col
+                    comment_col = self.colnames.comment_col
+                    calibrated_sources = [str(Path(calfile).name).replace("_calibrated.uvf", "") for calfile in calibrated_files]
+                    missing_sources = list(set(allsources).difference(calibrated_files))
+                    desc[band]                  =   f"calibrated {','.join(calibrated_sources)}"
+                    target_calfile = [str(calfile) for calfile in calibrated_files if target in calfile]
+                    self.result.detail[band] = target_calfile[0] if len(target_calfile) else "uvf not found"
+                    
+                    print("calibrated_files", calibrated_files)
+                    
+                    self.result.desc.append(desc[band])
+                    
+                    if len(exp_calibrated_files) > len(calibrated_files):    
+                        
+                        print("expected calibrated_files", exp_calibrated_files)
+                    if len(calibrated_files)==len(exp_calibrated_files):
+                        self.result.success.append(True)
+                        _   =   lf.put_value(f"{lf.get_value(colname=col)} {band}:{desc[band]}".strip(), col, self.result.success_count)
+                        self.result.success_count += 1
+                    elif len(calibrated_files)>0:
+                        _   =   lf.put_value(f"{lf.get_value(colname=col)} {band}:{desc[band]}".strip(), col, self.result.success_count)
+                        _   =   lf.put_value(f"{lf.get_value(colname=comment_col)} {band}:missing {','.join(missing_sources)}".strip(), comment_col, self.result.success_count)
+                        self.result.success_count += 1
+                    else:
+                        errf    =   latest_file(wd_t, '*err.out*')
+                        self.result.success.append(False)
+                        errv    =   ','.join(missing_sources)
+                        _       =   lf.put_value(f"{lf.get_value(colname=col)} {band}:{errv}".strip(), col, self.result.success_count)
+                        _       =   lf.put_value(f"{lf.get_value(colname=comment_col)} {band}:{errf}".strip(), comment_col, self.result.failed_count)
+                        self.result.failed_count += 1
+                        self.result.detail[band] = f"{errv},{errf}"
                 else:
-                    errf    =   latest_file(wd_t, '*err.out*')
-                    self.result.success.append(False)
-                    errv    =   ','.join(missing_sources)
-                    _       =   lf.put_value(f"{lf.get_value(colname=col)} {band}:{errv}".strip(), col, self.result.success_count)
-                    _       =   lf.put_value(f"{lf.get_value(colname=comment_col)} {band}:{errf}".strip(), comment_col, self.result.failed_count)
-                    self.result.failed_count += 1
-                    self.result.detail[band] = f"{errv},{errf}"
+                    self.result.detail[band] = "missing"
 
             self.result.end_stamp           =   datetime.now()
             return self.result
-

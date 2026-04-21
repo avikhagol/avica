@@ -1,7 +1,10 @@
-from casatools import msmetadata
+from casatools import msmetadata, logsink
 from vasco.util import check_band
 import numpy as np
 
+vascolog=logsink('vasco.casa_log')
+vascolog.setlogfile='vasco.casa_log'
+vascolog.setglobal(True)
 
 # -------                       Classes
 

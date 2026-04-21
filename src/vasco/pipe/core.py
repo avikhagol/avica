@@ -1,4 +1,4 @@
-from vasco.pipe.config import MPI_CASA_PERL_SCRIPT, PHASESHIFT_PERL_SCRIPT
+from vasco.pipe.config import MPI_CASA_PERL_SCRIPT, PHASESHIFT_PERL_SCRIPT, MPICASA_WORKER
 import subprocess
 import sys
 from pathlib import Path
@@ -44,7 +44,7 @@ import threading
 
 from vasco.pipe.helpers import find_tsys, FileSize, tsys_exists, tsys_exists_in_fitsfiles, overlap_percentage, del_fl, parse_params, get_allfitsfiles
 from vasco.pipe.helpers import get_targets_filenames, setup_workdir, add_O, get_logfilename
-from vasco.pipe.config import DEFAULT_PARAMS, CSV_POPULATED_STEPS
+from vasco.pipe.config import DEFAULT_PARAMS, CSV_POPULATED_STEPS, _CASA_INPROCESS_MODULES,  setup_casa_path, get_added_casa_paths, get_added_casa_lib_dirs
 
 from copy import deepcopy
 
@@ -344,9 +344,9 @@ def merge_obs_data(base_dict, *new_dicts):
                 base_dict = new_dict
         return base_dict
 
-###############################################################################
-# -----------------             Classes         ------------------------------#
-###############################################################################
+#####################################################################
+# -------------         Classes         -----------------------------#
+#####################################################################
 
 
 # -------------------------------------                 Pipeline helpers
@@ -678,7 +678,7 @@ class InitVariables(PipelineStepValidatorBase):
         
         
         
-        primary_target, alltargets, fitsfilenames   = get_targets_filenames(lf, filename_col, targetname_col) if lf.is_googlesheet else target, targets, init_params.get('fitsfilenames') or fitsfilenames
+        primary_target, alltargets, fitsfilenames   = get_targets_filenames(lf, filename_col, targetname_col) if lf.is_googlesheet else target, targets, init_params.get('fitsfilenames')
         
         if isinstance(fitsfilenames, str):
             fitsfilenames = fitsfilenames.split(",")
@@ -717,6 +717,23 @@ class InitVariables(PipelineStepValidatorBase):
 
         return PipelineStepValidatorResult(success=[True], msg="init")
 
+class CasaSetup(PipelineStepValidatorBase):
+    name = "casadir_setup"
+    run_after = False
+    desc = "If use_casadir_pythonpath is True, adds the casadir to PATH"
+    
+    def check_casa_import(self) -> bool:
+        try:
+            for mod in _CASA_INPROCESS_MODULES:
+                __import__(mod)
+            return True
+        except ImportError:
+            return False
+        
+    def run(self, lf, casadir, use_casadir_pythonpath):
+        if use_casadir_pythonpath:
+            setup_casa_path(casadir=casadir)        
+        return PipelineStepValidatorResult(success=[self.check_casa_import()], msg="")
 
 class ColValidation(PipelineStepValidatorBase):
     name = "col_validations"
@@ -796,7 +813,7 @@ class RowValidation(PipelineStepValidatorBase):
         )
 
         row_validated = size_validation and tsys_validation and col_validations and pcol_validation
-        print("skipped" if not row_validated else "success!")
+        
         
 
         PipelineContext.validation_success       = row_validated
@@ -1021,6 +1038,7 @@ class VascoPipelineCore:
                         for step_validator in validate_before:
                             msg_info = f"executing validator step: {step_validator.name} "
                             log.info(msg_info)
+                            print(f" • {step_validator.name}")
                             with step_stage(msg_info, step_validator=step_validator):
                                 validator_kwargs = self.get_kwargs(step=step_validator)
                                 res = step_validator.run(**validator_kwargs)
@@ -1307,11 +1325,12 @@ class GenerateAndAppendAntab:
         """
         antabfile                       =   Path(self.wd) / 'gc_dpfu_fromidi.ANTAB'
         self.success, self.desc         =   False, "Failed"
-                
+        tsys_found_in_files             =   []
         for i, fitsfile in enumerate(self.workingfits):
             antabfile                   =   Path(self.wd) / f'gc_dpfu_fromidi.ANTAB.{i}'
             del_fl(Path(self.wd), fl=f'gc_dpfu_fromidi.ANTAB.{i}', rm=True)
             tsys_found, _, _ , _, _     =   tsys_exists(fitsfile)
+            tsys_found_in_files.append(tsys_found)
             if not tsys_found:
                 if self.verbose: print("TSYS not found! Searching in other fitsfile")
                 
@@ -1326,7 +1345,8 @@ class GenerateAndAppendAntab:
                     if only_first:   break
                 else:
                     if self.verbose: print("TSYS exists in another fitsfile!")
-        if self.verbose: print("Attaching TSYS finished!")
+        if len(tsys_found_in_files) and (not all(tsys_found_in_files)) and self.verbose: 
+            print("Attaching TSYS finished!")
 
     def sort_by_time(self):
         starttime = []
@@ -1397,7 +1417,40 @@ class ImportFITSIdi(CasaTask):
         task_cmd                 =   self.parse_to_step(task_name="importfitsidi", logfile=logfile, errf=errf, casadir=casadir, mpi_cores=mpi_cores)
         return task_cmd
 
-#  ----------------------      phaseshift   (phaseshift)
+#  ----------------------      FringeFit (fringefit)
+@dataclass
+class FringeFit(CasaTask):
+    vis:str                 =   ""
+    caltable:str            =   ""
+    field:str               =   ""
+    spw:str                 =   ""
+    selectdata:bool         =   True
+    timerange:str           =   ""
+    antenna:str             =   ""
+    scan:str                =   ""
+    observation:str         =   ""
+    msselect:str            =   ""
+    solint:str              =   'inf'
+    combine:str             =   "spw"
+    refant:str              =   ""
+    minsnr:str              =   ""
+    zerorates:bool          =   False
+    globalsolve:bool        =   False
+    append:bool             =   False
+    docallib:bool           =   False
+    callib:str              =   ""
+    gaintable:List | str    =   ""
+    gainfield:List | str    =   ""
+    interp:str              =   ""
+    corrdepflags:bool       =   True
+    concatspws:bool         =   True
+    corrcomb:str            =   "none"
+    parang:bool             =   True
+    
+    
+    def to_step(self, logfile:str, casadir:str, errf:str, mpi_cores:int=5):
+        task_cmd                 =   self.parse_to_step(task_name="fringefit", logfile=logfile, errf=errf, casadir=casadir, mpi_cores=mpi_cores)
+        return task_cmd
 
 
 #  ----------------------      Average MS / Split MS  (mstransform)
@@ -1443,53 +1496,6 @@ class FlagData(CasaTask):
         return task_cmd
     
 
-@dataclass
-class VascoSnRatinCMD:
-    vis:                str
-    caltable_folder:    str         = None
-    n_refant:           int         = 5
-    n_calib:            int         = 6
-    n_scans:            int         = 10
-    iter_scan_count:    int         = 5
-    selected_sources:   List[str]   = None
-    selected_scans:     List[int]   = None
-    selected_ants:      List[int]   = None
-    selected_spws:      List        = field(default_factory=list)
-    gaintables:         List        = field(default_factory=list)
-    interp:             List        = field(default_factory=list)
-    metafolder:         str         = ""
-    verbose:            bool        = False
-
-    def to_args(self) -> List[str]:
-        def _sanitize(v):
-            if isinstance(v, np.integer): return int(v)
-            if isinstance(v, np.floating): return float(v)
-            if isinstance(v, np.ndarray): return v.tolist()
-            return v
-        return [f"{k}={_sanitize(v)}" for k, v in asdict(self).items()]
-        
-
-    def to_cmd_list(self, casadir: str, mpi_cores: int, python_bin: str = sys.executable) -> List[str]:
-        return [
-            f"{casadir}/bin/mpicasa",
-            "--oversubscribe", "-n", str(mpi_cores),
-            python_bin, "-m", "vasco.ms.fringefit",]
-    
-    def get_result(self):
-        if not self.metafolder:
-            self.metafolder = str(Path(self.caltable_folder).parent / "vasco.meta")
-        
-        if Path(self.metafolder).exists():
-            mf = Path(self.metafolder)
-            sources = mf / "sources.vasco"
-            refants = mf / "refants.vasco"
-            dic_fields = read_metafile(str(sources))
-            dic_refants = read_metafile(str(refants))
-            ppout = ""
-            with open(str(mf / "snrating.out"), "r") as rbuff: 
-                ppout = rbuff.read()
-            return dic_fields, dic_refants['refant'], ppout
-        
 
 # __________________________________________________________________________________.
 # 
@@ -1498,13 +1504,123 @@ class VascoSnRatinCMD:
 
 
 
+import threading
+
+class IterativeSubprocess:
+    def __init__(self, cmd_list, clean_env=True, verbose=True):
+        self.verbose = verbose
+        self._stderr_lines = []
+        self._stderr_lock = threading.Lock()
+
+        env_found = {
+            k: v for k, v in os.environ.items()
+            if k not in {"PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV"} or not clean_env
+        }
+        self.process = subprocess.Popen(
+            cmd_list, env=env_found,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, bufsize=1
+        )
+        self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._stderr_thread.start()
+
+        self._wait_for_ready()  # block here until worker signals ready
+
+    def _wait_for_ready(self, timeout=120):
+        """Read stdout lines until we see the ready signal, discarding startup noise."""
+        import time
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.process.poll() is not None:
+                raise RuntimeError(f"Worker died during startup.\n{self.get_stderr()}")
+            line = self.process.stdout.readline()
+            if not line:
+                continue
+            if self.verbose:
+                print(f"[startup] {line}", end="", flush=True)
+            try:
+                msg = json.loads(line.strip())
+                if msg.get("status") == "ready":
+                    return
+            except json.JSONDecodeError:
+                pass  # discard startup noise
+        raise TimeoutError(f"Worker did not become ready within {timeout}s.\n{self.get_stderr()}")
+
+    def _drain_stderr(self):
+        for line in self.process.stderr:
+            with self._stderr_lock:
+                self._stderr_lines.append(line)
+            if self.verbose:
+                print(f"[mpicasa stderr] {line}", end="", flush=True)
+
+    def get_stderr(self):
+        with self._stderr_lock:
+            return "".join(self._stderr_lines)
+
+    def send_and_receive(self, inp_data: dict) -> dict:
+        if self.process.poll() is not None:
+            raise RuntimeError(f"Subprocess terminated.\nstderr:\n{self.get_stderr()[-2000:]}")
+
+        self.process.stdin.write(json.dumps(inp_data) + "\n")
+        self.process.stdin.flush()
+
+        # loop until we get a JSON line — discards any stray stdout noise
+        while True:
+            line = self.process.stdout.readline()
+            if not line:
+                return {"error": "Received empty response from subprocess"}
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                return json.loads(line)
+            except json.JSONDecodeError:
+                if self.verbose:
+                    print(f"[non-JSON stdout, skipping] {line}", flush=True)
+
+    def close(self):
+        if self.process.poll() is None:
+            self.process.stdin.close()
+            self.process.wait()
+        self._stderr_thread.join(timeout=5)
+
+class PersistentMpiCasaRunner:
+    def __init__(self, casadir: str, mpi_cores: int = 10, verbose:bool=False):
+        """single MPI process to recieve payload"""
+        self.verbose = verbose
+        cmd_list = [
+            f"{casadir}/bin/mpicasa", "-n", str(mpi_cores), 
+            "--oversubscribe", f"{casadir}/bin/casa", "--nologger", "--nogui", "--agg", 
+            "-c", f"{MPICASA_WORKER}"]
+        self.runner = IterativeSubprocess(cmd_list=cmd_list, clean_env=True, verbose=verbose)
+
+    def run_task(self, task_name: str, args: dict, args_type:Dict[str, Any], block=False, target_server:Optional[int]=None):
+        payload = {
+            "task_casa": task_name,
+            "args": args,
+            "args_type":args_type,
+            "block": block,
+            "target_server": target_server
+        }
+        return self.runner.send_and_receive(payload)
+
+    def get_response(self, command_ids: Any, block: bool = True):
+        payload = {
+            "task_casa": "get_command_response",
+            "parameters": {"command_ids": command_ids, "block": block}
+        }
+        return self.runner.send_and_receive(payload)
+
+    def close(self):
+        self.runner.close()
+
 
 
 def run_subprocess(cmd_list: List[str], inp_data: dict, mode: str = "stdin", clean_env:bool=True, verbose:bool=True) -> dict:
     
     env_found = {
         k: v for k, v in os.environ.items()
-        if k not in {"PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV"} or not clean_env
+        if k not in {"PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", } or not clean_env
     }
     if mode == "stdin":
         stdin_input = json.dumps(inp_data)
@@ -1559,17 +1675,17 @@ def run_subprocess(cmd_list: List[str], inp_data: dict, mode: str = "stdin", cle
 
     return {"raw": "".join(stdout_lines)}
 
-
 class SubprocessPayload:
     cmd_list: List[str] =   []
     mode: str =   "stdin"
+    clean_env:bool = True
 
     def __init__(self,inp_data: dict,cmd_list: List[str] = None,host: str = "localhost",port: int = SERVER_PORT):
         self.inp_data = inp_data
         self.cmd_list   = cmd_list or self.__class__.cmd_list
 
     def run(self)->dict:
-        return run_subprocess(cmd_list=self.cmd_list, inp_data=self.inp_data, mode=self.mode)
+        return run_subprocess(cmd_list=self.cmd_list, inp_data=self.inp_data, mode=self.mode, clean_env=self.clean_env)
 
 class MpiCasaPayload(SubprocessPayload):
     cmd_list    =   ["perl", MPI_CASA_PERL_SCRIPT]
@@ -1581,7 +1697,7 @@ class MpiCasaPayload(SubprocessPayload):
 
 class MpiVascoPayload(SubprocessPayload):
     mode = "stdin"
-
+    clean_env = True
     def __init__(self,
                 cmd:        VascoSnRatinCMD,
                 casadir:    str,

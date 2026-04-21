@@ -657,7 +657,7 @@ def parse_class_cat(filepath, skiprows=7):
 c = {
     "b": "\033[1m",   # Bold
     "d": "\033[2m",   # Dim
-
+    "x": "\033[0m",   # Reset
     # Normal Colors
     "k": "\033[30m",  # Black
     "r": "\033[31m",  # Red

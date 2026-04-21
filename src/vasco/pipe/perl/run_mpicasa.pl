@@ -12,13 +12,13 @@ my $json_text = do {
     <STDIN>
 };
 
+print STDERR "DEBUG raw stdin: '$json_text'\n";
 my $json = JSON::PP->new->ascii->pretty->allow_nonref;
 my $perl_scalar = $json->decode( $json_text );
 my $pretty_printed_json_text = $json->encode( $perl_scalar );
 
 my @cmd_list_json = @{ $perl_scalar->{"tasks_list"} };
 my $saved_stdout;
-
 
 foreach my $item (@cmd_list_json){
     
@@ -61,8 +61,9 @@ foreach my $item (@cmd_list_json){
         
         push(@task_cmd_list, "$key=$formatted_val");
     }
-
-
+    print STDERR "casa_args: $casa_args\n";
+    print STDERR "run_cmd_list: " . join(" ", @run_cmd_list) . "\n";
+    
     sub parse_by_type{
         my ($v, $t) = @_;
         if ($t eq 'str') {

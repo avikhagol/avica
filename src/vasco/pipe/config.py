@@ -2,14 +2,15 @@ from __future__ import annotations
 from .helpers import read_inputfile
 # from alfrd.core import LogFrame
 import io
-
+import sys
+import glob
 from dataclasses import dataclass, field
-
+import site
 import time
 import traceback
 from pathlib import Path
 from typing import Optional, List, Any, Union
-
+import os
 try:
     from importlib.resources import files, as_file   # 3.9+
 except ImportError:
@@ -18,6 +19,10 @@ except ImportError:
 ref = files("vasco.pipe") / "perl" / "run_mpicasa.pl"
 with as_file(ref) as perl_script_path:
     MPI_CASA_PERL_SCRIPT = str(perl_script_path)
+
+ref = files("vasco.pipe") / "mpicasa_worker.py"
+with as_file(ref) as py_script_path:
+    MPICASA_WORKER = str(py_script_path)
 
 ref = files("vasco.pipe") / "perl" / "phaseshift.pl"
 with as_file(ref) as perl_script_path:
@@ -46,7 +51,13 @@ except ImportError:
 CSV_POPULATED_STEPS = ['preprocess_fitsidi','fits_to_ms',
                     #    'phaseshift',
                        'vasco_avg','vascometa_ms','vasco_snr','vasco_fill_input','vasco_split_ms','rpicard']
-    
+
+
+_casa_path_setup_done = False
+_added_casa_paths = []
+_CASA_INPROCESS_MODULES = ("casatools", "casampi")
+
+# _______________________________________________________________________________________________________
     
 class LogFramework:
     """
@@ -341,7 +352,100 @@ class LogFramework:
             self.update_csv(count, failed, csvfile)
 
         self._t0 = time.time()
-        
+
+_casa_path_setup_done: bool = False
+_added_casa_paths: list = []      # CASA python site-packages dirs we inserted
+_added_casa_lib_dirs: list = []   # CASA lib dirs (for LD_LIBRARY_PATH)
+
+_CASA_INPROCESS_MODULES = ["casatools", "casatasks", "casampi"]  # adjust as needed
+
+
+def get_added_casa_paths() -> list:
+    return _added_casa_paths
+
+
+def get_added_casa_lib_dirs() -> list:
+    return _added_casa_lib_dirs
+
+
+def setup_casa_path(casadir: str) -> None:
+    """
+    Inject CASA's site-packages (and lib dirs) into the current interpreter
+    so that CASA modules can be imported in-process.
+
+    Also records what was added so that run_subprocess can propagate the
+    same paths into child processes via PYTHONPATH / LD_LIBRARY_PATH.
+    """
+    global _casa_path_setup_done, _added_casa_paths, _added_casa_lib_dirs
+
+    if _casa_path_setup_done:
+        return
+
+    casadir = os.path.expanduser(casadir)
+
+    # Patterns that cover common CASA installation layouts
+    patterns = [
+        os.path.join(casadir, "lib", "python*", "site-packages"),
+        os.path.join(casadir, "lib64", "python*", "site-packages"),
+        os.path.join(casadir, "lib", "py", "lib", "python*", "site-packages"),
+        os.path.join(casadir, "lib", "py", "lib", "python*"),
+    ]
+
+    already_present = []
+    inserted = []
+    lib_dirs = []
+
+    for pattern in patterns:
+        for path in sorted(glob.glob(pattern)):
+            if not os.path.isdir(path):
+                continue
+
+            if path in sys.path:
+                already_present.append(path)
+            else:
+                # addsitedir instead of sys.path.insert so that CASA's
+                # .pth files are processed — CASA uses these to wire up
+                # its internal C extensions and namespace packages.
+                before = set(sys.path)
+                site.addsitedir(path)
+                new_entries = [p for p in sys.path if p not in before]
+
+                # addsitedir appends; promote newly added paths to the
+                # front so CASA wins over any conflicting pyenv2 packages.
+                for p in reversed(new_entries):
+                    sys.path.remove(p)
+                    sys.path.insert(0, p)
+
+                inserted.append(path)
+
+            # Derive the lib dir from the site-packages path:
+            #   e.g. /casa/lib/python3.8/site-packages -> /casa/lib
+            # This is what needs to go into LD_LIBRARY_PATH so that
+            # CASA's .so files can be found by the dynamic linker.
+            lib_dir = os.path.dirname(os.path.dirname(path))
+            if os.path.isdir(lib_dir) and lib_dir not in lib_dirs:
+                lib_dirs.append(lib_dir)
+
+    if casadir not in sys.path:
+        sys.path.insert(0, casadir)
+
+    if not inserted and not already_present:
+        raise RuntimeError(
+            f"No CASA site-packages found under {casadir!r}. "
+            "Check your casadir setting."
+        )
+
+    _added_casa_paths = inserted
+    _added_casa_lib_dirs = lib_dirs
+    _casa_path_setup_done = True
+
+    for mod_name in _CASA_INPROCESS_MODULES:
+        try:
+            __import__(mod_name)
+        except ImportError as e:
+            raise RuntimeError(
+                f"{mod_name} not found under {casadir!r}: {e}"
+            ) from e
         
 def populate_default_csv():
     import csv
@@ -388,6 +492,7 @@ DEFAULT_PARAMS: dict = {
     "targetname_col"            :   "TARGET_NAME",
     "mpi_cores_rpicard"         :   10,
     "hi_freq_ref"               :   11,         # in GHz
+    "use_casadir_pythonpath"    :   True,
 }
     
 
