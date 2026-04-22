@@ -390,7 +390,8 @@ def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  cal
         
         refants_d['array_type']             =   get_antenna_name(vis)
         if get_reffreq(vis)>hi_freq_ref and all(has_table(vis, "WEATHER", "SYSTEM_TEMPERATURE")):
-            refants_d['array_type']         =   refants_d['array_type'] + 'hi'
+            if "VLBA" in refants_d['array_type']:
+                refants_d['array_type']         =   refants_d['array_type'] + 'hi'
         
         update_from_vascometa(wd_ifolder, val_dict=refants_d, new_wd=iwd_b, inpfile='array.inp')
 
