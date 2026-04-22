@@ -1094,7 +1094,7 @@ class GenerateAndAppendAntab:
         self.tsysfiles                  =   set()
     
     def find_and_attach_antab(self, fitsfile, fitsfiles, antabfile, attach_all, verbose=False):
-        from vasco.idifits import ANTAB, get_dateobs, parse_antab
+        from vasco.fitsidiutil import ANTAB, get_dateobs, parse_antab
         from vasco.external import append_tsys as TsysData, append_gc as GCData
         
         ans_found                       =   set()

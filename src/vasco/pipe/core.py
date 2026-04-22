@@ -1245,7 +1245,7 @@ class GenerateAndAppendAntab:
         self.tsysfiles                  =   set()
     
     def find_and_attach_antab(self, fitsfile, fitsfiles, antabfile, attach_all, verbose=False):
-        from vasco.idifits import ANTAB, get_dateobs, parse_antab
+        from vasco.fitsidiutil import ANTAB, get_dateobs, parse_antab
         from vasco.external import append_tsys as TsysData, append_gc as GCData
         
         ans_found                       =   set()
@@ -1262,7 +1262,7 @@ class GenerateAndAppendAntab:
             print(self.desc)
         else:
             for i,gf in enumerate(rawfs):
-                if (not '.tsys' in gf):
+                if ('.tsys' not in gf):
                     print("using", gf)
                     for gzippable_format in ['.Z', '.gz']:
                         if gzippable_format in gf:
