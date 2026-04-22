@@ -147,11 +147,11 @@ def datetimerange_fromfits(fitsfile):
     
     hduname, lids = _gethduname(hdul,['UV_DATA'])
     
-    startyday=(Time(hdul[lids[0]]['DATE'][0], format='jd') + TimeDelta(hdul[lids[0]].data['TIME'][0], format='jd')).yday    
+    startyday=(Time(hdul[lids[0]]['DATE'][0], format='jd') + TimeDelta(hdul[lids[0]]['TIME'][0], format='jd')).yday    
     nrows = hdul[lids[-1]].nrows
     fo.read(10, start_row=nrows-5)
     
-    endyday=(Time(hdul[lids[-1]]['DATE'][-1], format='jd') + TimeDelta(hdul[lids[-1]].data['TIME'][-1], format='jd')).yday
+    endyday=(Time(hdul[lids[-1]]['DATE'][-1], format='jd') + TimeDelta(hdul[lids[-1]]['TIME'][-1], format='jd')).yday
     
     fo.close()
     return startyday, endyday
