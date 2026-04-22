@@ -75,7 +75,14 @@ class IdiData:
         # Create antenna mapping
         tbhdu = hdulist['ARRAY_GEOMETRY']
         assert tbhdu.header['EXTVER'] == 1
-        antennas = [s.strip() for s in tbhdu.data['ANNAME']]
+        antennas = []
+        for s in tbhdu.data['ANNAME']:
+            if isinstance(s, bytes):
+                antennas.append(s.decode('ascii', errors='ignore').strip()[:2])
+            else:
+                antennas.append(s)
+            
+        # antennas = [bytes(s).decode('ascii', errors='ignore').strip()[:2] for s in tbhdu.data['ANNAME']]
         self.antenna_map = dict(zip(antennas, tbhdu.data['NOSTA']))
 
         # Create list of frequencies
@@ -99,7 +106,11 @@ class IdiData:
                                    tbhdu.data[source_id_col]))
 
         # Reference date in convenient form
-        tupletime = tm.strptime(self.rdate, "%Y-%m-%d")
+        try:
+            tupletime = tm.strptime(self.rdate, "%Y-%m-%d")
+        except:
+            tupletime = tm.strptime(self.rdate, "%d/%m/%y")
+        
         self.reftime = tm.mktime(tupletime)
 
         # Create an index
@@ -260,6 +271,7 @@ def process_values(infp, keys, pols, idi, data):
         skip_values(infp)
         return
     try:
+        # print(antenna_name, idi.antenna_map)
         antenna = idi.antenna_map[antenna_name]
     except:
         print('Antenna %s not present in FITS-IDI file' % antenna_name)
@@ -335,10 +347,11 @@ def process_gc_values(infp, keys, pols, idi, data):
         skip_values(infp)
         return
     try:
+        # print(antenna_name, idi.antenna_map)
         antenna = idi.antenna_map[antenna_name]
     except:
         print('Antenna %s not present in FITS-IDI file' % antenna_name)
-        skip_values(infp)
+        # skip_values(infp)     # avi: this ignores the next line, which is the TSYS header and values, handled outside of this function
         return
     keys = dict(keys[0])
 
@@ -350,12 +363,7 @@ def process_gc_values(infp, keys, pols, idi, data):
         pols.add('L')
     except:
         dpfu['R'] = dpfu['L'] = keys['DPFU']
-        if idi.n_stokes > 1:
-            pols.add('R')
-            pols.add('L')
-        else:
-            pols.add('X')
-            pass
+        pols.add('X')
         pass
     try:
         value = keys['POLY'][0]
