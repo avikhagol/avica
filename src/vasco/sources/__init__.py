@@ -228,6 +228,8 @@ def id_flux_for_sources(sourcenames, sources_list,  caliblist_file, band='C'):
     res = search_sources(sources_list, caliblist_file)
     if band and f'{band}_T-' in res.columns:
         res = res[['IVS name', 'J2000 name', f'{band}_T-', f'{band}_Tot', 'orig_sourcename']]
+    else:
+        return df(columns=['flux'])
     _, _, m, flux, orig_srcs = res.values.T if not res.empty else ([], [], [], [], [])
     dic = {}
     sids = get_sources_id(sourcenames, orig_srcs)
