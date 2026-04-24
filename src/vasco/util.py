@@ -156,70 +156,6 @@ def read_flaglist(flaglistfile):
               dic_src_flaggedants[src][ant] = perc
   return dic_src_flaggedants
 
-# targets = SkyCoord([23.997513*u.hourangle],[47.119273*u.deg], frame='fk5')
-
-def create_df_fromrfcfile(rfc_filepath):
-    
-    rfc_dfpath = Path(rfc_filepath).parent / f'{Path(rfc_filepath).stem}.pkl'
-    with open(rfc_filepath, 'r') as rfc:
-        header_lines = 0
-        dic_comments = {}
-        for i,line in enumerate(rfc.readlines()):
-            if line[0]=='#': 
-                dic_comments[i]=line.strip('#').strip()
-                header_lines+=1
-            else:
-                break
-
-    columns = [
-        "origin",
-            
-        "J2000_name", "Comm_name", "RAh", "RAm", "RAs", "DECd", "DECm", "DECs", 
-        "D_alp", "D_Del", "Corr", "Obs", "Sca", "Ses", 
-        "S-band Shr", "S-band Mid", "S-band Unres", 
-        "C-band Shr", "C-band Mid", "C-band Unres", 
-        "X-band Shr", "X-band Mid", "X-band Unres", 
-        "U-band Shr", "U-band Mid", "U-band Unres", 
-        "K-band Shr", "K-band Mid", "K-band Unres", "Epoch"
-    ]
-    start_buff = list(dic_comments.keys())[-1]+1
-    with open(rfc_filepath, 'r') as rfc:
-        for _ in range(start_buff):
-            rfc.readline()
-        rfcbuff = StringIO(rfc.read())
-        
-    df_rfc = read_csv(rfcbuff, names=columns, delim_whitespace=True, dtype='str')
-    df_rfc['RA_J2000']=Angle(df_rfc['RAh']+':'+df_rfc['RAm']+':'+df_rfc['RAs'], unit=u.hourangle)
-    df_rfc['DEC_J2000']=Angle(df_rfc['DECd']+':'+df_rfc['DECm']+':'+df_rfc['DECs'], unit=u.deg)
-    df_filtered = df_rfc.drop(columns=["RAh", "RAm", "RAs", "DECd", "DECm", "DECs"])
-    df_filtered.insert(1, 'RA_J2000', df_filtered.pop('RA_J2000'))
-    df_filtered.insert(2, 'DEC_J2000', df_filtered.pop('DEC_J2000'))
-    if Path(rfc_dfpath).exists(): Path.unlink(rfc_dfpath)
-    df_filtered.to_parquet(rfc_dfpath,engine='pyarrow')
-    return df_filtered
-
-def search_rfc_catalog(targets, rfc_filepath, reset=False, seplimit=10, columns=[]):
-    # rfcbuff = None
-    rfc_dfpath = Path(rfc_filepath).parent / f'{Path(rfc_filepath).stem}.pkl'
-    if rfc_dfpath.exists() and not reset:
-        df_rfc = read_parquet(rfc_dfpath)
-    else:
-        df_rfc = create_df_fromrfcfile(rfc_filepath=rfc_filepath)
-        
-    catalog = SkyCoord(df_rfc['RA_J2000'].values*u.hourangle, df_rfc['DEC_J2000'].values*u.deg, frame='icrs')
-    idxsearcharound, idxself, sep2d, dist3d =  search_around_sky(catalog, targets, seplimit=seplimit*u.milliarcsecond)
-    df_res = df_rfc.loc[idxsearcharound[idxself]]
-    df_res['sep(mas)'] = sep2d.milliarcsecond
-    df_res['coordinate'] = SkyCoord(df_res['RA_J2000'].values*u.hourangle, df_res['DEC_J2000'].values*u.deg).to_string('hmsdms')
-    # df_res['RA_J2000'] = (df_res['RA_J2000'].values*u.hourangle).to_value('hms')
-    # df_res['DEC_J2000'] = (df_res['DEC_J2000'].values*u.hourangle).to_value('dms')
-    
-    df_res.insert(0, 'sep(mas)', df_res.pop('sep(mas)'))
-    df_res.insert(1, 'coordinate', df_res.pop('coordinate'))
-
-    cols= '|'.join(columns)
-    df_res = df_res[df_res.filter(regex=rf'RA|DEC|{cols}').columns]
-    return df_res
 
 def run_fitsverify(fitsfile):
     """Run fitsverify and capture output for extra byte
@@ -442,8 +378,6 @@ def parse_line(line, dic_col, **colkwargs):
         
     return parsed_line
 
-
-
 def rfc_parse_col(lines):
     
     col_decimalround        =   0
@@ -600,26 +534,28 @@ def create_df_fromrfcfile(rfc_filepath):
     df_filtered.to_parquet(rfc_dfpath,engine='pyarrow')
     return df_filtered
 
-# def search_rfc_catalog(targets, rfc_filepath, reset=False, seplimit=10, columns=[]):
-
-#     rfc_dfpath = Path(rfc_filepath).parent / f'{Path(rfc_filepath).stem}.pkl'
-#     if rfc_dfpath.exists() and not reset:
-#         df_rfc = read_parquet(rfc_dfpath)
-#     else:
-#         df_rfc = create_df_fromrfcfile(rfc_filepath=rfc_filepath)
+def search_rfc_catalog(targets, rfc_filepath, reset=False, seplimit=10, columns=[]):
+    # rfcbuff = None
+    rfc_dfpath = Path(rfc_filepath).parent / f'{Path(rfc_filepath).stem}.pkl'
+    if rfc_dfpath.exists() and not reset:
+        df_rfc = read_parquet(rfc_dfpath)
+    else:
+        df_rfc = create_df_fromrfcfile(rfc_filepath=rfc_filepath)
         
-#     catalog = SkyCoord(df_rfc['RA_J2000'].values*u.hourangle, df_rfc['DEC_J2000'].values*u.deg, frame='fk5')
-#     idxsearcharound, idxself, sep2d, dist3d =  catalog.search_around_sky(targets, seplimit=seplimit*u.milliarcsecond)
-#     df_res = df_rfc.loc[idxself]
-#     df_res['sep(mas)'] = sep2d.milliarcsecond
-#     df_res['coordinate'] = SkyCoord(df_res['RA_J2000'].values*u.hourangle, df_res['DEC_J2000'].values*u.deg).to_string('hmsdms')
+    catalog = SkyCoord(df_rfc['RA_J2000'].values*u.hourangle, df_rfc['DEC_J2000'].values*u.deg, frame='icrs')
+    idxsearcharound, idxself, sep2d, dist3d =  search_around_sky(catalog, targets, seplimit=seplimit*u.milliarcsecond)
+    df_res = df_rfc.loc[idxsearcharound[idxself]]
+    df_res['sep(mas)'] = sep2d.milliarcsecond
+    df_res['coordinate'] = SkyCoord(df_res['RA_J2000'].values*u.hourangle, df_res['DEC_J2000'].values*u.deg).to_string('hmsdms')
+    # df_res['RA_J2000'] = (df_res['RA_J2000'].values*u.hourangle).to_value('hms')
+    # df_res['DEC_J2000'] = (df_res['DEC_J2000'].values*u.hourangle).to_value('dms')
     
-#     df_res.insert(0, 'sep(mas)', df_res.pop('sep(mas)'))
-#     df_res.insert(1, 'coordinate', df_res.pop('coordinate'))
+    df_res.insert(0, 'sep(mas)', df_res.pop('sep(mas)'))
+    df_res.insert(1, 'coordinate', df_res.pop('coordinate'))
 
-#     cols= '|'.join(columns)
-#     df_res = df_res[df_res.filter(regex=rf'RA|DEC|{cols}').columns]
-#     return df_res
+    cols= '|'.join(columns)
+    df_res = df_res[df_res.filter(regex=rf'RA|DEC|{cols}').columns]
+    return df_res
 
 def format_coord(coord_str):
     parts = coord_str.strip().split()
