@@ -147,10 +147,17 @@ class PreProcessFitsIdi(PipelineStepBase):
                 log.info(result_remaining_fixes)
         
         # 5     ________________________________    split in freqid / attach missing tsys
-        with step_stage("splitting in freqid / attaching missing tsys", fitsfiles=fitsfiles):
+        fitsfiles_used  =   fitsfiles
+        msg_info = "checking if multifreqid"
+        log.info(msg_info)
+        with step_stage(msg_info, fitsfiles=fitsfiles):
             multifreqid     =   PipelineContext.params['multifreqid']                          =   True if any([count_freqids(fitsfile)>1 for fitsfile in fitsfiles]) else False
-            
-            fitsfiles_used  =   fitsfiles
+        
+        msg_info = "attaching missing tsys"
+        if multifreqid : msg_info = "splitting in freqid and " + msg_info
+        
+        log.info(msg_info)
+        with step_stage(msg_info, fitsfiles=fitsfiles, multifreqid=multifreqid):
             if multifreqid:
                 log.info("observation has multiple frequennct IDs")
                 res_splitdata   = split_in_freqid(fitsfiles=fitsfiles, verbose=verbose) # result = {"workingfits": workingfits, "split_result": split_result}

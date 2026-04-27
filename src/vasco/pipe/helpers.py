@@ -1324,21 +1324,17 @@ def meta_from_fitsfile_freqid(fitsfiles, wd_ifolder, metafolder, do_manual_selec
 def count_freqids(fitsfile):
     from vasco.fitsidiutil.io import FITSIDI
     
-    fo = FITSIDI(fitsfile)
+    hdul = read_idi(fitsfile)
 
     FREQID_CHK_HDUNAME = ['FREQUENCY', 'ANTENNA', 'GAIN_CURVE', 'SYSTEM_TEMPERATURE', 'SOURCE']
     freqids                     =   1
     
-    with fo.open('r') as fop:
-        
-        hdul = fop.read()
-        
-        try:
-            ind_freqid_chk              =   [all(np.array(hdul[hduname_forfreqid]['FREQID'])==1) for hduname_forfreqid in FREQID_CHK_HDUNAME if hduname_forfreqid in hdul] # checking if there is only FREQID==1 or not
-            if not all(ind_freqid_chk):
-                freqids                 =   len(hdul['FREQUENCY'].data['FREQID'])
-        except Exception as e:
-            print(f"something went wrong!", e)
+    try:
+        ind_freqid_chk              =   [all(np.array(hdul[hduname_forfreqid]['FREQID'])==1) for hduname_forfreqid in FREQID_CHK_HDUNAME if hduname_forfreqid in hdul.names] # checking if there is only FREQID==1 or not
+        if not all(ind_freqid_chk):
+            freqids                 =   len(hdul['FREQUENCY'].data['FREQID'])
+    except Exception as e:
+        print("something went wrong!", e)
         
     return freqids
 
