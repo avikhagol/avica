@@ -294,7 +294,7 @@ def identify_calibrators(t, target, ps, flux_thres, flux_df, min_flux=0.025, nca
     calib,least_calib           =   {}, 1
     calib_df                    =   df(list(t.sourcenames.values()), index=list(t.sourcenames.keys()), columns=['source_name'])
     calib_df.loc[:, 'flux']     =   flux_df
-    fx = calib_df['flux']       =   calib_df['flux'].fillna(0).infer_objects(copy=False)
+    calib_df['flux']            =   calib_df['flux'].fillna(0).astype(float)
     calib_df                    =   calib_df.sort_values(by=['flux'], ascending=[False])
     target_flux                 =   calib_df.loc[calib_df['source_name']==target]['flux'].values[0]
     chk_flux                    =   min_flux
