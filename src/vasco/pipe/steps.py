@@ -700,7 +700,7 @@ class VascoMetaMS(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, init_params, rfc_catalogfile, target, verbose=True):
+    def run(self, lf, wd_ifolder, init_params, rfc_catalogfile, target, flux_threshold_phref=0.15, verbose=True):
         self.result.start_stamp   = datetime.now()
         from vasco.ms import identify_sources_fromtarget_ms
         
@@ -736,7 +736,7 @@ class VascoMetaMS(PipelineStepBase):
                     if vis_b is not None and Path(vis_b).exists():
                         try:
                             s_dict              =   identify_sources_fromtarget_ms(vis_b, target_source=target, caliblist_file=rfc_catalogfile,
-                                                        flux_thres=0.150, min_flux=0.025, ncalib=20, flux_df=None, 
+                                                        flux_thres=flux_threshold_phref, min_flux=0.025, ncalib=20, flux_df=None, 
                                                         sourcenames=None, hard_selection=False, metafolder=str(metadir_b))
                         except Exception:
                             traceback.print_exc()
@@ -971,12 +971,11 @@ class FillInputMs(PipelineStepBase):
     
     # ----------------------------------------------------------
     
-    def run(self, lf, wd_ifolder, rfc_catalogfile, target, n_calib=6, hi_freq_ref=11, verbose=True):
+    def run(self, lf, wd_ifolder, rfc_catalogfile, target, n_calib=6, flux_threshold_phref=7, hi_freq_ref=11, verbose=True):
         self.result.start_stamp         =   datetime.now()
         log                             =   logging.getLogger("vasco.pipeline")
         
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
-        metafolder                      =   Path(wd_meta.metafolder)
         desc                             =   {}
         
         bands_dict                      =   read_metafile(wd_meta.metafile_msmeta_sources)['bands_dict']
@@ -1002,13 +1001,16 @@ class FillInputMs(PipelineStepBase):
                         success                     =   fill_input_byvalues(iwd_b,          
                                                                             iwd_b, 
                                                                             str(vis_b), target,
-                                                                            flux_thres=7, 
-                                                                            n_calib=n_calib,  
-                                                                            caliblist_file=rfc_catalogfile, 
-                                                                            sourcesf=sourcesf, refantsf=refantsf, sourcesf_snr=sourcesf_snr, 
-                                                                            band=band[0], edgeflagging=True, 
-                                                                            pipe_params=PipelineContext.params,
-                                                                            hi_freq_ref=hi_freq_ref) # TODO: complete population of input parameters from user provided config file
+                                                                            flux_thres      =   flux_threshold_phref, 
+                                                                            n_calib         =   n_calib,  
+                                                                            caliblist_file  =   rfc_catalogfile, 
+                                                                            sourcesf        =   sourcesf, 
+                                                                            refantsf        =   refantsf,
+                                                                            sourcesf_snr    =   sourcesf_snr, 
+                                                                            band            =   band[0],
+                                                                            edgeflagging    =   True, 
+                                                                            pipe_params     =   PipelineContext.params,
+                                                                            hi_freq_ref     =   hi_freq_ref) # TODO: complete population of input parameters from user provided config file
                     else:
                         success                 =   False
                         errf                    =   "check prev"

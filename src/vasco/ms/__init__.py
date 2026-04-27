@@ -1082,7 +1082,7 @@ def identify_sources_fromtarget_ms(vis, target_source, caliblist_file=None, flux
         s                                   =   identify_sources_fromtarget(scanlist_seq, sourcenames, target_source, other_sources, c_target, c_others, 
                                                     band=band, flux_thres=flux_thres, min_flux=min_flux, ncalib=ncalib, caliblist_file=caliblist_file, verbose=True, flux_df=flux_df, hard_selection=hard_selection)
         s_dict[band]                        =   s
-    print(flux_thres)
+    
     meta['s_dict']                          =   s_dict
     save_metafile(metafile, meta)
     return s_dict

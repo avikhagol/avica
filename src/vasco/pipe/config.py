@@ -498,6 +498,8 @@ DEFAULT_PARAMS: dict = {
     "hi_freq_ref"               :   11,         # in GHz
     "use_casadir_pythonpath"    :   True,
     "mpi_cores_snrating"        :   5,
+    "snr_threshold_phref"       :   7,
+    "flux_threshold_phref"      :   0.15,
 }
     
 
