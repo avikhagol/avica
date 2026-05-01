@@ -5,7 +5,6 @@
 ### Added
 - Project renamed from **vasco** to **avica**.
 - Added `DeprecationWarning` for users still using the `vasco` package name.
-- `avica.idifits.ANTAB.gen_antab`: ability to use `GAIN_CURVE` table for gain values.
 - Configuration support for `phref` (phase reference) observations.
 - `success_count` tracking for `avicametams`.
 - Vendored `casavlbitools` as plain files for better portability.
@@ -24,4 +23,4 @@
 
 [unreleased]: https://github.com/avikhagol/avica/compare/v0.3.1...HEAD
 [0.3.1]: https://github.com/avikhagol/avica/compare/v0.2.0...v0.3.1
-[0.1.2] : https://gitlab.ia.forth.gr/smile/vasco/compare/v0.1.2...v0.1.5
+[0.1.2] : https://github.com/avikhagol/avica/compare/v0.1.2...v0.1.5
