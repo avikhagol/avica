@@ -132,7 +132,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-src/vasco/fits/
-src/vasco/fitsio/
-src/vasco/idifits/
+src/avica/fits/
+src/avica/fitsio/
+src/avica/idifits/
+docs/source/_static/avica_demo.gif
 docs/source/_static/vasco_demo.gif

@@ -1,4 +1,4 @@
-name: vasco-dev
+name: avica-dev
 dependencies:
   - pip:
-    - -r requirements.txt
+      - -r requirements.txt

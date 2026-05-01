@@ -13,7 +13,7 @@ set(CMAKE_C_STANDARD 17)
 set(CFITSIO_VERSION 4.5.0)
 
 if(DEFINED ENV{VIRTUAL_ENV})
-    set(Python3_EXECUTABLE "$ENV{VIRTUAL_ENV}/bin/python3")
+  set(Python3_EXECUTABLE "$ENV{VIRTUAL_ENV}/bin/python3")
 endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(ZLIB REQUIRED)
@@ -33,7 +33,7 @@ FetchContent_Declare(cfitsio
 FetchContent_MakeAvailable(cfitsio)
 
 if(NOT TARGET cfitsio)
-    message(FATAL_ERROR "cfitsio target not found after FetchContent")
+  message(FATAL_ERROR "cfitsio target not found after FetchContent")
 endif()
 
 get_target_property(_type cfitsio TYPE)
@@ -45,7 +45,7 @@ set_target_properties(cfitsio PROPERTIES
 )
 
 set(FITSIDIUTIL_MODULE _core)
-pybind11_add_module(${FITSIDIUTIL_MODULE} MODULE src/vasco/fitsidiutil/bindings.cpp)
+pybind11_add_module(${FITSIDIUTIL_MODULE} MODULE src/avica/fitsidiutil/bindings.cpp)
 set_target_properties(${FITSIDIUTIL_MODULE} PROPERTIES
     OUTPUT_NAME _core
     JOB_POOL_COMPILE one_jobs

@@ -1,21 +1,21 @@
 [build-system]
 requires = [
-    "scikit-build-core>=0.3.3", 
+    "scikit-build-core>=0.3.3",
     "pybind11"
 ]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "vasco"
-version = "0.3.0.3"
-description = "VASCO: VLBI and SMILE-based CASA Optimizations"
+name = "avica"
+version = "0.3.1.0"
+description = "AVICA: Automated VLBI pipeline in CASA"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "BSD-3-Clause" }
 authors = [
   { name = "Avinash Kumar", email = "avialxee@gmail.com" }
 ]
-urls = { "Homepage" = "https://github.com/avikhagol/vasco"}
+urls = { "Homepage" = "https://github.com/avikhagol/avica"}
 classifiers = [
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
@@ -29,7 +29,7 @@ classifiers = [
 dependencies = [
   "astropy",
   "numpy",
-  "ipython",  
+  "ipython",
   "pandas",
   "scipy",
   "scikit-learn",
@@ -45,7 +45,7 @@ addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
 testpaths = ["tests"]
 
 # [tool.setuptools.package-data]
-# "vasco.pipe" = ["perl/*.pl"]
+# "avica.pipe" = ["perl/*.pl"]
 
 [project.optional-dependencies]
 dev = ["pytest>=3.8"]
@@ -53,14 +53,14 @@ all = ["casatools", "casatasks", "casampi"]
 test = ["pytest"]
 
 [project.scripts]
-vasco = "vasco:cli_new"
-fitsidiutil = "vasco.fitsidiutil.cli:fitsidiutil_cli"
+avica = "avica:cli_new"
+fitsidiutil = "avica.fitsidiutil.cli:fitsidiutil_cli"
 
 [tool.scikit-build]
 # cmake.build-type = "Release"
 cmake.verbose = true
 cmake.source-dir = "."
-wheel.packages = ["src/vasco"]    # locates the associated module
+wheel.packages = ["src/avica"]    # locates the associated module
 wheel.install-dir = "."
 build.tool-args = ["-j4"]         # should make all packages e.g cfitsio/fitsidiutil in cmake to use maximum of 4 cores
 cmake.args = ["-DCMAKE_POLICY_VERSION_MINIMUM=3.5"]
@@ -69,8 +69,8 @@ wheel.exclude = [
     "lib64/**",
     "lib/**",
     "include/**",
-    "vasco/fitsidiutil/test",
-    "vasco/fitsidiutil/chk",
+    "avica/fitsidiutil/test",
+    "avica/fitsidiutil/chk",
 ]
 
 [tool.scikit-build.cmake.define]
@@ -88,7 +88,7 @@ enable = ["cpython-prerelease"]
 build = ["cp39-*", "cp310-*", "cp311-*", "cp312-*"]
 
 [tool.cibuildwheel.linux]
-before-build = "pip cache purge || true"  
+before-build = "pip cache purge || true"
 repair-wheel-command = "auditwheel show {wheel}; auditwheel repair -w {dest_dir} {wheel}"
 # manylinux-x86_64-image = "quay.io/pypa/manylinux_2_34_x86_64:2024-11-23-da4547b"
 manylinux-x86_64-image= "quay.io/pypa/manylinux_2_28_x86_64:2024.11.24-1"

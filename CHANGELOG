@@ -1,91 +1,27 @@
 # Changelog
 
-## [Unreleased]
+## [0.3.1] - 2026-05-01
 
 ### Added
-- `vasco.idifits.ANTAB.gen_antab` if GAIN_CURVE is available try finding gain values from the table.
-
-### Fixed
-
-### Changed
-- `vasco.ms.polars` merged into `vasco.ms.table`
-
-### Removed
-- removed `vasco.ms.polars`
-
-
-## [0.2.0]
-
-Improvements for reading RFC and class catalogue. Moving towards casacore for reading tables. Prefer Polars over Pandas.
-
-### Added
-
-- `vasco.core` library for casacore based operations. Calculates Visibility summary using `get_vis_summary`.
-- `vasco.ms.read_df_vis` using polars to read the visibility data - not ready for use.
-- `vasco.util.parse_class_cat` to read the CLASS table for the SMILE sample.
-- `vasco.ms.find_phasecenter_inms` to identify the separation from the phasecenter coordinate for the field comparing from the output class catalogue search file and fitsfile, uses msfile to use the field ID corrosponding to the field name in the final dictionary.
-- `vasco.fitsio.catalog_search_from_fits` can search coordinates using `df_catalog` which can be made using `vasco.util.rfc_ascii_to_df` and `vasco.util.parse_class_cat` implemented in `vasco.fitsio.df_search_brightcalib_rfc`.
-- `vasco.fits` contains few functions to create multiple rows in a table corrosponding the the `FREQID` column in `FREQUENCY` table when the values are missing. It can also flatten two duplicate but incremented `FREQID` entries in the `FREQUENCY` table when all other columns are identical.
-
-### Fixed
-
-- frame `icrs` is preferred over `fk5` by default.
+- Project renamed from **vasco** to **avica**.
+- Added `DeprecationWarning` for users still using the `vasco` package name.
+- `avica.idifits.ANTAB.gen_antab`: ability to use `GAIN_CURVE` table for gain values.
+- Configuration support for `phref` (phase reference) observations.
+- `success_count` tracking for `avicametams`.
+- Vendored `casavlbitools` as plain files for better portability.
 
 ### Changed
-
-- switched from pandas to polars
-
-### Removed
-
-- dropping `dask` from `vasco[all]` in the setup file.
-
-
-## [0.1.5]
-
-### Added
-
-- CHANGELOG, CONTRIBUTING
-- Ability to get apparanat sampling for MS data with multiple band
-- CLI has ANTAB generation option
+- `avica.ms.polars` merged into `avica.ms.table`.
+- Optimized `preprocess_fitsidi` for faster `FREQUENCY` table reading.
+- Improved RFC value parsing using `pd.to_numeric` for better reliability.
 
 ### Fixed
-
-- using proper time conversion for timestamp (#2)
-- bug in ambiguous timestamp for ANTAB data handled
-
-### Changed
-
-- `save_fig` also takes dpi
-- Improvements in `apparant_sampling` code
+- Fixed ANTAB generation imports and header parsing errors.
+- Handled empty/missing values in RFC catalog searches more gracefully.
 
 ### Removed
+- Removed `avica.ms.polars` as a standalone module (merged).
 
-
-## [0.1.2] - 2025-03-10
-
-### Added
-
-- casatools, casatasks, dask[distributed] will be installed with `vasco[all]`
-- `apparant_sampling` method in `vasco.ms.fringefit`
-- takes first `n_calib` after the SNR rating.
-- `creat_df_fromrfcfile`, `search_rfc_catalog` method in `vasco.util` for parsing RFC catalog files and performing search using dataframe.
-
-### Fixed
-
-- For robust selection the default value for flux_thres(used as snr thres) to 7.0 for VASCO SNR rating.
-
-### Changed
-
-- Lowered default value for flux_thres(used as snr thres) to 7.0 for VASCO SNR rating.
-- few name changes e.g., _label -> _axs in `vasco.diag` (#68b3a1c0)
-- new methods added to `vasco.ms.fringefit`
-- `flag_d` in `vasco.ms` is now `flag=True` by default.
-
-
-### Removed
-
-- Redunant naming conventins within methods.
-
-
-[unreleased]: https://gitlab.ia.forth.gr/smile/vasco/compare/v0.1.5...HEAD
+[unreleased]: https://github.com/avikhagol/avica/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/avikhagol/avica/compare/v0.2.0...v0.3.1
 [0.1.2] : https://gitlab.ia.forth.gr/smile/vasco/compare/v0.1.2...v0.1.5
