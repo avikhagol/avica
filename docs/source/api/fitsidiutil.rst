@@ -5,47 +5,47 @@ FITS-IDI Utility
 .. fitsidiutil
 .. -------------
 
-.. vasco.fitsidiutil
+.. avica.fitsidiutil
 .. ~~~~~~~~~~~~~~~~~~~~~~~~~
-.. .. automodule:: vasco.fitsidiutil
+.. .. automodule:: avica.fitsidiutil
 ..    :members:
-   
+
 Read/Write
 -------------
 
-vasco.fitsidiutil.read_idi
+avica.fitsidiutil.read_idi
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. autofunction:: vasco.fitsidiutil.read_idi
+.. autofunction:: avica.fitsidiutil.read_idi
 
 
-vasco.fitsidiutil.io.FITSIDI
+avica.fitsidiutil.io.FITSIDI
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. autoclass:: vasco.fitsidiutil.io.FITSIDI
+.. autoclass:: avica.fitsidiutil.io.FITSIDI
 
 
-vasco.fitsidiutil.io.FITSIDI.quickread
+avica.fitsidiutil.io.FITSIDI.quickread
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. autofunction:: vasco.fitsidiutil.io.FITSIDI.quickread
+.. autofunction:: avica.fitsidiutil.io.FITSIDI.quickread
 
 
-vasco.fitsidiutil.io.FITSIDI.iter_read
+avica.fitsidiutil.io.FITSIDI.iter_read
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. autofunction:: vasco.fitsidiutil.io.FITSIDI.iter_read
+.. autofunction:: avica.fitsidiutil.io.FITSIDI.iter_read
 
 
 
-   
 
-vasco.fitsidiutil.split
+
+avica.fitsidiutil.split
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. index:: vasco.fitsidiutil.split
+.. index:: avica.fitsidiutil.split
 
-.. automodule:: vasco.fitsidiutil.split
+.. automodule:: avica.fitsidiutil.split
    :members:
    :no-undoc-members:
    :show-inheritance:
@@ -56,8 +56,7 @@ vasco.fitsidiutil.split
 Operations
 -------------
 
-vasco.fitsidiutil.op.find_refant
+avica.fitsidiutil.op.find_refant
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. autofunction:: vasco.fitsidiutil.op.find_refant
-
+.. autofunction:: avica.fitsidiutil.op.find_refant

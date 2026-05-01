@@ -1,7 +1,7 @@
 API
 ================
 
-This section covers the internal modules of the VASCO pipeline.
+This section covers the internal modules of the AVICA pipeline.
 
 .. toctree::
    :maxdepth: 2

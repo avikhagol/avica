@@ -7,13 +7,13 @@ autodoc_mock_imports = [
     "casampi", "casatools", "casatasks",
     "pandas", "astropy", "numpy", "scipy",
     "scikit-learn", "polars", "protobuf",
-    "typer", "vasco.fitsidiutil._core", "_core",
+    "typer", "avica.fitsidiutil._core", "_core",
 ]
 
-project   = 'vasco'
+project   = 'avica'
 copyright = '2026, Avinash Kumar'
 author    = 'Avinash Kumar'
-release   = '0.3.0.2'
+release   = '0.3.1'
 
 extensions = [
     'sphinx.ext.napoleon',

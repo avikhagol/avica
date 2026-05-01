@@ -12,7 +12,7 @@ Use ``pipe run`` command to execute pipeline steps.
 .. code-block:: bash
    :caption: bash
 
-   vasco pipe run --t TARGET_NAME --f example.idifits
+   avica pipe run --t TARGET_NAME --f example.idifits
 
 .. code-block:: text
    :caption: out
@@ -22,12 +22,12 @@ Use ``pipe run`` command to execute pipeline steps.
    +==========================================================================================================================================================================================+
    | preprocess_fitsidi | 1             | 0            | 2026-04-15 21:45:41.4 | {"example.idifits": "done"}       | ["fixed extra_byte"]              | [true]       | 2026-04-15 21:45:02.5 |
    | fits_to_ms         | 1             | 0            | 2026-04-15 21:45:03.2 | {"VLBI.ms": "done"}               | ["Successfully completed con..."] | [true]       | 2026-04-15 21:49:02.5 |
-   | vasco_avg          | 2             | 0            | 2026-04-15 21:49:02.8 | {"C": "done", "X": "done"}        | ["C", "X"]                        | [true, true] | 2026-04-15 21:50:22.4 |
-   | vascometa_ms       | 2             | 0            | 2026-04-15 21:50:22.6 | {"C": "done", "X": "done"}        | ["filled C", "filled X"]          | [true, true] | 2026-04-15 21:50:26.7 |
-   | vasco_snr          | 2             | 0            | 2026-04-15 21:50:27.1 | {"C": "done", "X": "done"}        | ["refant=LA,FD,PT calibrarator... | [true, true] | 2026-04-15 21:58:22.1 |
-   | vasco_fill_input   | 2             | 0            | 2026-04-15 21:58:22.2 | {"C": "done", "X": "done"}        | null                              | [true, true] | 2026-04-15 21:58:22.5 |
-   | vasco_split_ms     | 2             | 0            | 2026-04-15 21:58:22.8 | {"C": "/data/avi/tests/vasco_0... | ["..splitted J0852+2833,MJV234... | [true, true] | 2026-04-15 21:59:05.8 |
-   | rpicard            | 2             | 0            | 2026-04-15 21:59:06.2 | {"C": "/data/avi/tests/vasco_0... | ["calibrated J0927+3902,J1215+... | [true, true] | 2026-04-15 22:09:47.2 |
+   | avica_avg          | 2             | 0            | 2026-04-15 21:49:02.8 | {"C": "done", "X": "done"}        | ["C", "X"]                        | [true, true] | 2026-04-15 21:50:22.4 |
+   | avicameta_ms       | 2             | 0            | 2026-04-15 21:50:22.6 | {"C": "done", "X": "done"}        | ["filled C", "filled X"]          | [true, true] | 2026-04-15 21:50:26.7 |
+   | avica_snr          | 2             | 0            | 2026-04-15 21:50:27.1 | {"C": "done", "X": "done"}        | ["refant=LA,FD,PT calibrarator... | [true, true] | 2026-04-15 21:58:22.1 |
+   | avica_fill_input   | 2             | 0            | 2026-04-15 21:58:22.2 | {"C": "done", "X": "done"}        | null                              | [true, true] | 2026-04-15 21:58:22.5 |
+   | avica_split_ms     | 2             | 0            | 2026-04-15 21:58:22.8 | {"C": "/data/avi/tests/avica_0... | ["..splitted J0852+2833,MJV234... | [true, true] | 2026-04-15 21:59:05.8 |
+   | rpicard            | 2             | 0            | 2026-04-15 21:59:06.2 | {"C": "/data/avi/tests/avica_0... | ["calibrated J0927+3902,J1215+... | [true, true] | 2026-04-15 22:09:47.2 |
    +--------------------+---------------+--------------+----------------------------+-----------------------------------+-----------------------------------+--------------+------------------+
 
 
@@ -41,11 +41,11 @@ Use ``listobs`` command to get a summary of the observation for multiple files. 
 .. code-block:: bash
    :caption: bash
 
-   vasco listobs ex1.idifits ex2.idifits
+   avica listobs ex1.idifits ex2.idifits
 
 .. code-block:: text
    :caption: [out]
-   
+
    +-------------------------+-------------------------+-------+-------------+------------------------------+------+-----------+
    | start_time              | end_time                | nrows | source      | inttime                      | scan | source_id |
    +===========================================================================================================================+
@@ -67,7 +67,7 @@ To reproduce the above in python, one can import the ``ObservationSummary`` clas
 .. code-block:: python
    :caption: python
 
-   from vasco.fitsidiutil import ObservationSummary
+   from avica.fitsidiutil import ObservationSummary
 
    fitsfilepaths  = ["ex1.idifits", "ex2.idifits"]
    obs            = ObservationSummary(fitsfilepaths)
@@ -91,4 +91,3 @@ To reproduce the above in python, one can import the ``ObservationSummary`` clas
       | 2008-01-19 05:15:34.333 | 2008-01-19 05:20:48.906 | 5724  | J11285+3243 | [1.9660, 1.9660, ... 1.9660] | 10   | 6         |
       | 2008-01-19 05:20:52.838 | 2008-01-19 05:26:54.597 | 8166  | J0854+2006  | [1.9660, 1.9660, ... 1.9660] | 11   | 7         |
       +-------------------------+-------------------------+-------+-------------+------------------------------+------+-----------+
-   

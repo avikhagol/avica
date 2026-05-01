@@ -9,7 +9,7 @@ The pipeline steps can be invoked using the following command:
 
 .. code-block:: bash
 
-  vasco pipe run --t TARGET_NAME --f fitsfilenames
+  avica pipe run --t TARGET_NAME --f fitsfilenames
 
 
 Flowchart
@@ -28,7 +28,7 @@ Pre-process FITSIDI
 Sanity checks on the FITSIDI
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Checks the FITSIDI file for the known problems using ``vasco.fitsidiutil.fitsidi_check``.
+Checks the FITSIDI file for the known problems using ``avica.fitsidiutil.fitsidi_check``.
 
 .. list-table:: FITSIDI Known Problems & Identifiers
    :widths: 25 75
@@ -41,7 +41,7 @@ Checks the FITSIDI file for the known problems using ``vasco.fitsidiutil.fitsidi
    * - binary
      - Binary data (e.g., unexpected backslashes or encoding issues) found in string columns of the HDU table data.
    * - extra_byte
-     - Extra bytes found at the end of the file (detected via ``vasco.fitsidiutil.FITSIDI.check_extrabytes``).
+     - Extra bytes found at the end of the file (detected via ``avica.fitsidiutil.FITSIDI.check_extrabytes``).
    * - empty
      - Null or empty values found in required columns (e.g., missing Polarization types).
    * - date
@@ -93,7 +93,7 @@ Average Measurement Set
 SNR Rating
 ----------
 
-  - For each band separated Measurement Set, 
+  - For each band separated Measurement Set,
   - The FFT SNR is calculated for each scan and baseline, using the solution interval of scan length.
   - The SNR values are then used to rate the Sources, and antennas to select the best scans and antennas for fringe fitting.
 

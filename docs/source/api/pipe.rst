@@ -1,18 +1,18 @@
 Pipeline Library
 ===================
 
-vasco.pipe
+avica.pipe
 ^^^^^^^^^^
 
-.. automodule:: vasco.pipe
+.. automodule:: avica.pipe
    :members:
    :no-undoc-members:
    :show-inheritance:
 
-vasco.pipe.steps
+avica.pipe.steps
 ^^^^^^^^^^^^^^^^
 
-.. automodule:: vasco.pipe.steps
+.. automodule:: avica.pipe.steps
    :members:
    :no-undoc-members:
    :show-inheritance:
