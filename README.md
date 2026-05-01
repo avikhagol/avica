@@ -1,16 +1,15 @@
-VLBI and SMILE-based CASA Optimization (VASCO) pipeline has been renamed to AVICA Please update: pip install avica
+VLBI and SMILE-based CASA Optimization (VASCO) pipeline has been renamed to AVICA.
 
->AVICA: Automated VLBI pipeline in CASA
+# avica
+AVICA: Automated VLBI pipeline in CASA
 
-<!-- # vasco
-VASCO: VLBI and SMILE source based CASA Optimizations.
 
-Documentation : https://vasco-vlbi.readthedocs.io/en/latest/
+Documentation : https://avica.readthedocs.io/en/latest/
 
 > submitted to A&A
 
 [![asciicast](https://asciinema.org/a/945113.svg)](https://asciinema.org/a/945113)
-> Demo of the VASCO pipeline running end-to-end.
+> Demo of the AVICA pipeline running end-to-end.
 
 
 # Installation
@@ -18,12 +17,15 @@ Documentation : https://vasco-vlbi.readthedocs.io/en/latest/
 > Needs Ubuntu 18.04+, Debian 10+, RHEL/CentOS 8+ \
 > Python >=3.9
  
-
 Since the monolithic version of casa includes its own internal Python 3 installation, 
-it is best to install vasco within a Python environment that matches the casa version.
+it is best to install `avica` within a Python environment that matches the casa version.
+
+<!--Since the monolithic version of casa includes its own internal Python 3 installation, 
+it is best to install avica within a Python environment that matches the casa version.
 
 Specifically, if you are not using the "all" installation option, 
 you should use the casa Python executable itself to create a virtual environment first. For example, for `casa-6.7.0-31-py3.10.el8/` use a virtual environment created using `Python 3.10`. Conda can be used for creating the environment:
+-->
 
 ```bash
    
@@ -34,16 +36,16 @@ you should use the casa Python executable itself to create a virtual environment
 
 ```bash
 
-   $ pip install vasco
+   $ pip install avica
 
 ```
 
 Alternatively, you can use the following installation method, 
-which automatically includes the necessary casa dependency for vasco's internal operations.
+which automatically includes the necessary casa dependency for avica's internal operations.
 
 ```bash
 
-   $ pip install vasco[all]
+   $ pip install avica[all]
 
 ```
 
@@ -56,13 +58,13 @@ rPicard to execute specific tasks like mstransform and importfitsidi within an i
 1. Clone the repository to the desired destination.
 
 ```
-git clone https://github.com/avikhagol/vasco.git
+git clone https://github.com/avikhagol/avica.git
 ```
 
 2. Install using `pip`
 
 ```bash
-cd vasco/
+cd avica/
 
 pip install .
 
@@ -75,7 +77,7 @@ pip install .
 ## Pipeline
 
 ```
-Usage: vasco pipe run [OPTIONS] [STPS]...                                                                                                                                                                                                                                                                                    
+Usage: avica pipe run [OPTIONS] [STPS]...                                                                                                                                                                                                                                                                                    
                                                                                                                                                                                                                                                                                                                               
  _______________________                                                                                                                                                                                                                                                                                                      
                                                                                                                                                                                                                                                                                                                               
@@ -84,23 +86,23 @@ Usage: vasco pipe run [OPTIONS] [STPS]...
  -  preprocess_fitsidi
  -  fits_to_ms
  -  phaseshift
- -  vasco_avg
- -  vascometa_ms
- -  vasco_snr
- -  vasco_fill_input
- -  vasco_split_ms
+ -  avica_avg
+ -  avicameta_ms
+ -  avica_snr
+ -  avica_fill_input
+ -  avica_split_ms
  -  rpicard
  
  ________________________                                                     
  
       
 ╭─ Arguments ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│   stps      [STPS]...  steps for execution [default: preprocess_fitsidi, fits_to_ms, vasco_avg, vascometa_ms, vasco_snr, vasco_fill_input, vasco_split_ms, rpicard]                                                                                                                                                        │
+│   stps      [STPS]...  steps for execution [default: preprocess_fitsidi, fits_to_ms, avica_avg, avicameta_ms, avica_snr, avica_fill_input, avica_split_ms, rpicard]                                                                                                                                                        │
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
 │ --f,--fitsfilenames        TEXT  fitsfile names comma separated                                                                                                                                                                                                                                                            │
 │ --t,--target               TEXT  Selected field / sourc name                                                                                                                                                                                                                                                               │
-│ --configfile               TEXT  config file containing key=value [default: vasco.inp]                                                                                                                                                                                                                                     │
+│ --configfile               TEXT  config file containing key=value [default: avica.inp]                                                                                                                                                                                                                                     │
 │ --help                           Show this message and exit.                                                                                                                                                                                                                                                               │
 ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
@@ -112,7 +114,7 @@ Usage: vasco pipe run [OPTIONS] [STPS]...
 To check known FITS-IDI issues run the following:
 
 ```
- Usage: vasco fitsidi_check [OPTIONS] [FITSFILENAMES]... COMMAND [ARGS]...                                                                                                                                                                                                                                                         
+ Usage: avica fitsidi_check [OPTIONS] [FITSFILENAMES]... COMMAND [ARGS]...                                                                                                                                                                                                                                                         
                                                                                                                                                                                                                                                                                                                               
  validate and fix, known FITS-IDI problems                                                                                                                                                                                                                                                                                    
                                                                                                                                                                                                                                                                                                                               
@@ -132,7 +134,7 @@ To check known FITS-IDI issues run the following:
 #### Example
 
 ```
-vasco fitsidi_check VLBA_VSN005412_file3.uvfits
+avica fitsidi_check VLBA_VSN005412_file3.uvfits
 +--------------------+---------+-------+-------+----------------+----------+
 | hdu                | fixable | total | fixed | problem_code   | affected |
 +==========================================================================+
@@ -154,7 +156,7 @@ vasco fitsidi_check VLBA_VSN005412_file3.uvfits
 To get the information on the observation run the following:
 
 ```
-vasco listobs [FITSFILENAMES]... 
+avica listobs [FITSFILENAMES]... 
 ```
 
 
@@ -162,14 +164,14 @@ vasco listobs [FITSFILENAMES]...
 After you clone the repo
 ```bash
 
-$ cd vasco
+$ cd avica
 $ pip install -e .[dev]
 ```
 
 # Attribution
 
-When using VASCO, please add a link to this repository in a footnote.
+When using AVICA, please add a link to this repository in a footnote.
 
 # Acknowledgement
 
-"VASCO was developed within the "Search for Milli-Lenses" (SMILE) project. SMILE has received funding from the European Research Council (ERC) under the HORIZON ERC Grants 2021 programme (grant agreement No. 101040021). -->
+"AVICA was developed within the "Search for Milli-Lenses" (SMILE) project. SMILE has received funding from the European Research Council (ERC) under the HORIZON ERC Grants 2021 programme (grant agreement No. 101040021).
