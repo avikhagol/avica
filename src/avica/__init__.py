@@ -6,12 +6,6 @@ import json, time, shutil, subprocess
 import resource
 from avica.cli_new import avica_cli
 import warnings
-warnings.warn(
-    "avica pipeline has been renamed to avica. "
-    "Please update: pip install avica",
-    DeprecationWarning,
-    stacklevel=2
-)
 
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
 resource.setrlimit(resource.RLIMIT_NOFILE, (26000, rlimit[1]))
