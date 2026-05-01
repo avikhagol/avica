@@ -1332,7 +1332,7 @@ def count_freqids(fitsfile):
     try:
         ind_freqid_chk              =   [all(np.array(hdul[hduname_forfreqid]['FREQID'])==1) for hduname_forfreqid in FREQID_CHK_HDUNAME if hduname_forfreqid in hdul.names] # checking if there is only FREQID==1 or not
         if not all(ind_freqid_chk):
-            freqids                 =   len(hdul['FREQUENCY'].data['FREQID'])
+            freqids                 =   len(hdul['FREQUENCY']['FREQID'])
     except Exception as e:
         print("something went wrong!", e)
 
