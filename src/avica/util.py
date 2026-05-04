@@ -12,6 +12,9 @@ import subprocess
 import numpy as np
 import shutil
 import warnings
+from importlib.metadata import version
+from rich.console import Console
+from rich.panel import Panel
 
 # ------ read ASCII
 
@@ -32,6 +35,26 @@ def clean_ascii_to_polarsdf(ascii_str):
     ).with_columns(pl.all().str.strip_chars())
 
 # -----------
+
+
+ASCII_ART = f"""\b
+   ____     __    __    _____     ____     ____
+  (    )    ) )  ( (   (_   _)   / ___)   (    )
+  / /\\ \\   ( (    ) )    | |    / /       / /\\ \\
+ ( (__) )   \\ \\  / /     | |   ( (       ( (__) )
+  )    (     \\ \\/ /      | |   ( (        )    (
+ /  /\\  \\     \\  /      _| |__  \\ \\___   /  /\\  \\
+/__(  )__\\     \\/      /_____(   \\____) /__(  )__\\
+
+
+    Automated VLBI pipeline in CASA - {version("avica")}"""
+
+
+def make_art() -> str:
+    console = Console()
+    console.print("\n")
+    console.print(Panel(ASCII_ART, style="cyan", expand=False))
+    # console.print("\n")
 
 
 def check_band(freq, bands=None):

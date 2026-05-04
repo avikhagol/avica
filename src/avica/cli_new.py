@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+from shutil import make_archive
 from typing import List, Optional
 
 import resource
@@ -7,6 +8,7 @@ import typer
 import textwrap
 from rich.console import Console
 from rich.panel import Panel
+from avica.util import ASCII_ART, make_art
 
 from typing_extensions import Annotated
 from avica.config import avica_data_dir
@@ -28,28 +30,14 @@ X  = "\033[0m"
 
 rfc_filepath = f"{avicadir}/rfc_path.txt"
 
-ASCII_ART = """
-   ____     __    __    _____     ____     ____
-  (    )    ) )  ( (   (_   _)   / ___)   (    )
-  / /\\ \\   ( (    ) )    | |    / /       / /\\ \\
- ( (__) )   \\ \\  / /     | |   ( (       ( (__) )
-  )    (     \\ \\/ /      | |   ( (        )    (
- /  /\\  \\     \\  /      _| |__  \\ \\___   /  /\\  \\
-/__(  )__\\     \\/      /_____(   \\____) /__(  )__\\
 
-
-    Automated VLBI pipeline in CASA"""
-
-avica_cli = typer.Typer(name="avica",help=ASCII_ART,#"AVICA: Automated VLBI pipeline in CASA",
+avica_cli = typer.Typer(name="avica",help=ASCII_ART,
     add_completion=False, rich_markup_mode="rich")
-
-console = Console()
 
 @avica_cli.callback(invoke_without_command=True)
 def main(ctx: typer.Context):
     if ctx.invoked_subcommand is None:
-        console = Console()
-        console.print(Panel(ASCII_ART, style="cyan", expand=False))
+        make_art()
 
 # ________________________________________________________________________________
 #
