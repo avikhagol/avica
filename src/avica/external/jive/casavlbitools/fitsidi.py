@@ -115,32 +115,20 @@ class IdiData:
 
         # Create an index
         self.idx = []
-        source_id = -1
         self.last_time = float("-inf")
         self.first_time = float("inf")
         for idifile in idifiles:
             hdulist = pyfits.open(idifile)
             tbhdu = hdulist['UV_DATA']
-            if 'SOURCE' in tbhdu.columns.names:
-                source_id_col = 'SOURCE'
-            else:
-                source_id_col = 'SOURCE_ID'
-                pass
-            for data in tbhdu.data:
-                jd = data['DATE']
-                time = (jd - 2440587.5 + data['TIME']) * 86400
-                if time > self.last_time:
-                    self.last_time = time
-                    pass
-                if time < self.first_time:
-                    self.first_time = time
-                    pass
-                if data[source_id_col] != source_id:
-                    source_id = data[source_id_col]
-                    self.idx.append((time, source_id))
-                    pass
-                continue
-            continue
+            source_id_col = 'SOURCE' if 'SOURCE' in tbhdu.columns.names else 'SOURCE_ID'
+            times = (tbhdu.data['DATE'] - 2440587.5 + tbhdu.data['TIME']) * 86400
+            sids = tbhdu.data[source_id_col]
+            if len(times):
+                self.first_time = min(self.first_time, times[0])
+                self.last_time = max(self.last_time, times[-1])
+            changes = np.where(np.diff(sids, prepend=sids[0] - 1))[0]
+            for i in changes:
+                self.idx.append((float(times[i]), int(sids[i])))
         self.idx.sort()
         return
 

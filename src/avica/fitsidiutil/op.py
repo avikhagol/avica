@@ -648,6 +648,7 @@ def parse_tsys_from_antab(tsys_dic, antb_line_cols):
     return tsys_dic
 
 def parse_antab(antabfile, fitsfile):
+    yy              =   get_dateobs(fitsfile=fitsfile).year
     with open(antabfile) as antb:
         gain_dic                =   {}
         tsys_dic                =   {}
@@ -681,7 +682,7 @@ def parse_antab(antabfile, fitsfile):
 
                         s               =   " ".join(antb_line_cols[:2])
                         tsys_values     =   [float(v) for v in antb_line_cols[2:]]
-                        yy              =   get_dateobs(fitsfile=fitsfile).year
+
                         # dt              =   datetime.strptime(s, "%j %H:%M:%S.%f").replace(year=yy) # does not consider leap year
                         dt              =   datetime.strptime(f"{yy} {s}", "%Y %j %H:%M:%S.%f")
                         if not mintime or mintime> dt: mintime = dt
