@@ -471,7 +471,6 @@ class LeadingZerosValidator(IdiValidatorBase):
         return result(msg=f"{self.desc()}", need_fixing=len(bad_data)>0, detail=corrected_data, bad_data=bad_data, key=",".join(affected_data))
 
     def fix(self, hdu_name: str, key: str, hdul, result: ValidationResult) -> bool:
-        print(result.detail)
         for idx, corrected_data in result.detail.items():
             hdul[hdu_name].update_cell('SOURCE', idx, corrected_data)
         hdul[hdu_name].update()

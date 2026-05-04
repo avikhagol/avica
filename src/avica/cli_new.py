@@ -28,7 +28,7 @@ X  = "\033[0m"
 
 rfc_filepath = f"{avicadir}/rfc_path.txt"
 
-ASCII_ART = """\b
+ASCII_ART = """
    ____     __    __    _____     ____     ____
   (    )    ) )  ( (   (_   _)   / ___)   (    )
   / /\\ \\   ( (    ) )    | |    / /       / /\\ \\
@@ -99,12 +99,13 @@ def fitsidicheck(fitsfilenames: Annotated[Optional[List[str]], typer.Argument()]
     "validate and fix, known FITS-IDI problems"
     """
     from avica.fitsidiutil.validation import fitsidi_check
-    for fitsfile in fitsfilenames:
-        validators = fitsidi_check(fitsfilepath=fitsfile)
-        if desc:
-            print(validators)
-        else:
-            print(validators.run(fix=fix))
+    if fitsfilenames is not None:
+        for fitsfile in fitsfilenames:
+            validators = fitsidi_check(fitsfilepath=fitsfile)
+            if desc:
+                print(validators)
+            else:
+                print(validators.run(fix=fix))
 
 
 

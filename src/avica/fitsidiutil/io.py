@@ -290,7 +290,7 @@ class FITSIDI:
             self.hdul.extra_byte_location = self.check_extrabytes(verbose=False)
             self.hdul.filename = self.fitsfile
 
-        except:
+        except Exception as e:
             print_exc()
 
         return self.hdul
@@ -593,7 +593,7 @@ class IdIHDU:
         self._table_data[colname][:] = processed_value
         self._staged_hdudata[colname] = processed_value
 
-        print(f"use .update() to write to disk.")
+        # print("use .update() to write to disk.")
 
     def filter_inplace(self, mask):
         """Filters the internal table data using a boolean mask.
