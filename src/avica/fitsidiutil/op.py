@@ -181,7 +181,10 @@ def count_tsys_in_fitsfile(fitsfile, target=None):
 
             if target:
                 # target_names    =   source_hdu['SOURCE']
-                sid             =   source_hdu.df.filter(pl.col('SOURCE')==target)[sid_colname].to_list()[0]
+                sid_list        =   source_hdu.df.filter(pl.col('SOURCE')==target)[sid_colname].to_list()
+                if len(sid_list) == 0:
+                    return 0
+                sid             =   sid_list[0]
                 tsyssid_colname     =   _getcolname(tsys_hdu, ['ID_NO','ID_NO.', 'SOURCE_ID', 'SOURCE ID', 'SOURCE_ID.'])
                 count_tsys      =   len(tsys_hdu.df.filter(pl.col(tsyssid_colname)==sid)[tsyssid_colname].to_list())
     return count_tsys
