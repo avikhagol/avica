@@ -1639,10 +1639,6 @@ def run_subprocess(cmd_list: List[str], inp_data: dict, mode: str = "stdin", cle
 
     success = process.returncode == 0
 
-    # if not success:
-        # print("STDERR:\n", "".join(stderr_lines), flush=True)
-        # print("STDOUT:\n", "".join(stdout_lines), flush=True)
-
     for line in reversed(stdout_lines):
         line = line.strip()
         if not line:
