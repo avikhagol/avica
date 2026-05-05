@@ -1,11 +1,16 @@
->NOTE: VLBI and SMILE-based CASA Optimization pipeline has been renamed to AVICA.
-
-> submitted to A&A
 
 - [Contents:](#contents)
-  - [1. About](#about)
-  - [2. Installation](#installation)
-  - [3. Usage](#usage)
+  - [About](#about)
+  - [Installation](#installation)
+  - [Usage](#usage)
+  - [Manipulating FITS-IDI files](#manipulating-fits-idi)
+  - [Attribution](#attribution)
+  - [Acknowledgement](#acknowledgement)
+
+>Note: 
+>- Submitted to A&A
+>- VLBI and SMILE-based CASA Optimization pipeline has been renamed to AVICA.
+
 
 # About
 AVICA: Automated VLBI pipeline in CASA
@@ -151,14 +156,14 @@ To get the information on the observation run the following:
 avica listobs [FITSFILENAMES]... 
 ```
 
-
+<!--
 # Development
 After you clone the repo
 ```bash
 
 $ cd avica
 $ pip install -e .[dev]
-```
+```-->
 
 # Attribution
 
