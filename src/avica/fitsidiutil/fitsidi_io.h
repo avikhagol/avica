@@ -38,7 +38,7 @@ class HeaderManager {
 public:
     fitsfile* fptr = nullptr;
     std::map<int, std::vector<HeaderCard>> all_hdus;
-    
+
     std::map<int, std::vector<std::string>> history;
     std::map<int, std::vector<std::string>> comments;
 
@@ -64,26 +64,26 @@ public:
             for (int hdu_num = 1; hdu_num <= num_hdus; hdu_num++) {
                 int nkeys = 0;
                 int keytype = 0;
-                
+
                 if (fits_movabs_hdu(fptr, hdu_num, NULL, &status)) {
                     status = 0;
                     continue;
                 }
 
-                
+
                 fits_get_hdrspace(fptr, &nkeys, NULL, &status);
 
                 std::vector<HeaderCard> current_hdu_cards;
 
                 for (int i = 1; i <= nkeys; i++) {
                         if (fits_read_keyn(fptr, i, key, val, com, &status)) {
-                            status = 0; 
+                            status = 0;
                             continue;
                         }
 
-                        char letter_type[FLEN_VALUE]; 
+                        char letter_type[FLEN_VALUE];
                         fits_get_keytype(val, letter_type, &status);
-                        int key_code = (int)letter_type[0]; 
+                        int key_code = (int)letter_type[0];
 
                         if (status) {
                             key_code = 0;
@@ -97,7 +97,7 @@ public:
                         } else if (s_key == "COMMENT") {
                             comments[hdu_num].push_back(com);
                         } else if (s_key != "CONTINUE" && s_key != "END" && !s_key.empty()) {
-                            
+
                             current_hdu_cards.push_back({s_key, val, com, key_code});
                         }
                     }
@@ -114,7 +114,7 @@ struct RowData {                //  used by listobs to read time, source, nrows
     double time_end;
     int source;
     long nrows;
-    std::vector<double> inttime; 
+    std::vector<double> inttime;
 };
 
 typedef struct RowData Struct;
@@ -129,7 +129,7 @@ class ReadIO {
                 switch(ascii_code) {
                     case 73:  // 'I' - ASCII for 'I'
                         return TINT;      // 41
-                    case 70:  // 'F' - ASCII for 'F'  
+                    case 70:  // 'F' - ASCII for 'F'
                         return TDOUBLE;   // 82 (or TFLOAT=42 if you prefer)
                     case 67:  // 'C' - ASCII for 'C'
                         return TSTRING;   // 43
@@ -141,14 +141,14 @@ class ReadIO {
                         return TSTRING;   // default to string
                 }
             }
-        
+
     public:
         HeaderManager header_mgr;
 
 
         bool open(const std::string& fitsfilepath, bool writeable = false) {
             _current_fitsfilepath = fitsfilepath;
-        
+
             this->status = 0;
             int mode = writeable ? READWRITE : READONLY;
             const char* filename = fitsfilepath.c_str();
@@ -173,17 +173,17 @@ class ReadIO {
             if (this->fptr) {
                 int closing_stat = 0;
                 fits_close_file(this->fptr, &closing_stat);
-                
+
                 this->fptr = nullptr;
                 this->header_mgr.fptr = nullptr;
-                this->status = 0; 
+                this->status = 0;
             }
         }
         void flush() {
             if (fptr) {
                 int status = 0;
                 fits_flush_file(fptr, &status);
-                
+
                 if (status) {
                     char err_text[80];
                     fits_get_errstatus(status, err_text);
@@ -191,7 +191,7 @@ class ReadIO {
                 }
             }
         }
-        
+
         ~ReadIO() {
             close();
         }
@@ -283,16 +283,16 @@ class ReadIO {
 
 
         // one func for header updaes
-    
-        void insert_header_after(int hdu_num, const std::string& after_key, const std::string& key, 
+
+        void insert_header_after(int hdu_num, const std::string& after_key, const std::string& key,
                          const std::string& value, const std::string& comment, int dtype) {
             int status = 0, hdu_type;
             char card[FLEN_CARD];
             fits_movabs_hdu(fptr, hdu_num, &hdu_type, &status);
             fits_read_card(fptr, after_key.c_str(), card, &status);
-            
+
             int cfitsio_dtype = ascii_code_to_cfitsio_dtype(dtype);
-            
+
             switch(cfitsio_dtype) {
                 case TINT:
                 case TLOGICAL: {
@@ -315,15 +315,15 @@ class ReadIO {
             if (status != 0) { print_fits_error(status); }
         }
 
-            void insert_header(int hdu_num, int position, const std::string& key, 
+            void insert_header(int hdu_num, int position, const std::string& key,
                 const std::string& value, const std::string& comment, int dtype) {
                 int status = 0, hdu_type;
                 char keyname[FLEN_KEYWORD], val[FLEN_VALUE], comm[FLEN_COMMENT];
                 fits_movabs_hdu(fptr, hdu_num, &hdu_type, &status);
                 fits_read_keyn(fptr, position, keyname, val, comm, &status);
-                
+
                 int cfitsio_dtype = ascii_code_to_cfitsio_dtype(dtype);
-                
+
                 switch(cfitsio_dtype) {
                     case TINT:
                     case TLOGICAL: {
@@ -487,7 +487,7 @@ class ReadIO {
                 const std::string safe_out = "!" + outfitsfilepath;
 
                 bool has_override = !uv_data_dict_by_hdu.is_none();
-                
+
                 fits_create_file(&out_fptr, safe_out.c_str(), &status);
                 if (status) {
                     fits_report_error(stderr, status);
@@ -526,7 +526,7 @@ class ReadIO {
                     if (has_override) {
                         py::dict override_dict = uv_data_dict_by_hdu.cast<py::dict>();
                         py::object key = py::int_(uv_data_counter);
-                        
+
                         if (override_dict.contains(key)) {
                             uv_dict = override_dict[key].cast<py::dict>();
                             use_override = true;
@@ -586,13 +586,13 @@ class ReadIO {
                     fits_create_tbl(out_fptr, BINARY_TBL, 0, ncols, ttype.data(), tform.data(), tunit.data(), "UV_DATA", &status);
                     print_fits_error(status);
                     // fits_copy_header(fptr, out_fptr, &status);   // this creates undesired new hdu
-                    
+
                     long reset_rows = 0;
                     fits_modify_key_lng(out_fptr, "NAXIS2", reset_rows, NULL, &status);
-                   
+
                     write_python_dict_to_table(out_fptr, uv_dict, &status);
                     print_fits_error(status);
-                    
+
                     for (int col = 0; col < ncols; ++col) {
                         delete[] ttype[col];
                         delete[] tform[col];
@@ -630,7 +630,7 @@ class ReadIO {
                 int colnum;
                 fits_get_colnum(fptr, CASEINSEN, (char*)colname.c_str(), &colnum, &local_status);
                 if (local_status) {
-                    local_status = 0; 
+                    local_status = 0;
                     throw std::runtime_error("Column '" + colname + "' not found in HDU " + std::to_string(hdu_num));
                 }
 
@@ -641,21 +641,21 @@ class ReadIO {
 
                 // --- TSTRING
                 if (abs_type == TSTRING) {
-                    if (!py::isinstance<py::list>(data)) 
+                    if (!py::isinstance<py::list>(data))
                         throw std::runtime_error("String column update requires a Python list.");
 
                     py::list list_data = data.cast<py::list>();
                     for (long i = 0; i < list_data.size(); ++i) {
                         std::string val;
-                        
+
                         if (py::isinstance<py::bytes>(list_data[i])) {
                             val = list_data[i].cast<std::string>();
                         } else {
                             val = py::str(list_data[i]).cast<std::string>();
                         }
-                        
+
                         char *valptr[1] = {(char*)val.c_str()};
-                        
+
                         fits_write_col_str(fptr, colnum, start_row + i + 1, 1, 1, valptr, &local_status);
                     }
                 }
@@ -665,7 +665,7 @@ class ReadIO {
                     if (abs_type == TDOUBLE || abs_type == TFLOAT) {
                         auto arr = data.cast<py::array_t<double>>();
                         fits_write_col(fptr, TDOUBLE, colnum, start_row + 1, 1, arr.size(), (void*)arr.data(), &local_status);
-                    } 
+                    }
                     else if (abs_type == TINT || abs_type == TLONG || abs_type == TSHORT || abs_type == TBYTE || abs_type == TINT32BIT) {
                         auto arr = data.cast<py::array_t<long>>();
                         fits_write_col(fptr, TLONG, colnum, start_row + 1, 1, arr.size(), (void*)arr.data(), &local_status);
@@ -675,7 +675,7 @@ class ReadIO {
                     }
                 }
 
-                
+
                 if (local_status) {
                     char err_text[FLEN_ERRMSG];
                     fits_get_errstatus(local_status, err_text);
@@ -692,14 +692,14 @@ class ReadIO {
 
             fits_movabs_hdu(fptr, hdu_num, &hdu_type, &local_status);
             if (local_status || (hdu_type != BINARY_TBL && hdu_type != ASCII_TBL)) {
-                return result; 
+                return result;
             }
 
             long total_rows;
             fits_get_num_rows(fptr, &total_rows, &local_status);
             if (start_row < 0) start_row = 0;
             if (end_row >= total_rows) end_row = total_rows - 1;
-            
+
             long num_rows_to_read = end_row - start_row + 1;
             if (num_rows_to_read <= 0) return result;
 
@@ -713,43 +713,64 @@ class ReadIO {
                 char keyname[FLEN_KEYWORD];
                 snprintf(keyname, sizeof(keyname), "TTYPE%d", col);
                 fits_read_key(fptr, TSTRING, keyname, colname, NULL, &local_status);
-                if (local_status) { 
-                    local_status = 0; 
-                    snprintf(colname, sizeof(colname), "COL%d", col); 
+                if (local_status) {
+                    local_status = 0;
+                    snprintf(colname, sizeof(colname), "COL%d", col);
                 }
 
                 fits_get_coltype(fptr, col, &typecode, &repeat, &width, &local_status);
                 int abs_type = abs(typecode);
 
                 if (abs_type == TSTRING) {
-                        py::list str_list;
-                        for (long r = 0; r < num_rows_to_read; ++r) {
-                            char val[FLEN_VALUE] = {0};
-                            char *valptr[1] = {val};
-                            
-                            fits_read_col_str(fptr, col, start_row + r + 1, 1, 1, (char*)"", valptr, NULL, &local_status);
-                            
-                            std::string s(val);
-                            
-                            size_t last = s.find_last_not_of(" \n\r\t");
-                            if (last != std::string::npos) s = s.substr(0, last + 1);
-                            else s = "";
-                            
-                            
-                            try {
-                                str_list.append(py::str(s));
-                            } catch (const py::error_already_set& e) {
-                                str_list.append(py::bytes(s));
+                    std::vector<std::vector<unsigned char>> raw_rows(num_rows_to_read,
+                                                                     std::vector<unsigned char>(width, 0));
+                    bool any_dirty = false;
+
+                    for (long r = 0; r < num_rows_to_read; ++r) {
+                        local_status = 0;
+                        fits_read_col(fptr, TBYTE, col, start_row + r + 1, 1, width,
+                                      NULL, raw_rows[r].data(), NULL, &local_status);
+
+                        const auto& raw = raw_rows[r];
+                        auto null_it = std::find(raw.begin(), raw.end(), '\0');
+                        size_t name_len = null_it - raw.begin();
+
+                        // tail garbage after \0
+                        for (size_t i = name_len; i < (size_t)width; ++i) {
+                            if (raw[i] != '\0') { any_dirty = true; break; }
+                        }
+                        if (!any_dirty) {
+                            for (size_t i = 0; i < name_len; ++i) {
+                                unsigned char c = raw[i];
+                                if (c < 0x20 || c > 0x7e) { any_dirty = true; break; }
                             }
                         }
-                        result[colname] = str_list;
+                    }
+
+                    py::list out;
+                    if (any_dirty) {
+                            for (long r = 0; r < num_rows_to_read; ++r) {
+                                out.append(py::bytes(reinterpret_cast<const char*>(raw_rows[r].data()), width));
+                            }
+                        } else {
+                            for (long r = 0; r < num_rows_to_read; ++r) {
+                                const auto& raw = raw_rows[r];
+                                auto null_it = std::find(raw.begin(), raw.end(), '\0');
+                                size_t name_len = null_it - raw.begin();
+                                std::string s(reinterpret_cast<const char*>(raw.data()), name_len);
+                                size_t last = s.find_last_not_of(" \n\r\t");
+                                s = (last != std::string::npos) ? s.substr(0, last + 1) : "";
+                                out.append(py::str(s));
+                            }
+                        }
+                        result[colname] = out;
                     }
                 else if (repeat == 1) {
                     if (abs_type == TDOUBLE || abs_type == TFLOAT) {
                         py::array_t<double> arr(num_rows_to_read);
                         fits_read_col(fptr, TDOUBLE, col, start_row + 1, 1, num_rows_to_read, NULL, arr.mutable_data(), NULL, &local_status);
                         result[colname] = arr;
-                    } 
+                    }
                     else if (abs_type == TINT || abs_type == TLONG || abs_type == TSHORT || abs_type == TBYTE) {
                         py::array_t<long> arr(num_rows_to_read);
                         fits_read_col(fptr, TLONG, col, start_row + 1, 1, num_rows_to_read, NULL, arr.mutable_data(), NULL, &local_status);
@@ -770,44 +791,44 @@ class ReadIO {
     std::vector<std::vector<std::string>> read_table_by_hdu(int hdu_num) {
         std::vector<std::vector<std::string>> table_data;
         if (!fptr) return table_data;
-        
+
         int local_status = 0;
         int hdu_type;
-        
+
         fits_movabs_hdu(fptr, hdu_num, &hdu_type, &local_status);
         if (local_status || (hdu_type != BINARY_TBL && hdu_type != ASCII_TBL)) {
             return table_data;
         }
-        
+
         long nrows;
         int ncols;
         fits_get_num_rows(fptr, &nrows, &local_status);
         fits_get_num_cols(fptr, &ncols, &local_status);
-        
+
         if (local_status || nrows <= 0) return table_data;
-        
+
 
         std::vector<int> col_types(ncols);
         std::vector<long> col_repeats(ncols);
         std::vector<long> col_widths(ncols);
-        
+
         for (int col = 0; col < ncols; col++) {
             fits_get_coltype(fptr, col + 1, &col_types[col], &col_repeats[col], &col_widths[col], &local_status);
         }
-        
+
         table_data.reserve(nrows);
-        
+
         for (long row = 1; row <= nrows; row++) {
             std::vector<std::string> row_data;
             row_data.reserve(ncols);
-            
+
             for (int col = 0; col < ncols; col++) {
                 local_status = 0;
-                int type = abs(col_types[col]);        
-        
+                int type = abs(col_types[col]);
+
                 if (col_repeats[col] > 1 && type != TSTRING) {
                     std::string arr_str = "[";
-                    
+
                     if (type == TDOUBLE || type == TFLOAT) {
                         std::vector<double> vals(col_repeats[col]);
                         fits_read_col(fptr, TDOUBLE, col + 1, row, 1, col_repeats[col], NULL, vals.data(), NULL, &local_status);
@@ -816,7 +837,7 @@ class ReadIO {
                             snprintf(n_buf, sizeof(n_buf), "%.10g", vals[i]);
                             arr_str += (i > 0 ? ", " : "") + std::string(n_buf);
                         }
-                    } 
+                    }
                     else if (type == TINT || type == TLONG || type == TSHORT || type == TBYTE) {
                         std::vector<long> vals(col_repeats[col]);
                         fits_read_col(fptr, TLONG, col + 1, row, 1, col_repeats[col], NULL, vals.data(), NULL, &local_status);
@@ -824,15 +845,15 @@ class ReadIO {
                             arr_str += (i > 0 ? ", " : "") + std::to_string(vals[i]);
                         }
                     }
-                    
+
                     arr_str += "]";
                     row_data.push_back(local_status ? "[ERROR]" : arr_str);
-                } 
+                }
                 else {
                     char buffer[FLEN_VALUE] = {0};
-                    
+
                     if (type == TSTRING) {
-                        char *str_ptr = buffer; 
+                        char *str_ptr = buffer;
                         if (fits_read_col(fptr, TSTRING, col + 1, row, 1, 1, NULL, &str_ptr, NULL, &local_status) == 0) {
                             std::string s(buffer);
                             size_t last = s.find_last_not_of(' ');
@@ -840,18 +861,18 @@ class ReadIO {
                         } else {
                             row_data.push_back("");
                         }
-                    } 
+                    }
                     else if (type == TDOUBLE || type == TFLOAT) {
                         double val;
                         fits_read_col(fptr, TDOUBLE, col + 1, row, 1, 1, NULL, &val, NULL, &local_status);
                         snprintf(buffer, sizeof(buffer), "%.10f", val);
                         row_data.push_back(local_status ? "0.0" : buffer);
-                    } 
+                    }
                     else if (type == TINT || type == TLONG || type == TSHORT || type == TBYTE) {
                         long val;
                         fits_read_col(fptr, TLONG, col + 1, row, 1, 1, NULL, &val, NULL, &local_status);
                         row_data.push_back(local_status ? "0" : std::to_string(val));
-                    } 
+                    }
                     else {
                         row_data.push_back("");
                     }
@@ -860,7 +881,7 @@ class ReadIO {
             }
             table_data.push_back(row_data);
         }
-        
+
         return table_data;
     }
         std::vector<RowData> listobs_fits(py::object sids_arg = py::none())
@@ -872,7 +893,7 @@ class ReadIO {
                 sids_vec = sids_arg.cast<std::vector<long int>>();
                 filter_by_sids = !sids_vec.empty();
             }
-            
+
             int num_hdus;
             int status = 0;
             std::map<int, long> freqidToBandfreq;
@@ -880,7 +901,7 @@ class ReadIO {
             std::vector<RowData> results;
             std::set<long int> sids_set(sids_vec.begin(), sids_vec.end());
             if (!fptr) return results;
-            
+
 
             fits_get_num_hdus(fptr, &num_hdus, &status);                                             // get number of hdus
             print_fits_error(status);
@@ -899,15 +920,15 @@ class ReadIO {
             if (status) {
                 std::cerr << "Error after status moving FREQ = " << status << std::endl;
                 fits_report_error(stderr, status);
-                
+
                 return results;
             }
             int colnum_freqid;
-            fits_get_colnum(fptr, CASEINSEN, freqidColName, &colnum_freqid, &status);                    
+            fits_get_colnum(fptr, CASEINSEN, freqidColName, &colnum_freqid, &status);
             if (status) {
                 std::cerr << "Error after freqidColName  = " << status << std::endl;
                 fits_report_error(stderr, status);
-                
+
                 return results;
             }
             int colnum_bandfreq;
@@ -916,33 +937,33 @@ class ReadIO {
             if (status) {
                 std::cerr << "Error after bandfreqColName = " << status << std::endl;
                 fits_report_error(stderr, status);
-                
+
                 return results;
             }
-        
+
             long nrows_freq;
             fits_get_num_rows(fptr, &nrows_freq, &status);
             if (status) {
                 std::cerr << "Error after nrows_freq  = " << status << std::endl;
                 fits_report_error(stderr, status);
-                
+
                 return results;
             }
-        
+
             for (long i = 1; i <= nrows_freq; ++i) {
                 int freqid;
                 fits_read_col(fptr, TINT, colnum_freqid, i, 1, 1, NULL, &freqid, NULL, &status);
-        
+
                 // get the number of BANDFREQ values for this FREQID
                 long nbandfreq = 0;
                 fits_get_coltype(fptr, colnum_bandfreq, NULL, &nbandfreq, NULL, &status);
                 if (status) {
                 std::cerr << "Error after nbandfreq = " << status << std::endl;
                 fits_report_error(stderr, status);
-                
+
                 return results;
                 }
-        
+
                 freqidToBandfreq[freqid] = nbandfreq;
             }
 
@@ -950,7 +971,7 @@ class ReadIO {
                 int hdu_type;
                 fits_movabs_hdu(fptr, hdu_num, &hdu_type, &status);                                  // move hdu pointer to hdu_num
                 print_fits_error(status);
-                
+
 
                 char hdu_name[FLEN_VALUE];                                                              // hdu name
                 fits_read_key(fptr, TSTRING, "EXTNAME", hdu_name, NULL, &status);
@@ -961,14 +982,14 @@ class ReadIO {
                 print_fits_error(status);
 
                 if (strcmp(hdu_name, "UV_DATA") == 0) {                                             // UV_DATA operations start
-                    
+
                     long nrows;
                     fits_get_num_rows(fptr, &nrows, &status);
 
-                    
+
                     // std::cout << "Processing HDU: " << hdu_name << " (HDU #" << hdu_num << "), nrows: " << nrows << std::endl;
                     int colnum_time, colnum_source, colnum_inttim, colnum_freqid;
-                    
+
                     fits_get_colnum(fptr, CASEINSEN, timeColName, &colnum_time, &status);
                     fits_get_colnum(fptr, CASEINSEN, sourceColName, &colnum_source, &status);
                     fits_get_colnum(fptr, CASEINSEN, inttimColName, &colnum_inttim, &status);
@@ -976,7 +997,7 @@ class ReadIO {
                     if (status) {
                     std::cerr << "Error getting colnum_inttim = " << status << std::endl;
                             fits_report_error(stderr, status);
-                            
+
                             return results;
                         }
 
@@ -988,36 +1009,36 @@ class ReadIO {
                         fits_read_col(fptr, TINT, colnum_source, i, 1, 1, NULL, &source, NULL, &status);
                         fits_read_col(fptr, TDOUBLE, colnum_inttim, i, 1, 1, NULL, &inttime, NULL, &status);
                         fits_read_col(fptr, TINT, colnum_freqid, i, 1, 1, NULL, &freqid, NULL, &status);
-                
+
                         if (status) {
                             // std::cout << freqid << " " << colnum_freqid << " "<<colnum_source << "\n";
                             std::cout << freqid << " " << colnum_freqid << " "<<colnum_source << "\n";
                             std::cerr << "Error after freqid = " << status << std::endl;
                             fits_report_error(stderr, status);
-                            
+
                             return results;
                         }
-                
+
                         if (filter_by_sids && sids_set.find(source) == sids_set.end()) {
                             continue;
                         }
-                
+
                         double scantime_mjd = time;
-                
+
                         if (source != current_source) {
                             if (current_source != -1) {
-                                
+
                                 long nbandfreq = (freqidToBandfreq.find(current_freqid) != freqidToBandfreq.end()) ? freqidToBandfreq[current_freqid] : 1;
-                
+
                                 std::vector<double> inttimeArray;
                                 for (long j = 0; j < nbandfreq; ++j) {
                                     inttimeArray.push_back(current_inttime);
                                 }
-                
+
                                 double startTime = current_time_start_mjd;//convertMJDToISOT(current_time_start_mjd);
                                 double endTime = current_time_end_mjd;//convertMJDToISOT(current_time_end_mjd);
-                
-                                
+
+
                                 results.push_back({
                                     startTime,
                                     endTime,
@@ -1026,14 +1047,14 @@ class ReadIO {
                                     inttimeArray
                                 });
                             }
-                            
+
                             current_source = source;
                             current_time_start_mjd = scantime_mjd;
                             current_time_end_mjd = scantime_mjd;
                             current_nrows = 1;
                             current_freqid = freqid;
                             current_inttime = inttime; // Update current_inttime
-                        } 
+                        }
                         else {
                             current_time_end_mjd = scantime_mjd;
                             current_nrows++;
@@ -1043,16 +1064,16 @@ class ReadIO {
                     }
 
                     if (current_source != -1) {
-                        
+
                         long nbandfreq = freqidToBandfreq[current_freqid];
-                
+
                         std::vector<double> inttimeArray;
                         for (long j = 0; j < nbandfreq; ++j) {
                             inttimeArray.push_back(current_inttime);
                         }
                         double startTime = current_time_start_mjd;
                         double endTime = current_time_end_mjd;
-                
+
                         results.push_back({
                             startTime,
                             endTime,
@@ -1062,20 +1083,20 @@ class ReadIO {
                         });
                         current_source = -1;
                     }
-                    
+
                     if (status) {
                 std::cerr << "Error after close = " << status << std::endl;
                         fits_report_error(stderr, status);
-                        
+
                         return results;
                     }
                 }
             }
-            
-            
+
+
             return results;
         }
-    
+
 
     void delete_hdu(int hdu_num) {
         int status = 0, hdutype;
@@ -1084,16 +1105,16 @@ class ReadIO {
             fits_close_file(fptr, &status);
             return;
         }
-        
+
         if (fits_delete_hdu(fptr, &hdutype, &status)) {
             fits_report_error(stderr, status);
         }
-    
+
     }
 
 
     std::pair<long long, long long> get_fits_byte_size() {
-        
+
         int status = 0;
         int num_hdus = 0;
         long long headstart, datastart, dataend;
@@ -1107,7 +1128,7 @@ class ReadIO {
 
         fits_get_num_hdus(fptr, &num_hdus, &status);
         fits_movabs_hdu(fptr, num_hdus, NULL, &status);
-    
+
         fits_get_hduaddrll(fptr, &headstart, &datastart, &dataend, &status);
 
 
