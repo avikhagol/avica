@@ -5,11 +5,12 @@
 ### Added
 - handling multiple frequency id values in FITS-IDI file.
 - `python-casacore` dependency for handling table I/O operations.
-- configurations `mpi_cores_importfitsidi` 
+- configurations `mpi_cores_importfitsidi`
 
 ### Changed
 - `AvicaAverageMs` runs iteratively for each `MS` file using `mpicasa` from user provided `casadir`.
 - `ImportFitsIdi` parallelized using `mpicasa` from user provided `casadir`.
+- `numpy` version requirement updated to `<1.25.0` for compatibility with monolithic CASA used by `rPicard`.
 
 ### Fixed
 - python environment collisions with `casadir`
