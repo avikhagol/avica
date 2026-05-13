@@ -427,6 +427,23 @@ class AvicaResult(UserList[StepResult]):
             return "AvicaResult(empty)"
         return df.__repr__()
 
+
+def append_step_result_csv(result: StepResult, csvfile: str | Path | None) -> bool:
+    if not csvfile:
+        return False
+
+    csvpath = Path(csvfile)
+    csvpath.parent.mkdir(parents=True, exist_ok=True)
+    result_df = AvicaResult([result]).to_polars()
+
+    if csvpath.exists():
+        with open(csvpath, "ab") as f:
+            result_df.write_csv(f, include_header=False)
+    else:
+        result_df.write_csv(csvpath)
+
+    return True
+
 @contextmanager
 def step_stage(name: str, **context):
     """Wraps a stage inside run(), logs entry and enriches any exception with context."""
@@ -444,6 +461,7 @@ class PipelineContext:
     step_name: str = ""
     validation_success: bool | None = None
     result: StepResult | None = None
+    result_persisted: bool = False
     colnames: ColName | None = None
     logfolder:str ="avica.logs/"
 
@@ -842,7 +860,7 @@ class UpdateResults(PipelineStepValidatorBase):
     name = "update_results"
     run_after=True
 
-    def run(self,lf, count, failed, fitsfile_name):
+    def run(self,lf, count, failed, fitsfile_name, result_csv_file=None):
         lf.put_value(time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), "last_update", count)
 
         # lf.update_sheet(PipelineContext.result.success_count, PipelineContext.result.failed_count)
@@ -859,6 +877,7 @@ class UpdateResults(PipelineStepValidatorBase):
         failed     = PipelineContext.result.failed_count
         PipelineContext.params['registered'] = lf.register = (success, failed)
         PipelineContext.params['lf']           =   lf
+        PipelineContext.result_persisted = append_step_result_csv(PipelineContext.result, result_csv_file)
         return PipelineStepValidatorResult(success=[PipelineContext.validation_success], msg="")
 
 class UpdateSheet(PipelineStepValidatorBase):
@@ -999,6 +1018,7 @@ class AvicaPipelineCore:
         for step_name, step in self._steps.items():
             if PipelineContext.validation_success:
                 exc=None
+                PipelineContext.result_persisted = False
                 step_start = datetime.now()
                 log.info(f"[{step_name}] Starting  {step_start}")
 
@@ -1109,8 +1129,12 @@ class AvicaPipelineCore:
 
                     result.end_stamp = end_stamp
                     PipelineContext.validation_success = False
+                    PipelineContext.result_persisted = False
 
                 self.allresults.append(result)
+                if not PipelineContext.result_persisted:
+                    csvfile = PipelineContext.params.get('result_csv_file')
+                    PipelineContext.result_persisted = append_step_result_csv(result, csvfile)
 
                 elapsed = (result.end_stamp - result.start_stamp).total_seconds()
                 status  = "OK" if result.success_count != 0 else "FAILED"

@@ -19,3 +19,14 @@ class AvicaPipeline(AvicaPipelineCore):
             pipe_params = merged_params,
             steps       = steps or self.DEFAULT_STEPS,
         )
+
+    def step_names(self):
+        return list(self._steps.keys())
+
+    def steps_from(self, step_name):
+        step_names = self.step_names()
+        if step_name not in step_names:
+            raise ValueError(f"Unknown pipeline step: {step_name}")
+
+        idx_step = step_names.index(step_name)
+        return step_names[idx_step:]

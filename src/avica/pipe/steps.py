@@ -538,7 +538,7 @@ class AverageMS(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, casadir, mpi_cores_avgms=5, verbose=True):
+    def run(self, lf, wd_ifolder, casadir, targets, mpi_cores_avgms=5, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms.meta import BandInfoMS
         # log = logging.getLogger("avica.pipeline")
@@ -640,8 +640,12 @@ class AverageMS(PipelineStepBase):
 
                                     # ---------------------------------------------------   Execution
                                 if Path(outvis).exists():
-                                    self.result.detail[band]     =   "vis-exists"
-                                else:
+                                    if targets is not None and len(targets)>1:
+                                        self.result.detail[band]     =   "vis-exists"
+                                    else:
+                                        del_fl(wd_b, fl=Path(outvis).name, rm=True)
+
+                                if not Path(outvis).exists():
 
                                     msg                 =   "executing casatask payload mstransform"
                                     log.info(msg)
@@ -684,7 +688,7 @@ class AverageMS(PipelineStepBase):
 
 
             self.result.success_count       =   len(success_band)
-            self.result.failed_count        =  len(bands_known) -len(success_band)
+            self.result.failed_count        =   len(bands_known) -len(success_band)
             if succeed  == 1:
                 comment_val                     =   lf.get_value(self.colnames.comment_col) + ' ' + comment_val if lf.get_value(self.colnames.comment_col) else comment_val
                 _                               =   lf.put_value(success_val, self.colnames.working_col, self.result.success_count)

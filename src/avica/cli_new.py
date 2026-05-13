@@ -200,6 +200,7 @@ def run_pipeline(
     main_pipeline = AvicaPipeline(pipe_params=pipe_params)
     csvfile = _result_csv_path(pipe_params)
 
+    main_pipeline.filter_steps(*stps)
     if resume_from:
         try:
             stps = main_pipeline.steps_from(resume_from)
@@ -218,7 +219,6 @@ def run_pipeline(
             stps = main_pipeline.steps_from(resume_from)
             typer.echo(f"Resuming from step: {resume_from}")
 
-    # main_pipeline.execute()
     main_pipeline.filter_steps(*stps)
     result = main_pipeline.execute()
 
