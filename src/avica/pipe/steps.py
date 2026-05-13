@@ -208,6 +208,7 @@ class PreProcessFitsIdi(PipelineStepBase):
 
             #### _________________________________________________________                       if count_tsys_in_fitsfile(fitsfiles_used[0], target) and validate_tsys_count_multifreqid:           # this ensures that we take fitsfile with max TSYS rows (viz validates non multifreqid) - TODO: doesn't validate mixed w/w.o freqid splitted fitsfiles
             self.result.success = [count_tsys_in_fitsfile(ff, target)>0 for ff in fitsfiles_used]
+            print(self.result.success)
             self.result.success_count = sum(self.result.success)
             self.result.failed_count = len(self.result.success) - self.result.success_count
             # lf.put_value("success")
@@ -589,10 +590,11 @@ class AverageMS(PipelineStepBase):
                 with step_stage(msg):
                     try:
                         for band in bandms.bands_dict:
+                            band_detail = bandms.get_band_detail(band)
                             for bandobsid in range(bandms.bands_dict[band]['nobs']):
                                 bandobs         =   f"{band}{bandobsid}" if bandms.bands_dict[band]['nobs']>1 else f"{band}"
                                 bands_known.append(bandobs)
-                                d_bands         =   bandms.get_band_detail(band)[f"{band}{bandobsid}"]
+                                d_bands         =   band_detail[f"{band}{bandobsid}"]
                                 wd_b, iwd_b = this_wd_meta.to_new_WD(bandobs, target="")
                                 wd_b = wd_b.absolute()
                                 iwd_b_new = f"{wd_b}/input_template_{bandobs}"
