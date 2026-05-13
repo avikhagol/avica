@@ -129,17 +129,19 @@ class BandInfoMS:
         _tsys = f"{self.vis}/SYSCAL"
         _ants = f"{self.vis}/ANTENNA"
 
+        self.msmd.close()
         tb_tsys = ctable(_tsys, ack=False)
         tb_ants = ctable(_ants, ack=False)
 
-        spws_str = ",".join(map(str, spws))
-        sub_tb_tsys = tb_tsys.query(f"SPECTRAL_WINDOW_ID IN {spws}")
+        spws_str = "[" + ",".join(map(str, spws)) + "]"
+        sub_tb_tsys = tb_tsys.query(f"SPECTRAL_WINDOW_ID IN {spws_str}")
         ants = np.array(tb_ants.getcol('NAME'))
         tsys_ants = np.array(sub_tb_tsys.getcol('ANTENNA_ID'))
 
         sub_tb_tsys.close()
         tb_tsys.close()
         tb_ants.close()
+        self.msmd.open(self.vis)
 
         tsys_missing_ants = list(set(range(len(ants))) - set(tsys_ants))
         self.removable_antennas[band] = ants[tsys_missing_ants]
