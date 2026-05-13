@@ -209,10 +209,8 @@ class PreProcessFitsIdi(PipelineStepBase):
 
             #### _________________________________________________________                       if count_tsys_in_fitsfile(fitsfiles_used[0], target) and validate_tsys_count_multifreqid:           # this ensures that we take fitsfile with max TSYS rows (viz validates non multifreqid) - TODO: doesn't validate mixed w/w.o freqid splitted fitsfiles
             self.result.success = [count_tsys_in_fitsfile(ff, target)>0 for ff in fitsfiles_used]
-            print(self.result.success)
             self.result.success_count = sum(self.result.success)
             self.result.failed_count = len(self.result.success) - self.result.success_count
-            # lf.put_value("success")
         self.result.end_stamp   =   datetime.now()
 
         return self.result

@@ -55,7 +55,8 @@ def _infer_resume_step(csvfile, ordered_steps):
     if not csvfile.exists():
         return None
 
-    latest_success_by_step = {}
+    latest_step = None
+    latest_success = False
     with open(csvfile, newline="") as result_csv:
         reader = csv.DictReader(result_csv)
         if not reader.fieldnames or "name" not in reader.fieldnames:
@@ -64,16 +65,17 @@ def _infer_resume_step(csvfile, ordered_steps):
         for row in reader:
             name = row.get("name")
             if name in ordered_steps:
-                latest_success_by_step[name] = _is_successful_result(row)
+                latest_step = name
+                latest_success = _is_successful_result(row)
 
-    last_success_idx = -1
-    for idx, step_name in enumerate(ordered_steps):
-        if latest_success_by_step.get(step_name):
-            last_success_idx = idx
-        else:
-            break
+    if latest_step is None:
+        return ordered_steps[0] if ordered_steps else None
 
-    next_idx = last_success_idx + 1
+    latest_idx = ordered_steps.index(latest_step)
+    if not latest_success:
+        return latest_step
+
+    next_idx = latest_idx + 1
     return ordered_steps[next_idx] if next_idx < len(ordered_steps) else None
 
 
@@ -196,9 +198,11 @@ def run_pipeline(
     #     configdata = PipeConfig(configfile=configfile)
     #     pipe_params.update(configdata.to_dict())
 
+    csvfile = _result_csv_path(pipe_params)
+    pipe_params["result_csv_file"] = str(csvfile)
+
     # print(DEFAULT_PARAMS['allfitsfile'])
     main_pipeline = AvicaPipeline(pipe_params=pipe_params)
-    csvfile = _result_csv_path(pipe_params)
 
     main_pipeline.filter_steps(*stps)
     if resume_from:
@@ -224,12 +228,6 @@ def run_pipeline(
 
 
     print(result)
-
-    if not Path(csvfile).exists():
-        result.to_polars().write_csv(csvfile)
-    else:
-        with open(csvfile, "ab") as f:
-            result.to_polars().write_csv(f, include_header=False)
 
 
 if __name__=='__main__':
