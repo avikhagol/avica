@@ -361,7 +361,7 @@ def catalog_search_from_fits(fitsfile, df_catalog, seplimit, thres_sep, source_n
     match_res       =   df_catalog[df_catalog[source_name_col].isin(target_names)]
 
     if not match_res.empty:
-        idx_found       =   np.in1d(target_names, match_res[source_name_col].values)
+        idx_found       =   np.isin(target_names, match_res[source_name_col].values)
 
     # _________________________________________________________________            since each row found corrosponds to the name match from fits
     if source_name_col in match_res.columns: match_res            =   match_res.rename(columns={source_name_col:'fits_target'})
