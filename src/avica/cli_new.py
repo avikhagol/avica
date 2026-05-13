@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
+import csv
 from pathlib import Path
-from shutil import make_archive
 from typing import List, Optional
 
 import resource
 import typer
-import textwrap
+
 from rich.console import Console
 from rich.panel import Panel
 from avica.util import ASCII_ART, make_art
 
-from typing_extensions import Annotated
+try:
+    from typing import Annotated
+except ImportError:
+    from typing_extensions import Annotated
+
 from avica.config import avica_data_dir
 
 from avica.util import casadir_find, rfc_find
@@ -29,6 +33,48 @@ c = {"x": "\033[0m", "g": "\033[32m", "r": "\033[31m", "b": "\033[34m",
 X  = "\033[0m"
 
 rfc_filepath = f"{avicadir}/rfc_path.txt"
+
+
+def _result_csv_path(pipe_params):
+    target = f"{pipe_params['target']}_"
+    return Path(pipe_params["target_dir"]) / f"{target}result.csv"
+
+
+def _is_successful_result(row):
+    try:
+        success_count = int(row.get("success_count") or 0)
+        failed_count = int(row.get("failed_count") or 0)
+    except (TypeError, ValueError):
+        return False
+
+    return success_count > 0 and failed_count == 0
+
+
+def _infer_resume_step(csvfile, ordered_steps):
+    csvfile = Path(csvfile)
+    if not csvfile.exists():
+        return None
+
+    latest_success_by_step = {}
+    with open(csvfile, newline="") as result_csv:
+        reader = csv.DictReader(result_csv)
+        if not reader.fieldnames or "name" not in reader.fieldnames:
+            return ordered_steps[0] if ordered_steps else None
+
+        for row in reader:
+            name = row.get("name")
+            if name in ordered_steps:
+                latest_success_by_step[name] = _is_successful_result(row)
+
+    last_success_idx = -1
+    for idx, step_name in enumerate(ordered_steps):
+        if latest_success_by_step.get(step_name):
+            last_success_idx = idx
+        else:
+            break
+
+    next_idx = last_success_idx + 1
+    return ordered_steps[next_idx] if next_idx < len(ordered_steps) else None
 
 
 avica_cli = typer.Typer(name="avica",help=ASCII_ART,
@@ -111,6 +157,8 @@ def run_pipeline(
     stps: Annotated[Optional[List[str]],typer.Argument(help="steps for execution")] = CSV_POPULATED_STEPS,
     target: Annotated[str,typer.Option("--t", "--target", help="Selected field / sourc name")] = '',
     configfile: Optional[str] = typer.Option("avica.inp", help="config file containing key=value"),
+    resume: Annotated[bool, typer.Option("--resume", help="Resume after the last successful step in the result CSV.")] = False,
+    resume_from: Annotated[Optional[str], typer.Option("--resume-from", help="Start from this pipeline step.")] = None,
     ):
     """
     _______________________
@@ -150,13 +198,29 @@ def run_pipeline(
 
     # print(DEFAULT_PARAMS['allfitsfile'])
     main_pipeline = AvicaPipeline(pipe_params=pipe_params)
+    csvfile = _result_csv_path(pipe_params)
+
+    if resume_from:
+        try:
+            stps = main_pipeline.steps_from(resume_from)
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc), param_hint="--resume-from") from exc
+    elif resume:
+        if not csvfile.exists():
+            typer.echo(f"No result CSV found at {csvfile}; running requested steps.")
+        else:
+            resume_from = _infer_resume_step(csvfile, main_pipeline.step_names())
+
+        if csvfile.exists() and resume_from is None:
+            typer.echo(f"All pipeline steps already completed according to {csvfile}.")
+            return
+        if resume_from:
+            stps = main_pipeline.steps_from(resume_from)
+            typer.echo(f"Resuming from step: {resume_from}")
 
     # main_pipeline.execute()
     main_pipeline.filter_steps(*stps)
     result = main_pipeline.execute()
-
-    target = f"{pipe_params['target']}_"
-    csvfile = f"{pipe_params['target_dir']}/{target}result.csv"
 
 
     print(result)

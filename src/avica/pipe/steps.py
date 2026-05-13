@@ -138,9 +138,10 @@ class PreProcessFitsIdi(PipelineStepBase):
                 tmpff  =   tmpfitsfiles[i]
 
                 if rfc_catalog_file is not None:
-                    split_by_catalog_search(tmpff, outfitsfilepath=ff, targets=targets, scanlist_arr=obsdata.scanlist(),
+                    sids = split_by_catalog_search(tmpff, outfitsfilepath=ff, targets=targets, scanlist_arr=obsdata.scanlist(),
                                             calibrator_catalog_file=rfc_catalog_file, coord_inpfile=class_search_asciifile,
-                                        matched_coord_outfile=wd_meta.matched_coord_outfile, metafolder=metafolder)
+                                            matched_coord_outfile=wd_meta.matched_coord_outfile, metafolder=metafolder)
+                    log.info(f"sids: {sids}")
                 else:
                     with step_stage(f"3 - moving file {tmpff} --> {ff}", tmpfitsfiles=tmpfitsfiles):
                         shutil.move(tmpff, ff)
