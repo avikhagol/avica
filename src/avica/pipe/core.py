@@ -143,9 +143,18 @@ def catalog_search_from_fits(fitsfile, df_catalog, seplimit, thres_sep, source_n
     if verbose: print(len(target_names[idx_found]), "found of", len(target_names))
     if verbose: print(len(target_names[~idx_found]), "not found")
     if include_not_found and any(~idx_found):
-#         col_usable = ['sep', 'fits_target','coordinate']
-        dic_df = {'coordinate':target_coords[~idx_found].to_string('hmsdms', sep=':'), 'fits_target': target_names[~idx_found],
-                 'sep': None}
+        unmatched_coords = target_coords[~idx_found]
+        unmatched_names  = target_names[~idx_found]
+        valid            = np.isfinite(unmatched_coords.ra.deg) & np.isfinite(unmatched_coords.dec.deg)
+        if not valid.all():
+            bad = unmatched_names[~valid]
+            warnings.warn(f"catalog_search_from_fits: NaN/inf coordinates found for sources {list(bad)}, skipping them", RuntimeWarning, stacklevel=2)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='invalid value encountered in do_format', category=RuntimeWarning)
+            coord_strings = unmatched_coords[valid].to_string('hmsdms', sep=':')
+        dic_df = {'coordinate': coord_strings,
+                  'fits_target': unmatched_names[valid],
+                  'sep': None}
         match_res = concat([match_res, df(dic_df)])
     return match_res
 
@@ -216,6 +225,12 @@ def df_search_brightcalib_fromascii_catalogfile(fitsfile, rfc_filepath, class_fi
     df_res_rfcsearch = df_res_rfcsearch.dropna(subset=['sid'])
     df_res_rfcsearch['sid'] = df_res_rfcsearch['sid'].astype('int')
 
+    # targets present in the FITS file are always kept, regardless of catalog match
+    included = set(df_res_rfcsearch['fits_target'])
+    forced = [{'fits_target': t, 'sid': int(dic_targets[t])}
+              for t in targets if t in dic_targets and t not in included]
+    if forced:
+        df_res_rfcsearch = concat([df_res_rfcsearch, df(forced)], ignore_index=True)
 
     if outfile:
         with open(outfile, 'w') as of:
@@ -276,7 +291,13 @@ def split_by_catalog_search(fitsfilepath, outfitsfilepath, targets, scanlist_arr
     else:
         raise NameError(f"both input and output are same files: {fitsfilepath}")
 
-    return sids
+    if sids is not None:
+        sids_set = set(int(s) for s in sids)
+        updated_scanlist = [s for s in scanlist_arr if int(s) in sids_set]
+    else:
+        updated_scanlist = list(scanlist_arr)
+
+    return sids, updated_scanlist
 
 def split_in_freqid(fitsfiles, verbose=False):
     workingfits                 =   deepcopy(fitsfiles)
@@ -707,7 +728,7 @@ class InitVariables(PipelineStepValidatorBase):
             return PipelineStepValidatorResult(success=[False], msg="no fitsfiles found")
 
         PipelineContext.params['multifreqid']   = any(count_freqids(f) > 1 for f in filepaths)
-        PipelineContext.params['targets']       = alltargets
+        PipelineContext.params['targets']       = alltargets or [target]
 
         # if str(PipelineContext.params['target'])[0] == '0':
         #     try:

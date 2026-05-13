@@ -21,8 +21,8 @@ from avica.fitsidiutil import read_idi
 
 
 def get_targets_filenames(lf, filename_col, targetname_col):
-    alltargets                  =   list(lf.df_sheet0[lf.df_sheet0[filename_col]==lf.get_value(filename_col)][targetname_col].values)
-    target                      =   lf.get_value(targetname_col)
+    alltargets                  =   list(lf.df_sheet0[lf.df_sheet0[filename_col]==lf.get_value(filename_col)][targetname_col].values) or [lf.primary_value]
+    target                      =   lf.get_value(targetname_col) or lf.primary_value
     parsed_filenames            =   lf.get_value(filename_col).replace('[', '').replace(']', '').replace('"', '').replace("'", '').replace('"""', '').replace("'''", '')
     fitsfilenames               =   parsed_filenames.split(',')
     return target, alltargets, fitsfilenames

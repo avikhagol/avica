@@ -134,11 +134,12 @@ class PreProcessFitsIdi(PipelineStepBase):
         msg_info = "splitting and keeping only desired sources"
         log.info(msg_info)
         with step_stage(msg_info, fitsfiles=fitsfiles, tmpfitsfiles=tmpfitsfiles):
+            updated_scanlists = {ff: obsdata.scanlist() for ff in fitsfiles}
             for i,ff in enumerate(fitsfiles):
                 tmpff  =   tmpfitsfiles[i]
 
                 if rfc_catalog_file is not None:
-                    sids = split_by_catalog_search(tmpff, outfitsfilepath=ff, targets=targets, scanlist_arr=obsdata.scanlist(),
+                    sids, updated_scanlists[ff] = split_by_catalog_search(tmpff, outfitsfilepath=ff, targets=targets, scanlist_arr=obsdata.scanlist(),
                                             calibrator_catalog_file=rfc_catalog_file, coord_inpfile=class_search_asciifile,
                                             matched_coord_outfile=wd_meta.matched_coord_outfile, metafolder=metafolder)
                     log.info(f"sids: {sids}")
@@ -151,7 +152,9 @@ class PreProcessFitsIdi(PipelineStepBase):
         log.info(msg_info)
         with step_stage(msg_info, fitsfiles=fitsfiles):
             for ff in fitsfiles:
-                result_remaining_fixes = fitsidi_check(fitsfilepath=ff).run(fix=True, scanlist=obsdata.scanlist())
+                result_remaining_fixes = fitsidi_check(fitsfilepath=ff).run(fix=True,
+                    scanlist=updated_scanlists[ff]
+                )
                 self.output_printable += str(result_remaining_fixes)
                 if verbose: print(result_remaining_fixes)
                 log.info(result_remaining_fixes)
