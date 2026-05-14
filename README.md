@@ -6,7 +6,6 @@
 # AVICA: Automated VLBI pipeline in CASA
 
 
-Demo of the AVICA pipeline running end-to-end:
 
 [![asciicast](https://asciinema.org/a/1016974.svg)](https://asciinema.org/a/1016974)
 > Demo of the AVICA pipeline running end-to-end.
