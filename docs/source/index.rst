@@ -39,30 +39,32 @@ It provides modules to ingest, manipulate, and calibrate *FITS-IDI* and *Measure
 Installation
 ============
 
-Since the monolithic version of casa includes its own internal Python 3 installation,
-it is best to install avica within a Python environment that matches the casa version.
 
+> Needs Ubuntu 18.04+, Debian 10+, RHEL/CentOS 8+ \
+> Python >=3.9
 
-.. code-block:: bash
+The `avica` package is publicly available on [PyPI](https://pypi.org/project/avica/).
+Installation is recommended using [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) or [pipx](https://pipx.pypa.io/stable/how-to/install-pipx/) within a isolated environment:
 
-   $ /path/to/casadir/bin/python3 -m venv MY_ENV_DIR
-   $ source MY_ENV_DIR/bin/activate
+using `uv`
 
+```bash
+uv tool install avica --python 3.11
+```
 
-.. code-block:: bash
+or using `pipx`
 
-   $ pip install avica
+```bash
+pipx install avica
+```
 
-Alternatively, you can use the following installation method,
-which automatically includes the necessary casa dependency for avica's internal operations.
+or using `pip`
 
-.. code-block:: bash
+```bash
+pip install avica
+```
+> Note: it is recommended to use `venv` for installation, if you are not using `pipx` or `uv`.
 
-   $ pip install avica[all]
-
-Note that you must still provide the path to your casadir.
-This ensures that the pipeline uses the same monolithic casa version, ideally the one downloaded for
-rPicard to execute specific tasks like mstransform and importfitsidi within an isolated environment.
 
 Setup
 =====

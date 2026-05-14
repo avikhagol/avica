@@ -1,3 +1,8 @@
+![PyPI - Downloads](https://img.shields.io/pypi/dm/avica)
+![GitHub License](https://img.shields.io/github/license/avikhagol/avica)
+
+
+
 VLBI and SMILE-based CASA Optimization (VASCO) pipeline has been renamed to AVICA.
 
 # avica
