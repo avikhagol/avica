@@ -181,7 +181,10 @@ def count_tsys_in_fitsfile(fitsfile, target=None):
 
             if target:
                 # target_names    =   source_hdu['SOURCE']
-                sid             =   source_hdu.df.filter(pl.col('SOURCE')==target)[sid_colname].to_list()[0]
+                sid_list        =   source_hdu.df.filter(pl.col('SOURCE')==target)[sid_colname].to_list()
+                if len(sid_list) == 0:
+                    return 0
+                sid             =   sid_list[0]
                 tsyssid_colname     =   _getcolname(tsys_hdu, ['ID_NO','ID_NO.', 'SOURCE_ID', 'SOURCE ID', 'SOURCE_ID.'])
                 count_tsys      =   len(tsys_hdu.df.filter(pl.col(tsyssid_colname)==sid)[tsyssid_colname].to_list())
     return count_tsys
@@ -358,7 +361,7 @@ def catalog_search_from_fits(fitsfile, df_catalog, seplimit, thres_sep, source_n
     match_res       =   df_catalog[df_catalog[source_name_col].isin(target_names)]
 
     if not match_res.empty:
-        idx_found       =   np.in1d(target_names, match_res[source_name_col].values)
+        idx_found       =   np.isin(target_names, match_res[source_name_col].values)
 
     # _________________________________________________________________            since each row found corrosponds to the name match from fits
     if source_name_col in match_res.columns: match_res            =   match_res.rename(columns={source_name_col:'fits_target'})

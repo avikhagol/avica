@@ -134,13 +134,15 @@ class PreProcessFitsIdi(PipelineStepBase):
         msg_info = "splitting and keeping only desired sources"
         log.info(msg_info)
         with step_stage(msg_info, fitsfiles=fitsfiles, tmpfitsfiles=tmpfitsfiles):
+            updated_scanlists = {ff: obsdata.scanlist() for ff in fitsfiles}
             for i,ff in enumerate(fitsfiles):
                 tmpff  =   tmpfitsfiles[i]
 
                 if rfc_catalog_file is not None:
-                    split_by_catalog_search(tmpff, outfitsfilepath=ff, targets=targets, scanlist_arr=obsdata.scanlist(),
+                    sids, updated_scanlists[ff] = split_by_catalog_search(tmpff, outfitsfilepath=ff, targets=targets, scanlist_arr=obsdata.scanlist(),
                                             calibrator_catalog_file=rfc_catalog_file, coord_inpfile=class_search_asciifile,
-                                        matched_coord_outfile=wd_meta.matched_coord_outfile, metafolder=metafolder)
+                                            matched_coord_outfile=wd_meta.matched_coord_outfile, metafolder=metafolder)
+                    log.info(f"sids: {sids}")
                 else:
                     with step_stage(f"3 - moving file {tmpff} --> {ff}", tmpfitsfiles=tmpfitsfiles):
                         shutil.move(tmpff, ff)
@@ -150,7 +152,9 @@ class PreProcessFitsIdi(PipelineStepBase):
         log.info(msg_info)
         with step_stage(msg_info, fitsfiles=fitsfiles):
             for ff in fitsfiles:
-                result_remaining_fixes = fitsidi_check(fitsfilepath=ff).run(fix=True, scanlist=obsdata.scanlist())
+                result_remaining_fixes = fitsidi_check(fitsfilepath=ff).run(fix=True,
+                    scanlist=updated_scanlists[ff]
+                )
                 self.output_printable += str(result_remaining_fixes)
                 if verbose: print(result_remaining_fixes)
                 log.info(result_remaining_fixes)
@@ -210,7 +214,6 @@ class PreProcessFitsIdi(PipelineStepBase):
             self.result.success = [count_tsys_in_fitsfile(ff, target)>0 for ff in fitsfiles_used]
             self.result.success_count = sum(self.result.success)
             self.result.failed_count = len(self.result.success) - self.result.success_count
-            # lf.put_value("success")
         self.result.end_stamp   =   datetime.now()
 
         return self.result
@@ -536,7 +539,7 @@ class AverageMS(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, casadir, mpi_cores_avgms=5, verbose=True):
+    def run(self, lf, wd_ifolder, casadir, targets, mpi_cores_avgms=5, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms.meta import BandInfoMS
         # log = logging.getLogger("avica.pipeline")
@@ -589,10 +592,11 @@ class AverageMS(PipelineStepBase):
                 with step_stage(msg):
                     try:
                         for band in bandms.bands_dict:
+                            band_detail = bandms.get_band_detail(band)
                             for bandobsid in range(bandms.bands_dict[band]['nobs']):
                                 bandobs         =   f"{band}{bandobsid}" if bandms.bands_dict[band]['nobs']>1 else f"{band}"
                                 bands_known.append(bandobs)
-                                d_bands         =   bandms.get_band_detail(band)[f"{band}{bandobsid}"]
+                                d_bands         =   band_detail[f"{band}{bandobsid}"]
                                 wd_b, iwd_b = this_wd_meta.to_new_WD(bandobs, target="")
                                 wd_b = wd_b.absolute()
                                 iwd_b_new = f"{wd_b}/input_template_{bandobs}"
@@ -637,8 +641,12 @@ class AverageMS(PipelineStepBase):
 
                                     # ---------------------------------------------------   Execution
                                 if Path(outvis).exists():
-                                    self.result.detail[band]     =   "vis-exists"
-                                else:
+                                    if targets is not None and len(targets)>1:
+                                        self.result.detail[band]     =   "vis-exists"
+                                    else:
+                                        del_fl(wd_b, fl=Path(outvis).name, rm=True)
+
+                                if not Path(outvis).exists():
 
                                     msg                 =   "executing casatask payload mstransform"
                                     log.info(msg)
@@ -681,7 +689,7 @@ class AverageMS(PipelineStepBase):
 
 
             self.result.success_count       =   len(success_band)
-            self.result.failed_count        =  len(bands_known) -len(success_band)
+            self.result.failed_count        =   len(bands_known) -len(success_band)
             if succeed  == 1:
                 comment_val                     =   lf.get_value(self.colnames.comment_col) + ' ' + comment_val if lf.get_value(self.colnames.comment_col) else comment_val
                 _                               =   lf.put_value(success_val, self.colnames.working_col, self.result.success_count)

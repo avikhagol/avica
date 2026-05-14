@@ -39,21 +39,31 @@ It provides modules to ingest, manipulate, and calibrate *FITS-IDI* and *Measure
 Installation
 ============
 
-The recommended way to install `avica` is by using the `pipx` package manager. This installs `avica` into a
-dedicated virtual environment and adds it to your `PATH`. Installation instructions for `pipx` can be found at `this link`_.
 
-.. _this link: https://pipx.pypa.io/stable/how-to/install-pipx/
+> Needs Ubuntu 18.04+, Debian 10+, RHEL/CentOS 8+ \
+> Python >=3.9
 
-.. code-block:: bash
+The `avica` package is publicly available on [PyPI](https://pypi.org/project/avica/).
+Installation is recommended using [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) or [pipx](https://pipx.pypa.io/stable/how-to/install-pipx/) within a isolated environment:
 
-    $ pipx install avica
+using `uv`
 
-Alternatively, you can install `avica` within a Python environment.
+```bash
+uv tool install avica --python 3.11
+```
 
-.. code-block:: bash
+or using `pipx`
 
-   $ source /path/to/env/bin/activate
-   $ python3 -m pip install avica
+```bash
+pipx install avica
+```
+
+or using `pip`
+
+```bash
+pip install avica
+```
+> Note: it is recommended to use `venv` for installation, if you are not using `pipx` or `uv`.
 
 
 Setup

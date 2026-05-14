@@ -118,7 +118,7 @@ class ListObs:
         df_listobs = df_listobs.select(cols)
         return df_listobs
 
-def merge_and_reorder(base_dict, *new_dicts):
+def merge_and_reorder(base_dict, *new_dicts, reindex=False):
     seen_obs = set()
     pairs = []
 
@@ -138,26 +138,35 @@ def merge_and_reorder(base_dict, *new_dicts):
     if is_merge:
         pairs.sort(key=lambda x: x[0].get('start_time', '9999'))
 
-    name_to_id = {}
     final_sources = {}
     final_listobs = {}
-    id_counter = count(1)
 
-    for i, (obs, source_name) in enumerate(pairs):
-        if source_name not in name_to_id:
-            new_id = next(id_counter)
-            name_to_id[source_name] = new_id
-            final_sources[str(new_id)] = source_name
-
-        new_scan = i + 1
-        final_listobs[str(i)] = {
-            **{k: v for k, v in obs.items() if k not in ('sid', 'source_id', 'scan')},
-            'scan': new_scan,
-            'source_id': name_to_id[source_name],
-        }
+    if reindex:
+        name_to_id = {}
+        id_counter = count(1)
+        for i, (obs, source_name) in enumerate(pairs):
+            if source_name not in name_to_id:
+                new_id = next(id_counter)
+                name_to_id[source_name] = new_id
+                final_sources[str(new_id)] = source_name
+            final_listobs[str(i)] = {
+                **{k: v for k, v in obs.items() if k not in ('sid', 'source_id', 'scan')},
+                'scan': i + 1,
+                'source_id': name_to_id[source_name],
+            }
+        scanlist = list(range(1, len(final_listobs) + 1))
+    else:
+        for d in filter(None, [base_dict, *new_dicts]):
+            final_sources.update({str(k): v for k, v in d.get('sources', {}).items()})
+        for i, (obs, _) in enumerate(pairs):
+            final_listobs[str(i)] = {
+                **{k: v for k, v in obs.items() if k not in ('sid', 'scan')},
+                'scan': i + 1,
+            }
+        scanlist = [obs.get('source_id') for obs, _ in pairs]
 
     return {
-        'scanlist': list(range(1, len(final_listobs) + 1)),
+        'scanlist': scanlist,
         'listobs': final_listobs,
         'sources': final_sources,
     }
@@ -172,6 +181,7 @@ class ObservationSummary:
     fitsfilepaths:List
     sids:List = field(default_factory=list)
     scangap=15
+    reindex: bool = False
     dic_summary : dict = field(default_factory=dict)
 
 
@@ -187,7 +197,7 @@ class ObservationSummary:
                         "sources": listobs_data.dic_sources,
                         }
             dic_list.append(dic_new)
-            self.dic_summary = merge_and_reorder(*dic_list)
+            self.dic_summary = merge_and_reorder(*dic_list, reindex=self.reindex)
         self
 
     def to_polars(self):

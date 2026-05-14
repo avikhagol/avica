@@ -50,6 +50,7 @@ class BandInfoMS:
 
         self.bands_dict         =   self.check_bands_ms()
         self.removable_antennas =   {band:[] for band in self.bands_dict}
+        self._missing_antennas_cache = {}
 
     def check_bands_ms(self):
         """
@@ -121,29 +122,37 @@ class BandInfoMS:
         return d
 
     def missing_antennas(self, band):
+        if band in self._missing_antennas_cache:
+            return self._missing_antennas_cache[band]
+
         spws = self.bands_dict[band]['spws']
         _tsys = f"{self.vis}/SYSCAL"
         _ants = f"{self.vis}/ANTENNA"
 
+        self.msmd.close()
         tb_tsys = ctable(_tsys, ack=False)
         tb_ants = ctable(_ants, ack=False)
 
-        spws_str = ",".join(map(str, spws))
-        sub_tb_tsys = tb_tsys.query(f"SPECTRAL_WINDOW_ID IN {spws}")
+        spws_str = "[" + ",".join(map(str, spws)) + "]"
+        sub_tb_tsys = tb_tsys.query(f"SPECTRAL_WINDOW_ID IN {spws_str}")
         ants = np.array(tb_ants.getcol('NAME'))
         tsys_ants = np.array(sub_tb_tsys.getcol('ANTENNA_ID'))
 
         sub_tb_tsys.close()
         tb_tsys.close()
         tb_ants.close()
+        self.msmd.open(self.vis)
 
         tsys_missing_ants = list(set(range(len(ants))) - set(tsys_ants))
         self.removable_antennas[band] = ants[tsys_missing_ants]
+        self._missing_antennas_cache[band] = self.removable_antennas[band]
         return self.removable_antennas[band]
 
     def get_band_detail(self, band):
         timeavg                         =   False
         dict_result                     =   {}
+        scan_cache                      =   {}
+        antenna_names                   =   np.array(self.msmd.antennanames())
         # __________________________ missing_antennas
 
 
@@ -151,11 +160,13 @@ class BandInfoMS:
             good_scans                  =   set()
             spws                            =   set([int(val) for val in self.bands_dict[band][f'obs={obsid}']['scans'].keys()])
             reffreqs                        =   [self.bands_dict[band]['reffreqs'][self.bands_dict[band]['spws'].index(spw)] for spw in spws]
+            missing_antennas                =   list(self.missing_antennas(band))
+            removable_antennas              =   set(missing_antennas)
             # reffreqs                        =   [self.bands_dict[self.bands_dict[band]['reffreqs'][refi] for refi in reffreqi]
             if not dict_result:
-                dict_result                     =   {f"{band}{i}" : {"spws": spws, "reffreqs":reffreqs, "missing_antennas": list(self.missing_antennas(band))},}
+                dict_result                     =   {f"{band}{i}" : {"spws": spws, "reffreqs":reffreqs, "missing_antennas": missing_antennas},}
             else:
-                dict_result[f"{band}{i}"]       =   {"spws": spws, "reffreqs":reffreqs, "missing_antennas": list(self.missing_antennas(band))}
+                dict_result[f"{band}{i}"]       =   {"spws": spws, "reffreqs":reffreqs, "missing_antennas": missing_antennas}
 
             for spw in spws:
                 found_expt                  =   999
@@ -166,9 +177,12 @@ class BandInfoMS:
 
                     expt                    =   self.msmd.exposuretime(scan=scan, spwid=spw, obsid=obsid)['value']
                     found_expt              =   expt if expt<found_expt else found_expt
-                    ants_scan               =   [an for an in self.msmd.antennasforscan(scan) if self.msmd.antennanames(an)[0] not in self.removable_antennas[band]]
-                    scan_times              =   self.msmd.timesforscan(scan)
-                    if len(scan_times)>1 and len(ants_scan) >= self.min_ant_scans: good_scans.add(str(scan))                      # The scans with just one time sample are also bad
+                    scan_key                =   int(scan)
+                    if scan_key not in scan_cache:
+                        ants_scan           =   [an for an in self.msmd.antennasforscan(scan) if antenna_names[int(an)] not in removable_antennas]
+                        scan_times          =   self.msmd.timesforscan(scan)
+                        scan_cache[scan_key] =  len(scan_times)>1 and len(ants_scan) >= self.min_ant_scans
+                    if scan_cache[scan_key]: good_scans.add(str(scan))                      # The scans with just one time sample are also bad
 
                 if self.verbose: print(f"min exposure time for the spw {spw} (obs={obsid}) is {found_expt} | mean_freq={np.round(self.msmd.meanfreq(spw)/1e9,2)} GHz")
 

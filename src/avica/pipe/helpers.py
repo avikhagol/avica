@@ -21,8 +21,8 @@ from avica.fitsidiutil import read_idi
 
 
 def get_targets_filenames(lf, filename_col, targetname_col):
-    alltargets                  =   list(lf.df_sheet0[lf.df_sheet0[filename_col]==lf.get_value(filename_col)][targetname_col].values)
-    target                      =   lf.get_value(targetname_col)
+    alltargets                  =   list(lf.df_sheet0[lf.df_sheet0[filename_col]==lf.get_value(filename_col)][targetname_col].values) or [lf.primary_value]
+    target                      =   lf.get_value(targetname_col) or lf.primary_value
     parsed_filenames            =   lf.get_value(filename_col).replace('[', '').replace(']', '').replace('"', '').replace("'", '').replace('"""', '').replace("'''", '')
     fitsfilenames               =   parsed_filenames.split(',')
     return target, alltargets, fitsfilenames
@@ -966,9 +966,10 @@ def tsys_exists(fitsfile, valid_perc=5, verbose=False):
     from astropy.time import Time
 
     success                 =   False
-    fo                      =   FITSIDI(fitsfile, mode='r')
-    hdul = fo.read()
-    fo.close()
+    chunk_cols              =   ["UV_DATA", "SYSTEM_TEMPERATURE"]
+
+    with FITSIDI(fitsfile, mode='r').open("r") as fo:
+        hdul = fo.read(chunk_cols=chunk_cols)
 
     scale_dateobs, scale_time = 'utc', 'tai'
 
@@ -990,13 +991,11 @@ def tsys_exists(fitsfile, valid_perc=5, verbose=False):
             nrow            =   hdu.nrows
 
             szero           =   Time(refdate_uvd[0], format='jd', scale='tt')
-            ezero           =   Time(refdate_uvd[-1], format='jd', scale='tt')
-            lastt           =   hdutime[-1]
 
-            with fo.open("r") as fop:
-                hdul_chunk  =   fop.read(10, start_row=nrow-6)
-                ezero           =   Time(hdul_chunk['UV_DATA']['DATE'][-1], format='jd', scale='tt')
-                lastt           =   hdul_chunk['UV_DATA']['TIME'][-1]
+            with FITSIDI(fitsfile, mode='r').open("r") as fop:
+                hdul_chunk  =   fop.read(start_row=max(nrow-1, 0), chunk_cols=chunk_cols)
+                ezero       =   Time(hdul_chunk['UV_DATA']['DATE'][-1], format='jd', scale='tt')
+                lastt       =   hdul_chunk['UV_DATA']['TIME'][-1]
             if i_uvd==0:
                 starttime_uvd   =   Time(szero.mjd+hdutime[0], format='mjd', scale='tt')
             lasttime_uvd    =   Time(ezero.mjd+lastt, format='mjd', scale='tt')
@@ -1005,12 +1004,15 @@ def tsys_exists(fitsfile, valid_perc=5, verbose=False):
         if hdu.extname == 'SYSTEM_TEMPERATURE':
             success         =   True
             hdutime         =   np.array(hdu['TIME'])
+            nrow            =   hdu.nrows
 
             zerotime        =   Time(refdate, format='isot',scale='utc')
-            scantime        =   Time(zerotime.mjd+hdutime, format='mjd', scale='tt')
+            with FITSIDI(fitsfile, mode='r').open("r") as fop:
+                hdul_chunk  =   fop.read(start_row=max(nrow-1, 0), chunk_cols=chunk_cols)
+                lastt       =   hdul_chunk['SYSTEM_TEMPERATURE']['TIME'][-1]
 
-            lasttime_tsys   =   max(scantime) if scantime else None
-            starttime_tsys  =   min(scantime) if scantime else None
+            starttime_tsys  =   Time(zerotime.mjd+hdutime[0], format='mjd', scale='tt') if len(hdutime) else None
+            lasttime_tsys   =   Time(zerotime.mjd+lastt, format='mjd', scale='tt')
 
     if lasttime_tsys is None:
         success             =   False

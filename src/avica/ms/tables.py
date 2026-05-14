@@ -1,5 +1,3 @@
-from asyncore import read
-from posix import access
 from avica.ms.compat import CasaMSMetadata as msmetadata, ctable
 import polars as pl
 import numpy as np

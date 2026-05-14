@@ -97,7 +97,7 @@ def catalog_search_from_fits(fitsfile, df_catalog, seplimit, thres_sep, source_n
     match_res       =   df_catalog[df_catalog[source_name_col].isin(target_names)]
 
     if not match_res.empty:
-        idx_found       =   np.in1d(target_names, match_res[source_name_col].values)
+        idx_found       =   np.isin(target_names, match_res[source_name_col].values)
 
                                                             # since each row found corrosponds to the name match from fits
     if source_name_col in match_res.columns:
@@ -110,10 +110,12 @@ def catalog_search_from_fits(fitsfile, df_catalog, seplimit, thres_sep, source_n
         if verbose:
             print("  searching by coordinate for..."," ".join(target_names[~idx_found]))
 
-        catalog                             =   SkyCoord(df_catalog['coordinate'].values, unit=(u.hourangle, u.deg), frame=frame)
+        df_catalog_valid                    =   df_catalog[df_catalog['coordinate'].notna()].reset_index(drop=True)
+        _cat_ra, _cat_dec                   =   df_catalog_valid['coordinate'].str.split(n=1, expand=True).values.T
+        catalog                             =   SkyCoord(_cat_ra, _cat_dec, unit=(u.hourangle, u.deg), frame=frame)
 
         idxtarget, idxself, sep2d, dist3d   =   catalog.search_around_sky(target_coords[~idx_found], seplimit=seplimit*u.milliarcsecond)
-        df_coord_search                     =   df_catalog.iloc[idxself].copy()
+        df_coord_search                     =   df_catalog_valid.iloc[idxself].copy()
         df_coord_search['sep']              =   sep2d.milliarcsecond
 
                                                             # in order to keep consistency.
@@ -140,10 +142,19 @@ def catalog_search_from_fits(fitsfile, df_catalog, seplimit, thres_sep, source_n
 
     if verbose: print(len(target_names[idx_found]), "found of", len(target_names))
     if verbose: print(len(target_names[~idx_found]), "not found")
-    if include_not_found:
-#         col_usable = ['sep', 'fits_target','coordinate']
-        dic_df = {'coordinate':target_coords[~idx_found].to_string('hmsdms', sep=':'), 'fits_target': target_names[~idx_found],
-                 'sep': None}
+    if include_not_found and any(~idx_found):
+        unmatched_coords = target_coords[~idx_found]
+        unmatched_names  = target_names[~idx_found]
+        valid            = np.isfinite(unmatched_coords.ra.deg) & np.isfinite(unmatched_coords.dec.deg)
+        if not valid.all():
+            bad = unmatched_names[~valid]
+            warnings.warn(f"catalog_search_from_fits: NaN/inf coordinates found for sources {list(bad)}, skipping them", RuntimeWarning, stacklevel=2)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='invalid value encountered in do_format', category=RuntimeWarning)
+            coord_strings = unmatched_coords[valid].to_string('hmsdms', sep=':')
+        dic_df = {'coordinate': coord_strings,
+                  'fits_target': unmatched_names[valid],
+                  'sep': None}
         match_res = concat([match_res, df(dic_df)])
     return match_res
 
@@ -181,9 +192,10 @@ def df_search_brightcalib_fromascii_catalogfile(fitsfile, rfc_filepath, class_fi
                                                   thres_sep=thres_sep,
                                                   include_not_found=True)
 
-    rfc_catalog = SkyCoord(df_rfc['coordinate'].values, unit=(u.hourangle, u.deg), frame='icrs')
-    fits_sources = SkyCoord(coord_search_class['coordinate'].values, unit=(u.hourangle, u.deg),
-                            frame='icrs')
+    _rfc_ra, _rfc_dec       =   df_rfc['coordinate'].str.split(n=1, expand=True).values.T
+    rfc_catalog             =   SkyCoord(_rfc_ra, _rfc_dec, unit=(u.hourangle, u.deg), frame='icrs')
+    _cls_ra, _cls_dec       =   coord_search_class['coordinate'].str.split(n=1, expand=True).values.T
+    fits_sources            =   SkyCoord(_cls_ra, _cls_dec, unit=(u.hourangle, u.deg), frame='icrs')
 
     idxtarget, idxself, sep2d, dist3d   =   rfc_catalog.search_around_sky(fits_sources,
                                                                           seplimit=300*u.mas)
@@ -210,8 +222,15 @@ def df_search_brightcalib_fromascii_catalogfile(fitsfile, rfc_filepath, class_fi
                              )
 
     df_res_rfcsearch = df_res_rfcsearch.drop_duplicates(['fits_target'])
+    df_res_rfcsearch = df_res_rfcsearch.dropna(subset=['sid'])
     df_res_rfcsearch['sid'] = df_res_rfcsearch['sid'].astype('int')
 
+    # targets present in the FITS file are always kept, regardless of catalog match
+    included = set(df_res_rfcsearch['fits_target'])
+    forced = [{'fits_target': t, 'sid': int(dic_targets[t])}
+              for t in targets if t in dic_targets and t not in included]
+    if forced:
+        df_res_rfcsearch = concat([df_res_rfcsearch, df(forced)], ignore_index=True)
 
     if outfile:
         with open(outfile, 'w') as of:
@@ -233,12 +252,6 @@ def split_by_catalog_search(fitsfilepath, outfitsfilepath, targets, scanlist_arr
 
 
     """
-    # classoutfile = matched_coord_outfile
-    # classoutfile = f"{wd}/class_search.out"
-
-# cmd                                 =   ['/data/avi/env/py11/bin/fitsidiutil','split-x',
-#                                          ff_path, self.tmpfs[i], '/data/avi/d/smile/smile_complete_table.txt','--nfiltersource', str(nfiltersource),
-                                        #  '--wd', str(self.metafolder),'--targets',",".join(self.targets),'--rfcfilepath','/data/avi/d/rfc_2024d/rfc_2024d_cat.txt']
     if not Path(fitsfilepath).exists():
         raise FileNotFoundError(f"{fitsfilepath}")
     fo  =   FITSIDI(fitsfile=fitsfilepath)
@@ -248,11 +261,26 @@ def split_by_catalog_search(fitsfilepath, outfitsfilepath, targets, scanlist_arr
     source_data = hdul['SOURCE']
     nsources   = source_data.nrows
 
-    nfiltersource = int(nsources)
+    ntargets                        =   len(targets or [])
+    if ntargets <= 3:
+        nfiltersource               =   20
+    elif ntargets < 13:
+        nfiltersource               =   25
+    elif ntargets < 15:
+        nfiltersource               =   30
+    elif ntargets < 20:
+        nfiltersource               =   35
+    else:
+        nfiltersource               =   60          # max
+    # else:
+
+    #     if self.verbose:
+    #         print("Skipping source extraction, since multiple fitsfile usually belongs to old projects, which means the filesize wont be a problem.")                                        # TODO: [FUTURE] scoop sources when there are many sources in multiple input filtsfile as well.
+
+
     if int(nsources)>nfiltersource:
         sids = df_search_brightcalib_fromascii_catalogfile(fitsfilepath, calibrator_catalog_file, coord_inpfile, scanlist_arr,
                                         targets, outfile=matched_coord_outfile, nfilter_sources=nfiltersource)['sid'].values
-
         sids = [str(sid) for sid in sids]
     else:
         sids = None
@@ -263,7 +291,13 @@ def split_by_catalog_search(fitsfilepath, outfitsfilepath, targets, scanlist_arr
     else:
         raise NameError(f"both input and output are same files: {fitsfilepath}")
 
+    if sids is not None:
+        sids_set = set(int(s) for s in sids)
+        updated_scanlist = [s for s in scanlist_arr if int(s) in sids_set]
+    else:
+        updated_scanlist = list(scanlist_arr)
 
+    return sids, updated_scanlist
 
 def split_in_freqid(fitsfiles, verbose=False):
     workingfits                 =   deepcopy(fitsfiles)
@@ -414,6 +448,23 @@ class AvicaResult(UserList[StepResult]):
             return "AvicaResult(empty)"
         return df.__repr__()
 
+
+def append_step_result_csv(result: StepResult, csvfile: str | Path | None) -> bool:
+    if not csvfile:
+        return False
+
+    csvpath = Path(csvfile)
+    csvpath.parent.mkdir(parents=True, exist_ok=True)
+    result_df = AvicaResult([result]).to_polars()
+
+    if csvpath.exists():
+        with open(csvpath, "ab") as f:
+            result_df.write_csv(f, include_header=False)
+    else:
+        result_df.write_csv(csvpath)
+
+    return True
+
 @contextmanager
 def step_stage(name: str, **context):
     """Wraps a stage inside run(), logs entry and enriches any exception with context."""
@@ -431,6 +482,7 @@ class PipelineContext:
     step_name: str = ""
     validation_success: bool | None = None
     result: StepResult | None = None
+    result_persisted: bool = False
     colnames: ColName | None = None
     logfolder:str ="avica.logs/"
 
@@ -676,7 +728,7 @@ class InitVariables(PipelineStepValidatorBase):
             return PipelineStepValidatorResult(success=[False], msg="no fitsfiles found")
 
         PipelineContext.params['multifreqid']   = any(count_freqids(f) > 1 for f in filepaths)
-        PipelineContext.params['targets']       = alltargets
+        PipelineContext.params['targets']       = alltargets or [target]
 
         # if str(PipelineContext.params['target'])[0] == '0':
         #     try:
@@ -829,7 +881,7 @@ class UpdateResults(PipelineStepValidatorBase):
     name = "update_results"
     run_after=True
 
-    def run(self,lf, count, failed, fitsfile_name):
+    def run(self,lf, count, failed, fitsfile_name, result_csv_file=None):
         lf.put_value(time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), "last_update", count)
 
         # lf.update_sheet(PipelineContext.result.success_count, PipelineContext.result.failed_count)
@@ -846,6 +898,7 @@ class UpdateResults(PipelineStepValidatorBase):
         failed     = PipelineContext.result.failed_count
         PipelineContext.params['registered'] = lf.register = (success, failed)
         PipelineContext.params['lf']           =   lf
+        PipelineContext.result_persisted = append_step_result_csv(PipelineContext.result, result_csv_file)
         return PipelineStepValidatorResult(success=[PipelineContext.validation_success], msg="")
 
 class UpdateSheet(PipelineStepValidatorBase):
@@ -934,8 +987,6 @@ class AvicaPipelineCore:
                                         )
         return _report
 
-
-
     def filter_steps(self,*keys):
         if len(keys):
             self._steps = {k: v for k, v in self._steps.items() if k in keys}
@@ -988,6 +1039,7 @@ class AvicaPipelineCore:
         for step_name, step in self._steps.items():
             if PipelineContext.validation_success:
                 exc=None
+                PipelineContext.result_persisted = False
                 step_start = datetime.now()
                 log.info(f"[{step_name}] Starting  {step_start}")
 
@@ -1098,8 +1150,12 @@ class AvicaPipelineCore:
 
                     result.end_stamp = end_stamp
                     PipelineContext.validation_success = False
+                    PipelineContext.result_persisted = False
 
                 self.allresults.append(result)
+                if not PipelineContext.result_persisted:
+                    csvfile = PipelineContext.params.get('result_csv_file')
+                    PipelineContext.result_persisted = append_step_result_csv(result, csvfile)
 
                 elapsed = (result.end_stamp - result.start_stamp).total_seconds()
                 status  = "OK" if result.success_count != 0 else "FAILED"

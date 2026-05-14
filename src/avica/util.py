@@ -501,6 +501,26 @@ def rfc_ascii_to_df(file_path):
         lines = f.readlines()
 
     dic_col, ehb  =   rfc_parse_col(lines)
+    parsed_colnames = {col['name'] for col in dic_col.values()}
+    if not {'RAh', 'RAm', 'RAs', 'DE-', 'DEd', 'DEm', 'DEs'}.issubset(parsed_colnames):
+        columns = [
+            "origin", "Comnam", "J2000_name",
+            "RAh", "RAm", "RAs", "DEd", "DEm", "DEs",
+            "D_alp", "D_Del", "Corr", "Nobs",
+            "FmS", "FuS", "FmC", "FuC", "FmX", "FuX", "FmU", "FuU", "FmK", "FuK",
+            "Type", "Cat",
+        ]
+        rfcbuff = StringIO("".join(lines[ehb:]))
+        df_rfc = read_csv(rfcbuff, names=columns, sep=r'\s+', dtype='str')
+        df_rfc = df_rfc.dropna(subset=["RAh", "RAm", "RAs", "DEd", "DEm", "DEs"])
+        df_rfc['coordinate'] = (
+            df_rfc['RAh'] + 'h' + df_rfc['RAm'] + 'm' + df_rfc['RAs'] + 's ' +
+            df_rfc['DEd'] + 'd' + df_rfc['DEm'] + 'm' + df_rfc['DEs'] + 's'
+        )
+        for col in ["FmS", "FmC", "FmX", "FmU", "FmK"]:
+            df_rfc[col] = df_rfc[col].str.lstrip('<>').astype(float)
+        return df_rfc
+
     data_dicts +=   [parse_line(line, dic_col) for line in lines[ehb:]]
 
     return df(data_dicts)
@@ -547,7 +567,7 @@ def create_df_fromrfcfile(rfc_filepath):
             rfc.readline()
         rfcbuff = StringIO(rfc.read())
 
-    df_rfc = read_csv(rfcbuff, names=columns, delim_whitespace=True, dtype='str')
+    df_rfc = read_csv(rfcbuff, names=columns, sep=r'\s+', dtype='str')
     df_rfc['RA_J2000']=Angle(df_rfc['RAh']+':'+df_rfc['RAm']+':'+df_rfc['RAs'], unit=u.hourangle)
     df_rfc['DEC_J2000']=Angle(df_rfc['DECd']+':'+df_rfc['DECm']+':'+df_rfc['DECs'], unit=u.deg)
     df_filtered = df_rfc.drop(columns=["RAh", "RAm", "RAs", "DECd", "DECm", "DECs"])
@@ -581,12 +601,13 @@ def search_rfc_catalog(targets, rfc_filepath, reset=False, seplimit=10, columns=
     return df_res
 
 def format_coord(coord_str):
+    if not isinstance(coord_str, str):
+        return None
     parts = coord_str.strip().split()
     if len(parts) == 6:
         h, m1, s1, d, m2, s2 = parts
         return f"{h}:{m1}:{s1} {d}:{m2}:{s2}"
-    else:
-        return None
+    return None
 
 def read_df_out(filepath):
     with open(filepath) as f:
@@ -604,6 +625,7 @@ def parse_class_cat(filepath, skiprows=7):
 
     df_res.rename(columns={'h  m       s   d  m      s': 'RADEC'}, inplace=True)
     df_res['coordinate'] = df_res['RADEC'].apply(format_coord)
+    df_res = df_res[df_res['coordinate'].notna()].reset_index(drop=True)
     df_res = df_res.drop(columns=['RADEC'],errors='ignore')
     return df_res
 

@@ -649,7 +649,7 @@ def df_fromtb(vis, tbls, msmd):
         tsys_std = []
         for tsys_val in tsys_vals:
             itsys = np.where(tsys_anid==i_anid)
-            tsy_an_std = np.nanstd(tsys_val[itsys]) if len(itsys) else np.float('nan')
+            tsy_an_std = np.nanstd(tsys_val[itsys]) if len(itsys) else float('nan')
             tsys_std.append(tsy_an_std)
 
         an_dict[msmd.antennaids(an)[0]]={'ANNAME': an}
