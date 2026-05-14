@@ -7,17 +7,18 @@
 # AVICA: Automated VLBI pipeline in CASA
 
 
-Documentation : https://avica.readthedocs.io/en/latest/
+Demo of the AVICA pipeline running end-to-end:
 
-> submitted to A&A
+[![asciicast](https://asciinema.org/a/1016974.svg)](https://asciinema.org/a/1016974)
 
 [![asciicast](https://asciinema.org/a/1016974.svg)](https://asciinema.org/a/1016974)
 > Demo of the AVICA pipeline running end-to-end.
+Documentation : https://avica.readthedocs.io/en/latest/
 
 
 # Installation
 
-> Needs Ubuntu 18.04+, Debian 10+, RHEL/CentOS 8+ \
+> Requires Ubuntu 18.04+, Debian 10+, RHEL/CentOS 8+ \
 > Python >=3.9
 
 The `avica` package is publicly available on [PyPI](https://pypi.org/project/avica/).
@@ -42,11 +43,11 @@ pip install avica
 ```
 > Note: it is recommended to use `venv` for installation, if you are not using `pipx` or `uv`.
 
-## Manual
+### Manual
 
 1. Clone the repository to the desired destination.
 
-```
+```bash
 git clone https://github.com/avikhagol/avica.git
 ```
 
@@ -148,14 +149,14 @@ To get the information on the observation run the following:
 avica listobs [FITSFILENAMES]... 
 ```
 
-
+<!--
 # Development
 After you clone the repo
 ```bash
 
 $ cd avica
 $ pip install -e .[dev]
-```
+```-->
 
 # Attribution
 

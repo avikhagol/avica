@@ -1,26 +1,24 @@
 # Changelog
 
-## [0.3.1] - 2026-05-01
+## [0.3.2] - 2026-05-06
 
 ### Added
-- Project renamed from **vasco** to **avica**.
-- Added `DeprecationWarning` for users still using the `vasco` package name.
-- Configuration support for `phref` (phase reference) observations.
-- `success_count` tracking for `avicametams`.
-- Vendored `casavlbitools` as plain files for better portability.
+- handling multiple frequency id values in FITS-IDI file.
+- `python-casacore` dependency for handling table I/O operations.
+- configurations `mpi_cores_importfitsidi`
 
 ### Changed
-- `avica.ms.polars` merged into `avica.ms.table`.
-- Optimized `preprocess_fitsidi` for faster `FREQUENCY` table reading.
-- Improved RFC value parsing using `pd.to_numeric` for better reliability.
+- `AvicaAverageMs` runs iteratively for each `MS` file using `mpicasa` from user provided `casadir`.
+- `ImportFitsIdi` parallelized using `mpicasa` from user provided `casadir`.
+- `numpy` version requirement updated to `<1.25.0` for compatibility with monolithic CASA used by `rPicard`.
 
 ### Fixed
-- Fixed ANTAB generation imports and header parsing errors.
-- Handled empty/missing values in RFC catalog searches more gracefully.
+- python environment collisions with `casadir`
+- issue of `binary` data in FITS-IDI table columns.
+- counting multiple frequency ID values in FREQUENCY FITS-IDI table.
 
 ### Removed
-- Removed `avica.ms.polars` as a standalone module (merged).
+- `casatools` from internal dependencies.
 
-[unreleased]: https://github.com/avikhagol/avica/compare/v0.3.1...HEAD
-[0.3.1]: https://github.com/avikhagol/avica/compare/v0.2.0...v0.3.1
-[0.1.2] : https://github.com/avikhagol/avica/compare/v0.1.2...v0.1.5
+[0.3.2]: https://github.com/avikhagol/avica/compare/v0.2.0...v0.3.2
+[0.3.1] : https://github.com/avikhagol/avica/compare/v0.1.2...v0.3.1

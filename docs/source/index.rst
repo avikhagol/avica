@@ -20,7 +20,7 @@ Getting Started
 
 AVICA: Automated VLBI pipeline in CASA.
 
-.. asciinema:: 945113
+.. asciinema:: 1016974
    :rows: 30
    :cols: 120
    :speed: 1.5
@@ -33,7 +33,7 @@ AVICA: Automated VLBI pipeline in CASA.
 About
 =====
 
-**avica** is a Python package for the automated calibration of Very Long Baseline Interferometry (VLBI) data.
+**AVICA** is a Python package for the automated calibration of Very Long Baseline Interferometry (VLBI) data.
 It provides modules to ingest, manipulate, and calibrate *FITS-IDI* and *Measurement Set* files containing raw visibilities.
 
 Installation
@@ -82,13 +82,15 @@ The pipeline is configured via a plain-text file in the current working director
 .. code-block:: python
 
    # Required
-   folder_for_fits         =  "reductions/"
-   target_dir              =  "/path/to/target/dir"
-   casadir                 =  "path/to/monolithic-casa/casa-6.x.x-xx-py3.xx.xxx/"
+   folder_for_fits    =  "/path/to/fitsfile/dirs/"
+   casadir            =  "path/to/monolithic-casa/casa-6.x.x-xx-py3.xx.xxx/"
 
    # Optional
+   target_dir              =  "reductions/"
    picard_input_template   =  "/path/to/input_template"
    mpi_cores_rpicard       =  10
+   mpi_cores_snrating      =  5
+   mpi_cores_importfitsidi =  5
    rfc_catalogfile         =  "/path/to/rfc/catalogfile"
    separation_thres        =  850.0
    size_limit              =  2000.0
@@ -96,7 +98,7 @@ The pipeline is configured via a plain-text file in the current working director
    worksheet               =  None
    n_calib                 =  5
    n_refant                =  4
-   snr_threshold_phref     =  6
+   snr_threshold_phref     =  7
    minsnr                  =  3.2
 
 
