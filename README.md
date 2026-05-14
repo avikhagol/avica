@@ -10,8 +10,6 @@
 Demo of the AVICA pipeline running end-to-end:
 
 [![asciicast](https://asciinema.org/a/1016974.svg)](https://asciinema.org/a/1016974)
-
-[![asciicast](https://asciinema.org/a/1016974.svg)](https://asciinema.org/a/1016974)
 > Demo of the AVICA pipeline running end-to-end.
 Documentation : https://avica.readthedocs.io/en/latest/
 
