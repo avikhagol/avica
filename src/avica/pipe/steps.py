@@ -20,10 +20,12 @@ from avica.fitsidiutil.op import count_tsys_in_fitsfile
 
 from .helpers import del_fl, count_freqids, meta_from_fitsfile, meta_from_fitsfile_freqid, get_logfilename, single_ifcheck, fillinp_fromiwd, read_avica_sources_msmeta
 from .helpers import alls_fromobs, update_from_avicameta, check_target_in_ms, fits_has_target, fill_input_byvalues
+from .helpers import convert_flag_table, convert_ms_flag_cmd_table
 
 from .core import PipelineStepBase, StepResult, ColName, PipelineContext, WorkDirMeta
 from .core import step_stage, InitVariables, RunValidation,  UpdateResults, UpdateSheet, CasaSetup
 from .core import ImportFITSIdi, MsTransform, MpiCasaPayload, PicardPayload, GenerateAndAppendAntab, PicardTask, PersistentMpiCasaRunner
+from .core import FlagData, FlagManager
 from .config import PHASESHIFT_PERL_SCRIPT
 
 log = logging.getLogger("avica.pipeline")
@@ -240,8 +242,87 @@ class FitsIdiToMS(PipelineStepBase):
                                        success_count=0, failed_count=0, start_stamp=datetime.now())
     # ----------------------------------------------------------
 
-    def run(self, lf, casadir, wd_ifolder, mpi_cores_importfitsidi=5):
+    def _flagcmd_file(self, vis, flag_source="fitsidi"):
+        suffix = "idi_flags" if flag_source == "fitsidi" else "ms_flag_cmd"
+        return Path(vis).parent / f"{Path(vis).name}.{suffix}.flagcmd"
+
+    def _build_idi_flagcmd(self, fitsfiles, output):
+        output = Path(output)
+        flag_files = []
+        tmp_flag_files = []
+
+        for i, fitsfile in enumerate(fitsfiles):
+            flag_file = output if len(fitsfiles) == 1 else output.with_suffix(f"{output.suffix}.{i}")
+            nflags = convert_flag_table(Path(fitsfile), flag_file)
+            if len(fitsfiles) > 1:
+                tmp_flag_files.append(flag_file)
+            if nflags:
+                flag_files.append(flag_file)
+
+        if len(fitsfiles) > 1:
+            lines = []
+            for flag_file in flag_files:
+                lines.extend(flag_file.read_text().splitlines())
+            for flag_file in tmp_flag_files:
+                flag_file.unlink(missing_ok=True)
+            output.write_text("\n".join(lines) + ("\n" if lines else ""))
+
+        return sum(1 for line in output.read_text().splitlines() if line.strip()) if output.exists() else 0
+
+    def _build_ms_flagcmd(self, vis, output):
+        return convert_ms_flag_cmd_table(Path(vis), Path(output))
+
+    def _run_casa_step(self, mpi_runner, casastep, block=True):
+        task_response = mpi_runner.run_task(
+                    task_name=casastep.cmd.task_casa,
+                    args=casastep.cmd.args,
+                    args_type=casastep.cmd.args_type,
+                    block=False,
+                    target_server=None,)
+        if task_response.get("status") != "success":
+            raise RuntimeError(task_response)
+
+        response = mpi_runner.get_response(task_response["ret"], block=block)
+        if response.get("status") != "success":
+            raise RuntimeError(response)
+        failed = [ret for ret in response.get("ret", []) if not ret.get("successful", False)]
+        if failed:
+            raise RuntimeError(failed)
+        return response
+
+    def _apply_flags(self, mpi_runner, vis, fitsfiles, casalogfile, errcasalogfile, casadir, flag_source="fitsidi"):
+        flagcmd = self._flagcmd_file(vis, flag_source=flag_source)
+        if flag_source == "fitsidi":
+            nflags = self._build_idi_flagcmd(fitsfiles, flagcmd)
+        elif flag_source == "ms":
+            nflags = self._build_ms_flagcmd(vis, flagcmd)
+        else:
+            raise ValueError(f"unsupported flag_source={flag_source!r}")
+
+        if not nflags:
+            self.result.desc.append(f"no {flag_source} flag rows found for {Path(vis).name}")
+            return True
+
+        save_imported = FlagManager(vis=str(vis),mode="save",versionname=f"before_{flag_source}_flags",comment=f"Before applying {flag_source} flags",
+                ).to_step(logfile=casalogfile, errf=errcasalogfile, casadir=casadir)
+        apply_flags = FlagData(vis=str(vis),mode="list",inpfile=str(flagcmd),action="apply",flagbackup=True,savepars=False,
+                        ).to_step(logfile=casalogfile, errf=errcasalogfile, casadir=casadir)
+        save_flagged = FlagManager(vis=str(vis),mode="save",versionname=f"after_{flag_source}_flags",comment=f"After applying {flag_source} flags",
+                                    ).to_step(logfile=casalogfile, errf=errcasalogfile, casadir=casadir)
+
+        for step in [save_imported, apply_flags, save_flagged]:
+            self._run_casa_step(mpi_runner, step)
+
+        self.result.desc.append(f"applied {nflags} {flag_source} flag rows to {Path(vis).name}")
+        return True
+
+    def run(self, lf, casadir, wd_ifolder, apply_flag_from_idi=True, mpi_cores_importfitsidi=5, flag_source="ms",
+        apply_flag_to_existing_vis=False,):
+
         self.result.start_stamp   = datetime.now()
+        if flag_source not in ["fitsidi", "ms"]:
+            raise ValueError("flag_source must be 'fitsidi' or 'ms'")
+
         wd_meta         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         fitsfiles       =   wd_meta.ff_used
         multifreqid     =   len([ff for ff in fitsfiles if "freqid" in ff])>0
@@ -254,6 +335,7 @@ class FitsIdiToMS(PipelineStepBase):
             raise NameError(f"vis = {vis}; wd_ifolder ={wd_ifolder}")
 
         tasks_list        =   []
+        existing_flag_targets = []
         used_wd_ifolder =   []
         used_ff_wd_ifolder = []
 
@@ -278,6 +360,8 @@ class FitsIdiToMS(PipelineStepBase):
                 else:
                     self.result.desc.append(f"vis exists! {Path(vis).name}")
                     self.result.success.append(True)
+                    if apply_flag_to_existing_vis:
+                        existing_flag_targets.append((Path(vis), fitsfiles))
                 used_wd_ifolder.append(wd_ifolder)
                 used_ff_wd_ifolder.append(fitsfiles)
 
@@ -306,6 +390,8 @@ class FitsIdiToMS(PipelineStepBase):
                         else:
                             self.result.desc.append(f"vis exists! {Path(vis_freqid).name}")
                             self.result.success.append(True)
+                            if apply_flag_to_existing_vis:
+                                existing_flag_targets.append((Path(vis_freqid), ff_freqid))
                         used_wd_ifolder.append(wd_ifolder_freqid)
                         used_ff_wd_ifolder.append(ff_freqid)
 
@@ -319,6 +405,8 @@ class FitsIdiToMS(PipelineStepBase):
                         else:
                             self.result.desc.append(f"vis exists! {Path(vis).name}")
                             self.result.success.append(True)
+                            if apply_flag_to_existing_vis:
+                                existing_flag_targets.append((Path(vis), otherfitsfile))
 
                         used_wd_ifolder.append(wd_ifolder)
                         used_ff_wd_ifolder.append(otherfitsfile)
@@ -355,9 +443,30 @@ class FitsIdiToMS(PipelineStepBase):
             output_vis          =   Path(casastep.cmd.args['vis'])
             if output_vis.exists():
                 print(f"processed vis={casastep.cmd.args['vis']}")
-                self.result.success_count    +=  1
-                self.result.desc.append(f"FITS to MS conversion successfull! for {output_vis.name}")
-                self.result.success.append(True)
+                flag_success = True
+                if apply_flag_from_idi:
+                    try:
+                        flag_success = self._apply_flags(
+                            mpi_runner=mpi_runner,
+                            vis=output_vis,
+                            fitsfiles=casastep.cmd.args['fitsidifile'],
+                            casalogfile=casalogfile,
+                            errcasalogfile=errcasalogfile,
+                            casadir=casadir,
+                            flag_source=flag_source,
+                        )
+                    except Exception:
+                        traceback.print_exc()
+                        flag_success = False
+
+                if flag_success:
+                    self.result.success_count    +=  1
+                    self.result.desc.append(f"FITS to MS conversion successfull! for {output_vis.name}")
+                    self.result.success.append(True)
+                else:
+                    self.result.failed_count     +=  1
+                    self.result.desc.append(f"{flag_source} flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
+                    self.result.success.append(False)
             else:
                 print(f"failed vis={casastep.cmd.args['vis']}")
                 self.result.failed_count     +=  1
@@ -366,6 +475,29 @@ class FitsIdiToMS(PipelineStepBase):
                 if not all([Path(ff).exists() for ff in casastep.cmd.args['fitsidifile']]):
                     self.result.desc.append(f"input fitsidifile not found! {casastep.cmd.args['fitsidifile']}")
                 self.result.success.append(False)
+
+        if apply_flag_from_idi and apply_flag_to_existing_vis:
+            for output_vis, source_fitsfiles in existing_flag_targets:
+                try:
+                    flag_success = self._apply_flags(
+                        mpi_runner=mpi_runner,
+                        vis=output_vis,
+                        fitsfiles=source_fitsfiles,
+                        casalogfile=casalogfile,
+                        errcasalogfile=errcasalogfile,
+                        casadir=casadir,
+                        flag_source=flag_source,
+                    )
+                except Exception:
+                    traceback.print_exc()
+                    flag_success = False
+
+                if flag_success:
+                    self.result.desc.append(f"{flag_source} flagging successfull! for {output_vis.name}")
+                else:
+                    self.result.failed_count     +=  1
+                    self.result.desc.append(f"{flag_source} flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
+                    self.result.success.append(False)
         mpi_runner.close()
 
         self.result.end_stamp                   =   datetime.now()
