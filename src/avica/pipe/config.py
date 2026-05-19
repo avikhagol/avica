@@ -501,6 +501,7 @@ DEFAULT_PARAMS: dict = {
     "mpi_cores_importfitsidi"   :   5,
     "snr_threshold_phref"       :   7,
     "flux_threshold_phref"      :   0.15,
+    "apply_flag_from_idi"       :   True,
 }
 
 
