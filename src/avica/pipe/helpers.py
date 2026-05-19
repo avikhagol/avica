@@ -13,9 +13,12 @@ import re
 import urllib.request
 from urllib.error import URLError
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from avica.fitsidiutil import read_idi
+
+from astropy.io import fits
+
 
 #  ____________________________________________________________________     Init Variables
 
@@ -279,7 +282,7 @@ def update_array_finetune(wd_ifolder, new_wd=None, dic_p={}):
     p, files, folder = read_inputfile(wd_ifolder, 'array_finetune.inp')
 
     if dic_p: p.update(dic_p)
-    p['fringe_minSNR_mb_short_cal'] = 4
+    p['fringe_minSNR_mb_short_cal'] = 3.5
     p['fringe_minSNR_mb_reiterate'] = 3.38
     p['minblperant_cmplx_bandpass'] = 3
     p['minsnr_cmplx_bandpass']  =   3.8
@@ -434,6 +437,242 @@ def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  cal
 
 
 # ----------       Utilities
+#
+
+POL_MAP = ("RR", "LL", "RL", "LR")
+
+
+def casa_quote(value: str) -> str:
+    """Single-quote a CASA flagcmd value."""
+    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def contiguous_ranges(values: list[int]) -> list[tuple[int, int]]:
+    """Return inclusive contiguous ranges for sorted integer values."""
+    if not values:
+        return []
+
+    ranges = []
+    start = previous = values[0]
+    for value in values[1:]:
+        if value == previous + 1:
+            previous = value
+            continue
+        ranges.append((start, previous))
+        start = previous = value
+    ranges.append((start, previous))
+    return ranges
+
+
+def format_ranges(values: list[int]) -> str:
+    ranges = contiguous_ranges(sorted(set(values)))
+    return ",".join(
+        str(start) if start == end else f"{start}~{end}" for start, end in ranges
+    )
+
+
+def format_timerange(base_time: datetime, timerang_days: np.ndarray) -> str:
+    """Convert FITS-IDI TIMERANG day offsets to CASA timerange syntax."""
+    start, end = (float(timerang_days[0]), float(timerang_days[1]))
+    start_time = base_time + timedelta(days=start)
+    end_time = base_time + timedelta(days=end)
+    return f"{format_casa_time(start_time)}~{format_casa_time(end_time)}"
+
+
+def format_casa_time(time: datetime) -> str:
+    rounded = time + timedelta(microseconds=500_000)
+    return rounded.strftime("%Y/%m/%d/%H:%M:%S")
+
+
+def casa_time_from_seconds(seconds: float) -> datetime:
+    return datetime(1858, 11, 17) + timedelta(seconds=float(seconds))
+
+
+def parse_fits_date(value: str) -> datetime:
+    return datetime.fromisoformat(value.strip().replace("/", "-"))
+
+
+def antenna_names(hdul: fits.HDUList) -> dict[int, str]:
+    if "ANTENNA" not in hdul:
+        return {}
+
+    names: dict[int, str] = {}
+    for row in hdul["ANTENNA"].data:
+        number = int(row["ANTENNA_NO"])
+        names.setdefault(number, row["ANNAME"].strip())
+    return names
+
+
+def source_names(hdul: fits.HDUList) -> dict[int, str]:
+    if "SOURCE" not in hdul:
+        return {}
+
+    names: dict[int, str] = {}
+    for row in hdul["SOURCE"].data:
+        number = int(row["ID_NO."])
+        names.setdefault(number, row["SOURCE"].strip())
+    return names
+
+
+def format_antenna(ants: np.ndarray, ant_names: dict[int, str]) -> str | None:
+    ant1, ant2 = (int(ants[0]), int(ants[1]))
+    if ant1 == 0 and ant2 == 0:
+        return None
+
+    name1 = ant_names.get(ant1, str(ant1)) if ant1 else ""
+    name2 = ant_names.get(ant2, str(ant2)) if ant2 else ""
+    if ant1 and ant2:
+        return f"{name1}&{name2}"
+    return name1 or name2
+
+
+def format_spw(bands: np.ndarray, chans: np.ndarray, nband: int, nchan: int) -> str | None:
+    """Convert FITS-IDI BANDS/CHANS to a CASA spw selector.
+
+    FITS-IDI BANDS and CHANS use one-based numbering. A zero channel range
+    means all channels.
+    """
+    selected_spws = [idx for idx, value in enumerate(bands[:nband]) if int(value) != 0]
+    if not selected_spws:
+        selected_spws = list(range(nband))
+
+    spw_expr = format_ranges(selected_spws)
+
+    first_chan, last_chan = (int(chans[0]), int(chans[1]))
+    if first_chan == 0 and last_chan == 0:
+        return spw_expr
+
+    if first_chan <= 0 or last_chan <= 0:
+        raise ValueError(f"unsupported partial zero channel range: {chans!r}")
+
+    start = first_chan - 1
+    end = last_chan - 1
+    if start == 0 and end == nchan - 1:
+        return spw_expr
+    return f"{spw_expr}:{start}" if start == end else f"{spw_expr}:{start}~{end}"
+
+
+def format_correlation(pflags: np.ndarray) -> str | None:
+    selected = [POL_MAP[idx] for idx, value in enumerate(pflags[: len(POL_MAP)]) if int(value)]
+    if not selected or len(selected) == len(POL_MAP):
+        return None
+    return ",".join(selected)
+
+
+def flag_row_to_command(
+    row: fits.FITS_record,
+    *,
+    base_time: datetime,
+    nband: int,
+    nchan: int,
+    ant_names: dict[int, str],
+    src_names: dict[int, str],
+) -> str:
+    parts = ["mode='manual'"]
+
+    antenna = format_antenna(row["ANTS"], ant_names)
+    if antenna:
+        parts.append(f"antenna={casa_quote(antenna)}")
+
+    source_id = int(row["SOURCE_ID"])
+    if source_id:
+        parts.append(f"field={casa_quote(src_names.get(source_id, str(source_id)))}")
+
+    parts.append(f"timerange={casa_quote(format_timerange(base_time, row['TIMERANG']))}")
+
+    spw = format_spw(row["BANDS"], row["CHANS"], nband, nchan)
+    if spw:
+        parts.append(f"spw={casa_quote(spw)}")
+
+    correlation = format_correlation(row["PFLAGS"])
+    if correlation:
+        parts.append(f"correlation={casa_quote(correlation)}")
+
+    reason = row["REASON"].strip()
+    if reason:
+        parts.append(f"reason={casa_quote(reason)}")
+
+    return " ".join(parts)
+
+
+def convert_flag_table(idifits: Path, output: Path) -> int:
+    idifits = Path(idifits)
+    output = Path(output)
+
+    with fits.open(idifits) as hdul:
+        if "FLAG" not in hdul:
+            output.write_text("")
+            return 0
+
+        flag_hdu = hdul["FLAG"]
+        header = flag_hdu.header
+        base_time = parse_fits_date(header.get("RDATE") or hdul["UV_DATA"].header["DATE-OBS"])
+        nband = int(header["NO_BAND"])
+        nchan = int(header["NO_CHAN"])
+        ant_names = antenna_names(hdul)
+        src_names = source_names(hdul)
+        rows = [] if flag_hdu.data is None else flag_hdu.data
+
+        lines = [
+            flag_row_to_command(
+                row,
+                base_time=base_time,
+                nband=nband,
+                nchan=nchan,
+                ant_names=ant_names,
+                src_names=src_names,
+            )
+            for row in rows
+        ]
+
+    output.write_text("\n".join(lines) + "\n")
+    return len(lines)
+
+
+def convert_ms_flag_cmd_table(vis: Path, output: Path) -> int:
+    from avica.ms.compat import ctable
+
+    vis = Path(vis)
+    output = Path(output)
+    flag_cmd_table = vis / "FLAG_CMD"
+    if not flag_cmd_table.exists():
+        output.write_text("")
+        return 0
+
+    tb = ctable(str(flag_cmd_table), readonly=True, ack=False)
+    try:
+        if tb.nrows() == 0:
+            output.write_text("")
+            return 0
+
+        commands = tb.getcol("COMMAND")
+        times = tb.getcol("TIME")
+        intervals = tb.getcol("INTERVAL")
+        reasons = tb.getcol("REASON")
+        types = tb.getcol("TYPE") if "TYPE" in tb.colnames() else ["FLAG"] * tb.nrows()
+    finally:
+        tb.close()
+
+    lines = []
+    for command, time, interval, reason, flag_type in zip(commands, times, intervals, reasons, types):
+        if str(flag_type).upper() != "FLAG":
+            continue
+
+        start_time = casa_time_from_seconds(float(time) - float(interval) / 2)
+        end_time = casa_time_from_seconds(float(time) + float(interval) / 2)
+        parts = [
+            "mode='manual'",
+            str(command).strip(),
+            f"timerange={casa_quote(f'{format_casa_time(start_time)}~{format_casa_time(end_time)}')}",
+        ]
+        reason = str(reason).strip()
+        if reason:
+            parts.append(f"reason={casa_quote(reason)}")
+        lines.append(" ".join(part for part in parts if part))
+
+    output.write_text("\n".join(lines) + ("\n" if lines else ""))
+    return len(lines)
+
 
 def get_allfitsfiles(folder_for_fits, depth=3):
     allfiles = []

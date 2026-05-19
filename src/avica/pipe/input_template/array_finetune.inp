@@ -11,7 +11,7 @@ refant_minvaliddata = 0.5
 
 #Interval on which to solve for gains to correct for the digital sampler bias.
 #'int' means use the data (correlator) integration time.
-accor_solint = int
+accor_solint = 10
 
 
 #Can give the index of the spectral window that contains the line for spectral line
@@ -71,10 +71,10 @@ fringe_solint_mb_short = coherence
 fringe_minSNR_sb_instrumental = 3.7
 fringe_minSNR_mb_coher = 3.6
 fringe_minSNR_mb_short_cal = 3.5
-fringe_minSNR_mb_long_sci = 3.3
+fringe_minSNR_mb_long_sci = 3.2
 fringe_minSNR_mb_short_sci = 3.1
 fringe_minSNR_mb_shortFFT = 3.2
-fringe_minSNR_mb_reiterate = 3.5
+fringe_minSNR_mb_reiterate = 3.38
 
 #FFT SNR vs solint based estimation of optimal fringefit() solution interval.
 #If 'sqrt', the optimal solint is taken as the last solint before the SNR does no longer increase
@@ -399,7 +399,7 @@ NNphasecal_keep_diagnostics = False
 ###     For each calibration step parameters will be read in as                                                        ###
 ###     parameter0 ; parameter1 ; parameter2, ... -> [parameter0, parameter1, parameter2, ...].                        ###
 
-calib_accor                     = calibration_tables/accor.t        ; linearperscan  ; True  ; ''   ; ''   ; SAMPLER_CORR ; time      ; amp                  ; R,L  ; False ; None   ; 0 ; ''   ; '' ; ''
+calib_accor                     = calibration_tables/accor.t        ; nearest  ; True  ; ''   ; ''   ; SAMPLER_CORR ; time      ; amp                  ; R,L  ; False ; None   ; 0 ; ''   ; '' ; ''
 calib_acscl                     = calibration_tables/acscl.t        ; linearperscan  ; True  ; ''   ; ''   ; AC_ADJUST    ; time      ; amp                  ; R,L  ; False ; None   ; 0 ; ''   ; '' ; ''
 calib_tsys                      = calibration_tables/tsys.t         ; linearperscan  ; True  ; True ; ''   ; TSYS         ; time      ; tsys                  ; R,L  ; True  ; None   ; 0 ; ''   ; '' ; ''
 calib_tsys_add_exptau           = calibration_tables/tsys_tauc.t    ; linearperscan  ; True  ; True ; ''   ; TSYS         ; time      ; tsys                  ; R,L  ; True  ; None   ; 0 ; ''   ; '' ; ''
