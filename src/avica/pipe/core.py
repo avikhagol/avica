@@ -1525,14 +1525,32 @@ class MsTransform(CasaTask):
 class FlagData(CasaTask):
     vis:str             =   ""
     mode:str            =   "manual"
+    inpfile:str         =   ""
+    action:str          =   "apply"
+    flagbackup:bool     =   True
+    savepars:bool       =   False
     datacolumn:str      =   "data"
     field:str           =   ""
     spw:str             =   ""
     antenna:str         =   ""
     scan:str            =   ""
+    reason:str          =   "any"
 
     def to_step(self, logfile:str, casadir:str, errf:str, mpi_cores:int=5):
-        task_cmd                 =   self.parse_to_step(step_name="flagdata", logfile=logfile, errf=errf, casadir=casadir, mpi_cores=mpi_cores)
+        task_cmd                 =   self.parse_to_step(task_name="flagdata", logfile=logfile, errf=errf, casadir=casadir, mpi_cores=mpi_cores)
+        return task_cmd
+
+
+@dataclass
+class FlagManager(CasaTask):
+    vis:str             =   ""
+    mode:str            =   "save"
+    versionname:str     =   ""
+    comment:str         =   ""
+    merge:str           =   "replace"
+
+    def to_step(self, logfile:str, casadir:str, errf:str, mpi_cores:int=5):
+        task_cmd                 =   self.parse_to_step(task_name="flagmanager", logfile=logfile, errf=errf, casadir=casadir, mpi_cores=mpi_cores)
         return task_cmd
 
 

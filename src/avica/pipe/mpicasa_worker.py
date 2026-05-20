@@ -4,7 +4,7 @@ import traceback
 
 
 def main():
-    from casatasks import importfitsidi, fringefit, mstransform, flagdata
+    from casatasks import importfitsidi, fringefit, mstransform, flagdata, flagmanager
     from casampi.MPICommandClient import MPICommandClient
     client = MPICommandClient()
     client.set_log_mode('redirect')

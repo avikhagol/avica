@@ -52,7 +52,7 @@ fringe_rate_window_mb_sci_short = 0.05
 #The search will try to find a solint value for the most detections and the optimal SNR based on
 #fft_solint_estimation (see below) within the coherence time of as most baslines as possible.
 fringe_solint_optimize_search_cal = 56;60;84;108;120;180;240;360;420;480;520
-fringe_solint_optimize_search_sci = estimate
+fringe_solint_optimize_search_sci = 50;56;60;62;66;70;72;80;86;92;98;114;118;120;132;180;240;360;420;480;520
 
 #Fringe-fitting solution intervals to be searched over for a re-iteration for detections.
 #After multiband fringe-fitting, for each scan and antenna where no fringes were found

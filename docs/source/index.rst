@@ -48,22 +48,24 @@ Installation is recommended using [uv](https://docs.astral.sh/uv/getting-started
 
 using `uv`
 
-```bash
-uv tool install avica --python 3.11
-```
+.. code-block:: bash
+
+    uv tool install avica --python 3.11
 
 or using `pipx`
 
-```bash
-pipx install avica
-```
+.. code-block:: bash
+
+    pipx install avica
+
 
 or using `pip`
 
-```bash
-pip install avica
-```
-> Note: it is recommended to use `venv` for installation, if you are not using `pipx` or `uv`.
+.. code-block:: bash
+
+    pip install avica
+
+.. note:: It is recommended to use `venv` for installation, if you are not using `pipx` or `uv`.
 
 
 Setup

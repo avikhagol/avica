@@ -1,15 +1,11 @@
-![PyPI - Version](https://img.shields.io/pypi/v/avica)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/avica)
-![GitHub License](https://img.shields.io/github/license/avikhagol/avica)
 ![Read the Docs](https://img.shields.io/readthedocs/avica)
 ![GitHub commits since latest release (branch)](https://img.shields.io/github/commits-since/avikhagol/avica/latest/main)
+![PyPI - Version](https://img.shields.io/pypi/v/avica)
 
 # AVICA: Automated VLBI pipeline in CASA
 
 
-Demo of the AVICA pipeline running end-to-end:
-
-[![asciicast](https://asciinema.org/a/1016974.svg)](https://asciinema.org/a/1016974)
 
 [![asciicast](https://asciinema.org/a/1016974.svg)](https://asciinema.org/a/1016974)
 > Demo of the AVICA pipeline running end-to-end.
