@@ -155,7 +155,9 @@ def catalog_search_from_fits(fitsfile, df_catalog, seplimit, thres_sep, source_n
         dic_df = {'coordinate': coord_strings,
                   'fits_target': unmatched_names[valid],
                   'sep': None}
-        match_res = concat([match_res, df(dic_df)])
+        new_rows = df(dic_df).dropna(axis=1, how='all')
+        if not new_rows.empty:
+            match_res = concat([match_res, new_rows])
     return match_res
 
 def df_search_brightcalib_fromascii_catalogfile(fitsfile, rfc_filepath, class_filepath, scanlist_arr, targets=[],
