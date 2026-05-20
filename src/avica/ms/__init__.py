@@ -278,6 +278,66 @@ def fix_feedid(vis, spw_col = 'SPECTRAL_WINDOW_ID', warnonly=True, verbose=True)
                     tbchk.close()
     return fix_dic
 
+def remap_gain_curve_spws(vis, selected_spws, verbose=True):
+    """
+    Repair GAIN_CURVE after mstransform has selected a subset of SPWs.
+
+    CASA mstransform can renumber the main MS/DATA_DESCRIPTION/SYSCAL SPWs
+    while leaving GAIN_CURVE rows with the original FITS-IDI SPW ids.  gencal
+    then reads the wrong DPFU rows for the output SPWs.  selected_spws must be
+    the input-MS SPW ids used to create this output MS, in output order.
+    """
+    gain_path = Path(vis) / "GAIN_CURVE"
+    if not gain_path.exists():
+        return {"changed": False, "reason": "missing GAIN_CURVE"}
+
+    selected_spws = [int(str(spw).split(":", 1)[0]) for spw in selected_spws]
+    selected_set = set(selected_spws)
+
+    tbspw = ctable(f"{vis}/SPECTRAL_WINDOW", ack=False)
+    nspw = tbspw.nrows()
+    tbspw.close()
+
+    tbgain = ctable(str(gain_path), ack=False, readonly=False)
+    spwids = tbgain.getcol("SPECTRAL_WINDOW_ID").astype(int)
+    present = set(np.unique(spwids).astype(int))
+    expected = set(range(nspw))
+
+    if present == expected and selected_spws == list(range(nspw)):
+        tbgain.close()
+        return {"changed": False, "reason": "already aligned"}
+
+    if not selected_set.issubset(present):
+        tbgain.close()
+        return {
+            "changed": False,
+            "reason": "selected SPWs not all present in GAIN_CURVE",
+            "selected": selected_spws,
+            "present": sorted(present),
+        }
+
+    keep = np.isin(spwids, selected_spws)
+    drop_rows = np.where(~keep)[0]
+    if len(drop_rows):
+        tbgain.removerows(drop_rows)
+
+    spwids = tbgain.getcol("SPECTRAL_WINDOW_ID").astype(int)
+    spwmap = {old: new for new, old in enumerate(selected_spws)}
+    new_spwids = np.array([spwmap[int(old)] for old in spwids], dtype=spwids.dtype)
+    tbgain.putcol("SPECTRAL_WINDOW_ID", new_spwids)
+    tbgain.flush()
+    tbgain.close()
+
+    if verbose:
+        print(f"remapped {gain_path} SPWs {selected_spws} -> {list(range(len(selected_spws)))}")
+
+    return {
+        "changed": True,
+        "selected": selected_spws,
+        "output": list(range(len(selected_spws))),
+        "dropped_rows": int(len(drop_rows)),
+    }
+
 # def get_tb_data(vis, axs=[]):
 #     tb = ctable(vis, ack=False)
 #     available_cols = tb.colnames()

@@ -674,6 +674,7 @@ class AverageMS(PipelineStepBase):
     def run(self, lf, wd_ifolder, casadir, targets, mpi_cores_avgms=5, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms.meta import BandInfoMS
+        from avica.ms import remap_gain_curve_spws
         # log = logging.getLogger("avica.pipeline")
 
         global_bands_dict               =   {}
@@ -791,7 +792,7 @@ class AverageMS(PipelineStepBase):
                                                                 timeaverage=timeavg, timebin=timebin)
 
                                         step             =   task.to_step(logfile=casalogfile, casadir=casadir, errf=errcasalogfile, mpi_cores=mpi_cores_avgms)
-                                        tasks_list.append((step,outvis, band, errcasalogfile, obs_b, iwd_b, band_chwidth))
+                                        tasks_list.append((step,outvis, band, errcasalogfile, obs_b, iwd_b, band_chwidth, spws))
 
                     except Exception:
                         traceback.print_exc()
@@ -802,11 +803,13 @@ class AverageMS(PipelineStepBase):
             tasks_payload   =   MpiCasaPayload(tasks_list=steps_only)
             tasks_payload.run()
             comment_val, success_val, failed_band = "", "", ""
-            for (step, outvis, band, errcasalogfile, obs_b, iwd_b, band_chwidth) in tasks_list:
+
+            for (step, outvis, band, errcasalogfile, obs_b, iwd_b, band_chwidth, selected_spws) in tasks_list:
                 if not Path(outvis).exists():
                     self.result.detail[band]     =   f"check {errcasalogfile}"
                     self.result.success.append(False)
                 else:
+                    remap_gain_curve_spws(outvis, selected_spws)
                     self.result.detail[band]     =   str(Path(outvis).name)
                     print(f"processed {outvis}")
                     self.result.success.append(True)
@@ -1226,7 +1229,7 @@ class FinalSplitMs(PipelineStepBase):
 
     def run(self, lf, wd_ifolder, casadir, target, verbose=True):
         self.result.start_stamp   = datetime.now()
-        from avica.ms import get_best_spws
+        from avica.ms import get_best_spws, remap_gain_curve_spws
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         metafolder                      =   Path(wd_meta.metafolder)
@@ -1305,6 +1308,7 @@ class FinalSplitMs(PipelineStepBase):
                             msg                 =   "creating input and updating values"
                             log.info(msg)
                             with step_stage(msg):
+                                remap_gain_curve_spws(str(outvis), listof_uniquespws)
                                 desc[band]                 =   outvis.name
                                 self.result.success_count   +=  1
 
