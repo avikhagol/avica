@@ -1229,7 +1229,7 @@ class FinalSplitMs(PipelineStepBase):
 
     def run(self, lf, wd_ifolder, casadir, target, verbose=True):
         self.result.start_stamp   = datetime.now()
-        from avica.ms import get_best_spws
+        from avica.ms import get_best_spws, remap_gain_curve_spws
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         metafolder                      =   Path(wd_meta.metafolder)
@@ -1308,7 +1308,6 @@ class FinalSplitMs(PipelineStepBase):
                             msg                 =   "creating input and updating values"
                             log.info(msg)
                             with step_stage(msg):
-                                from avica.ms import remap_gain_curve_spws
                                 remap_gain_curve_spws(str(outvis), listof_uniquespws)
                                 desc[band]                 =   outvis.name
                                 self.result.success_count   +=  1
