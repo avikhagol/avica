@@ -1253,6 +1253,8 @@ class FinalSplitMs(PipelineStepBase):
     def run(self, lf, wd_ifolder, casadir, target, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms import get_best_spws, check_and_fix_spw_partitioning
+        from avica.ms.compat import CasaMSMetadata
+        msmd = CasaMSMetadata()
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         metafolder                      =   Path(wd_meta.metafolder)
@@ -1315,8 +1317,16 @@ class FinalSplitMs(PipelineStepBase):
                         with step_stage(msg):
                             casalogfile     =   f'{wd_t}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa")}'
                             errcasalogfile  =   f'{wd_t}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa")}'
+                            msmd.open(str(vis_b))
+                            try:
+                                scans = sorted(set(
+                                    s for fld in allsources for s in msmd.scansforfield(fld)
+                                ))
+                            finally:
+                                msmd.done()
 
-                            task            =   MsTransform(vis=str(vis_b), outputvis=str(outvis), field=",".join(allsources),
+                            task            =   MsTransform(vis=str(vis_b), outputvis=str(outvis),
+                                                    scan=",".join(map(str, scans)),
                                                     spw=",".join(listof_uniquespws))
 
                             step             =   task.to_step(logfile=casalogfile, casadir=casadir, errf=errcasalogfile, mpi_cores=10)
