@@ -339,15 +339,26 @@ def remap_gain_curve_spws(vis, selected_spws, verbose=True):
     }
 
 
+SPW_FIXABLE_TABLES = (
+    "GAIN_CURVE",
+    "SYSCAL",
+    "WEATHER",
+    "PHASE_CAL",
+    "FLAG_CMD"
+)
+
+
 def check_and_fix_spw_partitioning(vis, selected_spws, verbose=True):
     """
     After mstransform splits a subset of SPWs the main MS / DATA_DESCRIPTION /
     SPECTRAL_WINDOW are renumbered to a contiguous [0, nspw) range, but
-    auxiliary sub-tables may still carry the original input SPW ids and overflow that
-    range.  This walks every sub-table that has a SPECTRAL_WINDOW_ID column,
-    drops rows for SPWs that were not selected, and remaps the remaining ids
-    to the new output numbering.  Negative SPW ids (the "applies to all SPWs"
-    sentinel used by SOURCE / FEED) are preserved untouched.
+    auxiliary sub-tables (listed in SPW_FIXABLE_TABLES) may still carry the
+    original input SPW ids and overflow that range.  This iterates that fixed
+    list -- not a directory glob, which can match the SUBMSS partition and
+    other non-table entries on MMS layouts -- drops rows for SPWs that were
+    not selected, and remaps the remaining ids to the new output numbering.
+    Negative SPW ids (the "applies to all SPWs" sentinel used by SOURCE /
+    FEED) are preserved untouched.
 
     Each sub-table is opened read-only first; only the ones that actually
     need editing are reopened with readonly=False.  On networked filesystems
@@ -369,11 +380,9 @@ def check_and_fix_spw_partitioning(vis, selected_spws, verbose=True):
     valid_range = set(range(nspw))
     results = {}
 
-    for tb_path in glob.glob(f"{vis}/*"):
+    for tb_name in SPW_FIXABLE_TABLES:
+        tb_path = f"{vis}/{tb_name}"
         if not Path(f"{tb_path}/table.dat").exists():
-            continue
-        tb_name = Path(tb_path).name
-        if tb_name == "SPECTRAL_WINDOW":
             continue
 
         # read-only probe: decide if a fix is needed without taking a write lock
