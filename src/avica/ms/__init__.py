@@ -386,15 +386,12 @@ def check_and_fix_spw_partitioning(vis, selected_spws, verbose=True):
             continue
 
         # read-only probe: decide if a fix is needed without taking a write lock
+        tb = None
         try:
             tb = ctable(tb_path, ack=False, readonly=True)
-        except Exception as exc:
-            results[tb_name] = {"changed": False, "reason": f"open failed: {exc}"}
-            continue
 
-        cur_max = None
-        needs_fix = False
-        try:
+            cur_max = None
+            needs_fix = False
             if "SPECTRAL_WINDOW_ID" not in tb.colnames():
                 continue
 
@@ -424,13 +421,19 @@ def check_and_fix_spw_partitioning(vis, selected_spws, verbose=True):
                 continue
 
             needs_fix = True
+
+        except Exception as exc:
+            results[tb_name] = {"changed": False, "reason": f"open failed: {exc}"}
+            continue
         finally:
-            tb.close()
+            if tb is not None:
+                tb.close()
 
         if not needs_fix:
             continue
 
         # reopen read-write only for the tables that actually need editing
+        tb = None
         try:
             tb = ctable(tb_path, ack=False, readonly=False)
         except Exception as exc:
@@ -455,7 +458,8 @@ def check_and_fix_spw_partitioning(vis, selected_spws, verbose=True):
             tb.putcol("SPECTRAL_WINDOW_ID", remapped)
             tb.flush()
         finally:
-            tb.close()
+            if tb is not None:
+                tb.close()
 
         results[tb_name] = {
             "changed": True,
