@@ -503,6 +503,10 @@ def rfc_ascii_to_df(file_path):
     dic_col, ehb  =   rfc_parse_col(lines)
     parsed_colnames = {col['name'] for col in dic_col.values()}
     if not {'RAh', 'RAm', 'RAs', 'DE-', 'DEd', 'DEm', 'DEs'}.issubset(parsed_colnames):
+        # Old-format RFC catalogs only carry S/C/X/U/K flux columns.
+        # We parse the exact columns present; Q/W columns are added as NaN
+        # afterwards so downstream band-agnostic code doesn't raise KeyError
+        # when the observation is at Q- or W-band.
         columns = [
             "origin", "Comnam", "J2000_name",
             "RAh", "RAm", "RAs", "DEd", "DEm", "DEs",
@@ -519,6 +523,11 @@ def rfc_ascii_to_df(file_path):
         )
         for col in ["FmS", "FmC", "FmX", "FmU", "FmK"]:
             df_rfc[col] = df_rfc[col].str.lstrip('<>').astype(float)
+        # Pad missing higher-band columns so the DataFrame is consistent
+        # regardless of which band the observation uses.
+        for col in ["FmQ", "FuQ", "FmW", "FuW"]:
+            if col not in df_rfc.columns:
+                df_rfc[col] = float('nan')
         return df_rfc
 
     data_dicts +=   [parse_line(line, dic_col) for line in lines[ehb:]]

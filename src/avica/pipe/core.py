@@ -214,8 +214,17 @@ def df_search_brightcalib_fromascii_catalogfile(fitsfile, rfc_filepath, class_fi
     # checking which sources dont have any data in UV_DATA
     df_rfc_filtered = df_rfc[df_rfc['sid'].isin(set(scanlist_arr))]
 
-    # search for flux info in each band
-    for col_req in cols_req:
+    rfc_cols = set(df_rfc_filtered.columns)
+    valid_cols = [c for c in cols_req if c in rfc_cols]
+    if not valid_cols:
+        fallback_cols = sorted([c for c in rfc_cols if c.startswith('Fm')])
+        warnings.warn(
+            f"None of the derived flux columns {cols_req} found in the RFC catalog "
+            f"(available: {fallback_cols}).  Falling back to all Fm* columns.",
+            UserWarning,
+        )
+        valid_cols = fallback_cols
+    for col_req in valid_cols:
         df_res_rfcsearch = concat([df_rfc_filtered.sort_values(by=col_req, ascending=False),
                                     df_res_rfcsearch]).head(nfilter_sources)
     # add targets
