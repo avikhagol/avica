@@ -349,14 +349,22 @@ def check_and_fix_spw_partitioning(vis, selected_spws, verbose=True):
     to the new output numbering.  Negative SPW ids (the "applies to all SPWs"
     sentinel used by SOURCE / FEED) are preserved untouched.
 
+    Each sub-table is opened read-only first; only the ones that actually
+    need editing are reopened with readonly=False.  On networked filesystems
+    casacore takes an exclusive lock per writeable open, so probing read-only
+    avoids paying that cost for sub-tables that are already aligned.
+
     selected_spws must be the input-MS SPW ids used to create :vis:.
     """
     selected_spws = [int(str(spw).split(":", 1)[0]) for spw in selected_spws]
     spwmap = {old: new for new, old in enumerate(selected_spws)}
+    selected_set = set(selected_spws)
 
     tbspw = ctable(f"{vis}/SPECTRAL_WINDOW", ack=False)
-    nspw = tbspw.nrows()
-    tbspw.close()
+    try:
+        nspw = tbspw.nrows()
+    finally:
+        tbspw.close()
 
     valid_range = set(range(nspw))
     results = {}
@@ -368,61 +376,77 @@ def check_and_fix_spw_partitioning(vis, selected_spws, verbose=True):
         if tb_name == "SPECTRAL_WINDOW":
             continue
 
+        # read-only probe: decide if a fix is needed without taking a write lock
         try:
-            tb = ctable(tb_path, ack=False, readonly=False)
+            tb = ctable(tb_path, ack=False, readonly=True)
         except Exception as exc:
             results[tb_name] = {"changed": False, "reason": f"open failed: {exc}"}
             continue
 
-        if "SPECTRAL_WINDOW_ID" not in tb.colnames():
+        cur_max = None
+        needs_fix = False
+        try:
+            if "SPECTRAL_WINDOW_ID" not in tb.colnames():
+                continue
+
+            spwids = tb.getcol("SPECTRAL_WINDOW_ID")
+            if spwids is None or len(spwids) == 0:
+                continue
+            spwids = np.asarray(spwids).astype(int)
+
+            positive_ids = spwids[spwids >= 0]
+            if len(positive_ids) == 0:
+                continue
+
+            present = set(np.unique(positive_ids).tolist())
+            cur_max = int(positive_ids.max())
+
+            if present.issubset(valid_range):
+                results[tb_name] = {"changed": False, "reason": "already aligned", "max_spw": cur_max}
+                continue
+
+            if not selected_set.issubset(present):
+                results[tb_name] = {
+                    "changed": False,
+                    "reason": "selected SPWs not all present",
+                    "selected": selected_spws,
+                    "present": sorted(present),
+                }
+                continue
+
+            needs_fix = True
+        finally:
             tb.close()
+
+        if not needs_fix:
             continue
 
-        spwids = tb.getcol("SPECTRAL_WINDOW_ID")
-        if spwids is None or len(spwids) == 0:
-            tb.close()
-            continue
-        spwids = np.asarray(spwids).astype(int)
-
-        positive_mask = spwids >= 0
-        positive_ids = spwids[positive_mask]
-        if len(positive_ids) == 0:
-            tb.close()
+        # reopen read-write only for the tables that actually need editing
+        try:
+            tb = ctable(tb_path, ack=False, readonly=False)
+        except Exception as exc:
+            results[tb_name] = {"changed": False, "reason": f"reopen rw failed: {exc}"}
             continue
 
-        present = set(np.unique(positive_ids).tolist())
-        cur_max = int(positive_ids.max())
+        try:
+            spwids = np.asarray(tb.getcol("SPECTRAL_WINDOW_ID")).astype(int)
+            positive_mask = spwids >= 0
+            to_drop_mask = positive_mask & ~np.isin(spwids, selected_spws)
+            drop_rows = np.where(to_drop_mask)[0]
+            if len(drop_rows):
+                tb.removerows(drop_rows)
 
-        if present.issubset(valid_range):
+            spwids = np.asarray(tb.getcol("SPECTRAL_WINDOW_ID")).astype(int)
+            positive_mask = spwids >= 0
+            remapped = spwids.copy()
+            remapped[positive_mask] = np.array(
+                [spwmap[int(old)] for old in spwids[positive_mask]],
+                dtype=spwids.dtype,
+            )
+            tb.putcol("SPECTRAL_WINDOW_ID", remapped)
+            tb.flush()
+        finally:
             tb.close()
-            results[tb_name] = {"changed": False, "reason": "already aligned", "max_spw": cur_max}
-            continue
-
-        if not set(selected_spws).issubset(present):
-            tb.close()
-            results[tb_name] = {
-                "changed": False,
-                "reason": "selected SPWs not all present",
-                "selected": selected_spws,
-                "present": sorted(present),
-            }
-            continue
-
-        to_drop_mask = positive_mask & ~np.isin(spwids, selected_spws)
-        drop_rows = np.where(to_drop_mask)[0]
-        if len(drop_rows):
-            tb.removerows(drop_rows)
-
-        spwids = np.asarray(tb.getcol("SPECTRAL_WINDOW_ID")).astype(int)
-        positive_mask = spwids >= 0
-        remapped = spwids.copy()
-        remapped[positive_mask] = np.array(
-            [spwmap[int(old)] for old in spwids[positive_mask]],
-            dtype=spwids.dtype,
-        )
-        tb.putcol("SPECTRAL_WINDOW_ID", remapped)
-        tb.flush()
-        tb.close()
 
         results[tb_name] = {
             "changed": True,
