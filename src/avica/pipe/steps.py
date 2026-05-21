@@ -674,7 +674,7 @@ class AverageMS(PipelineStepBase):
     def run(self, lf, wd_ifolder, casadir, targets, mpi_cores_avgms=5, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms.meta import BandInfoMS
-        from avica.ms import remap_gain_curve_spws
+        from avica.ms import check_and_fix_spw_partitioning
         # log = logging.getLogger("avica.pipeline")
 
         global_bands_dict               =   {}
@@ -809,7 +809,7 @@ class AverageMS(PipelineStepBase):
                     self.result.detail[band]     =   f"check {errcasalogfile}"
                     self.result.success.append(False)
                 else:
-                    remap_gain_curve_spws(outvis, selected_spws)
+                    check_and_fix_spw_partitioning(outvis, selected_spws)
                     self.result.detail[band]     =   str(Path(outvis).name)
                     print(f"processed {outvis}")
                     self.result.success.append(True)
@@ -1229,7 +1229,7 @@ class FinalSplitMs(PipelineStepBase):
 
     def run(self, lf, wd_ifolder, casadir, target, verbose=True):
         self.result.start_stamp   = datetime.now()
-        from avica.ms import get_best_spws, remap_gain_curve_spws
+        from avica.ms import get_best_spws, check_and_fix_spw_partitioning
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         metafolder                      =   Path(wd_meta.metafolder)
@@ -1308,7 +1308,7 @@ class FinalSplitMs(PipelineStepBase):
                             msg                 =   "creating input and updating values"
                             log.info(msg)
                             with step_stage(msg):
-                                remap_gain_curve_spws(str(outvis), listof_uniquespws)
+                                check_and_fix_spw_partitioning(str(outvis), listof_uniquespws)
                                 desc[band]                 =   outvis.name
                                 self.result.success_count   +=  1
 
