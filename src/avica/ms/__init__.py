@@ -343,8 +343,8 @@ SPW_FIXABLE_TABLES = (
     "GAIN_CURVE",
     "SYSCAL",
     "WEATHER",
-    "PHASE_CAL",
-    "FLAG_CMD"
+    # "PHASE_CAL",
+    # "FLAG_CMD"
 )
 
 
