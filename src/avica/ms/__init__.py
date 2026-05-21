@@ -29,6 +29,14 @@ msmd=msmetadata()
 
 SNR_THRES = 7.0
 
+SPW_FIXABLE_TABLES = (
+    "GAIN_CURVE",
+    "SYSCAL",
+    "WEATHER",
+    # "PHASE_CAL",
+    # "FLAG_CMD"
+)
+
 
 
 def read_df_vis(vis:str, corr: List = [], spw: List =[], dcol:str='DATA', sel_row:List=[]):
@@ -339,33 +347,20 @@ def remap_gain_curve_spws(vis, selected_spws, verbose=True):
     }
 
 
-SPW_FIXABLE_TABLES = (
-    "GAIN_CURVE",
-    "SYSCAL",
-    "WEATHER",
-    # "PHASE_CAL",
-    # "FLAG_CMD"
-)
-
 
 def check_and_fix_spw_partitioning(vis, selected_spws, verbose=True):
     """
-    After mstransform splits a subset of SPWs the main MS / DATA_DESCRIPTION /
-    SPECTRAL_WINDOW are renumbered to a contiguous [0, nspw) range, but
-    auxiliary sub-tables (listed in SPW_FIXABLE_TABLES) may still carry the
-    original input SPW ids and overflow that range.  This iterates that fixed
-    list -- not a directory glob, which can match the SUBMSS partition and
-    other non-table entries on MMS layouts -- drops rows for SPWs that were
-    not selected, and remaps the remaining ids to the new output numbering.
-    Negative SPW ids (the "applies to all SPWs" sentinel used by SOURCE /
-    FEED) are preserved untouched.
+    After mstransform splits a subset of SPWs the main MS is reindexed, but
+    sub-tables (listed in SPW_FIXABLE_TABLES) may still carry the original input SPW ids and overflow that range.
+    This may write wrong gain tables.
 
-    Each sub-table is opened read-only first; only the ones that actually
-    need editing are reopened with readonly=False.  On networked filesystems
-    casacore takes an exclusive lock per writeable open, so probing read-only
-    avoids paying that cost for sub-tables that are already aligned.
+    Each sub-table is opened read-only first; only the ones that actually need editing are reopened with readonly=False.
 
-    selected_spws must be the input-MS SPW ids used to create :vis:.
+    :vis:
+                            the MS to check and fix
+    :selected_spws:
+                            the input-MS SPW ids used to create `vis`.
+
     """
     selected_spws = [int(str(spw).split(":", 1)[0]) for spw in selected_spws]
     spwmap = {old: new for new, old in enumerate(selected_spws)}
@@ -385,7 +380,6 @@ def check_and_fix_spw_partitioning(vis, selected_spws, verbose=True):
         if not Path(f"{tb_path}/table.dat").exists():
             continue
 
-        # read-only probe: decide if a fix is needed without taking a write lock
         tb = None
         try:
             tb = ctable(tb_path, ack=False, readonly=True)
@@ -432,7 +426,6 @@ def check_and_fix_spw_partitioning(vis, selected_spws, verbose=True):
         if not needs_fix:
             continue
 
-        # reopen read-write only for the tables that actually need editing
         tb = None
         try:
             tb = ctable(tb_path, ack=False, readonly=False)
