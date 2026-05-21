@@ -272,6 +272,19 @@ class FitsIdiToMS(PipelineStepBase):
     def _build_ms_flagcmd(self, vis, output):
         return convert_ms_flag_cmd_table(Path(vis), Path(output))
 
+    def _remove_casa_table_locks(self, vis):
+        removed = 0
+        for lock_file in Path(vis).glob("**/*.lock"):
+            try:
+                lock_file.unlink()
+                removed += 1
+            except FileNotFoundError:
+                pass
+            except OSError:
+                log.warning("failed to remove CASA table lock %s", lock_file, exc_info=True)
+        if removed:
+            self.result.desc.append(f"removed {removed} stale CASA table lock files from {Path(vis).name}")
+
     def _run_casa_step(self, mpi_runner, casastep, block=True):
         task_response = mpi_runner.run_task(
                     task_name=casastep.cmd.task_casa,
@@ -338,6 +351,7 @@ class FitsIdiToMS(PipelineStepBase):
         existing_flag_targets = []
         used_wd_ifolder =   []
         used_ff_wd_ifolder = []
+        output_vis_for_lock_cleanup = []
 
         wds_ifolder_for_payload  =   []
         casalogfile     =   f'{wd}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa")}'
@@ -423,33 +437,70 @@ class FitsIdiToMS(PipelineStepBase):
                 _           =   del_fl(Path(wd_ifolder_payload).parent, 1,fl="*stored*", rm=True)
                 _           =   del_fl(Path(wd_ifolder_payload).parent, 1,fl="*tmp*", rm=True)
 
-        with step_stage("MPI execution", vis=vis):
-            res         =   []
-            mpi_runner = PersistentMpiCasaRunner(casadir=casadir, mpi_cores=mpi_cores_importfitsidi)
-            for casastep in tasks_list:
-                print(f"processing vis={casastep.cmd.args['vis']}")
-                mpi_res = mpi_runner.run_task(
-                            task_name=casastep.cmd.task_casa,
-                            args=casastep.cmd.args,
-                            args_type=casastep.cmd.args_type,
-                            block=False,
-                            target_server=None,)
-                res.append(mpi_res)
+        mpi_runner = None
+        try:
+            with step_stage("MPI execution", vis=vis):
+                res         =   []
+                mpi_runner = PersistentMpiCasaRunner(casadir=casadir, mpi_cores=mpi_cores_importfitsidi)
+                for casastep in tasks_list:
+                    print(f"processing vis={casastep.cmd.args['vis']}")
+                    mpi_res = mpi_runner.run_task(
+                                task_name=casastep.cmd.task_casa,
+                                args=casastep.cmd.args,
+                                args_type=casastep.cmd.args_type,
+                                block=False,
+                                target_server=None,)
+                    res.append(mpi_res)
 
-        # ---------------- finalize outputs and metadata
+            # ---------------- finalize outputs and metadata
 
-        for i, casastep in enumerate(tasks_list):
-            final_response      =   mpi_runner.get_response(res[i]["ret"], block=True)
-            output_vis          =   Path(casastep.cmd.args['vis'])
-            if output_vis.exists():
-                print(f"processed vis={casastep.cmd.args['vis']}")
-                flag_success = True
-                if apply_flag_from_idi:
+            for i, casastep in enumerate(tasks_list):
+                final_response      =   mpi_runner.get_response(res[i]["ret"], block=True)
+                output_vis          =   Path(casastep.cmd.args['vis'])
+                output_vis_for_lock_cleanup.append(output_vis)
+                if output_vis.exists():
+                    print(f"processed vis={casastep.cmd.args['vis']}")
+                    flag_success = True
+                    if apply_flag_from_idi:
+                        try:
+                            flag_success = self._apply_flags(
+                                mpi_runner=mpi_runner,
+                                vis=output_vis,
+                                fitsfiles=casastep.cmd.args['fitsidifile'],
+                                casalogfile=casalogfile,
+                                errcasalogfile=errcasalogfile,
+                                casadir=casadir,
+                                flag_source=flag_source,
+                            )
+                        except Exception:
+                            traceback.print_exc()
+                            flag_success = False
+
+                    if flag_success:
+                        self.result.success_count    +=  1
+                        self.result.desc.append(f"FITS to MS conversion successfull! for {output_vis.name}")
+                        self.result.success.append(True)
+                    else:
+                        self.result.failed_count     +=  1
+                        self.result.desc.append(f"{flag_source} flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
+                        self.result.success.append(False)
+                else:
+                    print(f"failed vis={casastep.cmd.args['vis']}")
+                    self.result.failed_count     +=  1
+                    # last_log = latest_file(Path(output_vis).parent, '*err.out*')
+                    self.result.desc.append(f"failed! vis:{output_vis.name} check logs: {errcasalogfile}")
+                    if not all([Path(ff).exists() for ff in casastep.cmd.args['fitsidifile']]):
+                        self.result.desc.append(f"input fitsidifile not found! {casastep.cmd.args['fitsidifile']}")
+                    self.result.success.append(False)
+
+            if apply_flag_from_idi and apply_flag_to_existing_vis:
+                for output_vis, source_fitsfiles in existing_flag_targets:
+                    output_vis_for_lock_cleanup.append(output_vis)
                     try:
                         flag_success = self._apply_flags(
                             mpi_runner=mpi_runner,
                             vis=output_vis,
-                            fitsfiles=casastep.cmd.args['fitsidifile'],
+                            fitsfiles=source_fitsfiles,
                             casalogfile=casalogfile,
                             errcasalogfile=errcasalogfile,
                             casadir=casadir,
@@ -459,46 +510,18 @@ class FitsIdiToMS(PipelineStepBase):
                         traceback.print_exc()
                         flag_success = False
 
-                if flag_success:
-                    self.result.success_count    +=  1
-                    self.result.desc.append(f"FITS to MS conversion successfull! for {output_vis.name}")
-                    self.result.success.append(True)
-                else:
-                    self.result.failed_count     +=  1
-                    self.result.desc.append(f"{flag_source} flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
-                    self.result.success.append(False)
-            else:
-                print(f"failed vis={casastep.cmd.args['vis']}")
-                self.result.failed_count     +=  1
-                # last_log = latest_file(Path(output_vis).parent, '*err.out*')
-                self.result.desc.append(f"failed! vis:{output_vis.name} check logs: {errcasalogfile}")
-                if not all([Path(ff).exists() for ff in casastep.cmd.args['fitsidifile']]):
-                    self.result.desc.append(f"input fitsidifile not found! {casastep.cmd.args['fitsidifile']}")
-                self.result.success.append(False)
-
-        if apply_flag_from_idi and apply_flag_to_existing_vis:
-            for output_vis, source_fitsfiles in existing_flag_targets:
-                try:
-                    flag_success = self._apply_flags(
-                        mpi_runner=mpi_runner,
-                        vis=output_vis,
-                        fitsfiles=source_fitsfiles,
-                        casalogfile=casalogfile,
-                        errcasalogfile=errcasalogfile,
-                        casadir=casadir,
-                        flag_source=flag_source,
-                    )
-                except Exception:
-                    traceback.print_exc()
-                    flag_success = False
-
-                if flag_success:
-                    self.result.desc.append(f"{flag_source} flagging successfull! for {output_vis.name}")
-                else:
-                    self.result.failed_count     +=  1
-                    self.result.desc.append(f"{flag_source} flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
-                    self.result.success.append(False)
-        mpi_runner.close()
+                    if flag_success:
+                        self.result.desc.append(f"{flag_source} flagging successfull! for {output_vis.name}")
+                    else:
+                        self.result.failed_count     +=  1
+                        self.result.desc.append(f"{flag_source} flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
+                        self.result.success.append(False)
+        finally:
+            if mpi_runner is not None:
+                mpi_runner.close()
+            for output_vis in dict.fromkeys(output_vis_for_lock_cleanup):
+                if output_vis.exists():
+                    self._remove_casa_table_locks(output_vis)
 
         self.result.end_stamp                   =   datetime.now()
         del_fl(metafolder, 0, "available_wd_ifolder.avica", rm=True)

@@ -1668,6 +1668,10 @@ class PersistentMpiCasaRunner:
         return self.runner.send_and_receive(payload)
 
     def close(self):
+        try:
+            self.runner.send_and_receive({"task_casa": "stop_services", "parameters": {}})
+        except Exception:
+            pass
         self.runner.close()
 
 
