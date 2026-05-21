@@ -798,6 +798,9 @@ class AverageMS(PipelineStepBase):
                                     # ---------------------------------------------------   Execution
                                 if Path(outvis).exists():
                                     if targets is not None and len(targets)>1:
+                                        nfixed_tsys = _repair_mixed_single_pol_syscal_tsys(outvis)
+                                        if nfixed_tsys:
+                                            self.result.desc.append(f"repaired {nfixed_tsys} mixed single-pol SYSCAL TSYS rows in {Path(outvis).name}")
                                         self.result.detail[band]     =   "vis-exists"
                                     else:
                                         del_fl(wd_b, fl=Path(outvis).name, rm=True)
@@ -833,6 +836,9 @@ class AverageMS(PipelineStepBase):
                     self.result.success.append(False)
                 else:
                     check_and_fix_spw_partitioning(outvis, selected_spws)
+                    nfixed_tsys = _repair_mixed_single_pol_syscal_tsys(outvis)
+                    if nfixed_tsys:
+                        self.result.desc.append(f"repaired {nfixed_tsys} mixed single-pol SYSCAL TSYS rows in {Path(outvis).name}")
                     self.result.detail[band]     =   str(Path(outvis).name)
                     print(f"processed {outvis}")
                     self.result.success.append(True)
@@ -1387,6 +1393,37 @@ class FinalSplitMs(PipelineStepBase):
 
         return self.result
 
+def _repair_mixed_single_pol_syscal_tsys(vis):
+    """Replace missing single-pol TSYS slots with the valid companion value."""
+    syscal = Path(vis) / "SYSCAL"
+    if not syscal.exists():
+        return 0
+
+    from avica.ms.compat import ctable
+
+    tb = ctable(str(syscal), readonly=False, ack=False)
+    nfixed = 0
+    try:
+        for row in range(tb.nrows()):
+            tsys = np.asarray(tb.getcell("TSYS", row), dtype=float)
+            invalid = (
+                ~np.isfinite(tsys)
+                | (tsys <= 0)
+                | np.isclose(np.abs(tsys), 999.0)
+                | np.isclose(np.abs(tsys), 999.9)
+            )
+            valid = ~invalid
+            if np.count_nonzero(valid) == 1 and np.any(invalid):
+                fixed = tsys.copy()
+                fixed[invalid] = fixed[valid][0]
+                tb.putcell("TSYS", row, fixed)
+                nfixed += 1
+        tb.flush()
+    finally:
+        tb.close()
+
+    return nfixed
+
 class Calibration(PipelineStepBase):
     """
         _______________________________________________________
@@ -1446,6 +1483,13 @@ class Calibration(PipelineStepBase):
                     del_fl(wd_t,0, '*.uvf', rm=True)
                     del_fl(wd_t,0, '*calibration_tables', rm=True)
 
+
+                    if vis is not None and Path(vis).exists():
+                        nfixed_tsys = _repair_mixed_single_pol_syscal_tsys(vis)
+                        if nfixed_tsys:
+                            msg = f"repaired {nfixed_tsys} mixed single-pol SYSCAL TSYS rows in {Path(vis).name}"
+                            print(msg)
+                            self.result.desc.append(msg)
 
                     payload         =   PicardPayload(PicardTask(input=iwd_b_t, n=PipelineContext.params['mpi_cores_rpicard']))
                     payload.run()
