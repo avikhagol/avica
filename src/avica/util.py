@@ -58,44 +58,44 @@ def make_art() -> str:
 
 
 def check_band(freq, bands=None):
-        """
-        Input
-        ---
+    """
+    Input
+    ---
 
-        freq            (float)
-                        value of the reference fequency in GHz
+    freq            (float)
+                    value of the reference fequency in GHz
 
-        bands           (dict)
-                        dictionary of bands containing numpy array of limiting values of range of the band.
+    bands           (dict)
+                    dictionary of bands containing numpy array of limiting values of range of the band.
 
-        Return
-        ---
+    Return
+    ---
 
-        band closest to S,C,X,U,K,Q,W of observation
+    band closest to S,C,X,U,K,Q,W of observation
 
-        https://science.nrao.edu/facilities/vlba/docs/manuals/oss/bands-perf
-        """
-        band = None
-        if not bands:
-            bands = {
-            'S' : np.array([2.0, 2.6]),
-            'C' : np.array([3.5, 6.4]),
-            'X' : np.array([7.401, 8.8]),
-            'U' : np.array([11.8, 15.7]),
-            'K' : np.array([20.0, 25.0]),
-            'Q' : np.array([40.0, 46.0]),
-            'W' : np.array([80.0, 90.0]),
-        }
-        compare = 999.0
-        for k,v in bands.items():
-            val = (np.abs(v-freq)).min()
+    https://science.nrao.edu/facilities/vlba/docs/manuals/oss/bands-perf
+    """
+    band = None
+    if not bands:
+        bands = {
+        'S' : np.array([2.0, 2.6]),
+        'C' : np.array([3.5, 6.4]),
+        'X' : np.array([7.401, 8.8]),
+        'U' : np.array([11.8, 15.7]),
+        'K' : np.array([20.0, 25.0]),
+        'Q' : np.array([40.0, 46.0]),
+        'W' : np.array([80.0, 90.0]),
+    }
+    compare = 999.0
+    for k,v in bands.items():
+        val = (np.abs(v-freq)).min()
 
-            if compare > val:
-                band = k
-                compare = val
-        if band is None:
-            warnings.warn(f"no matching band was found", UserWarning)
-        return band
+        if compare > val:
+            band = k
+            compare = val
+    if band is None:
+        warnings.warn(f"no matching band was found", UserWarning)
+    return band
 
 def read_inputfile(folder,inputfile='.inp'):
     """Read the input file and return a dictionary with the parameters.
