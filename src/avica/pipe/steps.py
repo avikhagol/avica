@@ -698,6 +698,7 @@ class AverageMS(PipelineStepBase):
         self.result.start_stamp   = datetime.now()
         from avica.ms.meta import BandInfoMS
         from avica.ms import check_and_fix_spw_partitioning
+        from avica.ms.tables import repair_mixed_single_pol_syscal_tsys
         # log = logging.getLogger("avica.pipeline")
 
         global_bands_dict               =   {}
@@ -798,7 +799,7 @@ class AverageMS(PipelineStepBase):
                                     # ---------------------------------------------------   Execution
                                 if Path(outvis).exists():
                                     if targets is not None and len(targets)>1:
-                                        nfixed_tsys = _repair_mixed_single_pol_syscal_tsys(outvis)
+                                        nfixed_tsys = repair_mixed_single_pol_syscal_tsys(outvis)
                                         if nfixed_tsys:
                                             self.result.desc.append(f"repaired {nfixed_tsys} mixed single-pol SYSCAL TSYS rows in {Path(outvis).name}")
                                         self.result.detail[band]     =   "vis-exists"
@@ -836,7 +837,7 @@ class AverageMS(PipelineStepBase):
                     self.result.success.append(False)
                 else:
                     check_and_fix_spw_partitioning(outvis, selected_spws)
-                    nfixed_tsys = _repair_mixed_single_pol_syscal_tsys(outvis)
+                    nfixed_tsys = repair_mixed_single_pol_syscal_tsys(outvis)
                     if nfixed_tsys:
                         self.result.desc.append(f"repaired {nfixed_tsys} mixed single-pol SYSCAL TSYS rows in {Path(outvis).name}")
                     self.result.detail[band]     =   str(Path(outvis).name)
@@ -1325,9 +1326,7 @@ class FinalSplitMs(PipelineStepBase):
                             errcasalogfile  =   f'{wd_t}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa")}'
                             msmd.open(str(vis_b))
                             try:
-                                scans = sorted(set(
-                                    s for fld in allsources for s in msmd.scansforfield(fld)
-                                ))
+                                scans = sorted(set(s for fld in allsources for s in msmd.scansforfield(fld)))
                             finally:
                                 msmd.done()
 
@@ -1393,37 +1392,6 @@ class FinalSplitMs(PipelineStepBase):
 
         return self.result
 
-def _repair_mixed_single_pol_syscal_tsys(vis):
-    """Replace missing single-pol TSYS slots with the valid companion value."""
-    syscal = Path(vis) / "SYSCAL"
-    if not syscal.exists():
-        return 0
-
-    from avica.ms.compat import ctable
-
-    tb = ctable(str(syscal), readonly=False, ack=False)
-    nfixed = 0
-    try:
-        for row in range(tb.nrows()):
-            tsys = np.asarray(tb.getcell("TSYS", row), dtype=float)
-            invalid = (
-                ~np.isfinite(tsys)
-                | (tsys <= 0)
-                | np.isclose(np.abs(tsys), 999.0)
-                | np.isclose(np.abs(tsys), 999.9)
-            )
-            valid = ~invalid
-            if np.count_nonzero(valid) == 1 and np.any(invalid):
-                fixed = tsys.copy()
-                fixed[invalid] = fixed[valid][0]
-                tb.putcell("TSYS", row, fixed)
-                nfixed += 1
-        tb.flush()
-    finally:
-        tb.close()
-
-    return nfixed
-
 class Calibration(PipelineStepBase):
     """
         _______________________________________________________
@@ -1446,6 +1414,7 @@ class Calibration(PipelineStepBase):
     # ----------------------------------------------------------
 
     def run(self, lf, wd_ifolder, casadir, target, verbose=True):
+        from avica.ms.table import repair_mixed_single_pol_syscal_tsys
         self.result.start_stamp         =   datetime.now()
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
@@ -1485,7 +1454,7 @@ class Calibration(PipelineStepBase):
 
 
                     if vis is not None and Path(vis).exists():
-                        nfixed_tsys = _repair_mixed_single_pol_syscal_tsys(vis)
+                        nfixed_tsys = repair_mixed_single_pol_syscal_tsys(vis)
                         if nfixed_tsys:
                             msg = f"repaired {nfixed_tsys} mixed single-pol SYSCAL TSYS rows in {Path(vis).name}"
                             print(msg)

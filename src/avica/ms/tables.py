@@ -297,6 +297,51 @@ def read_df_vis_single(vis:str, tb_data, field_name, antenna_name, data_desc_spw
     return df_vis
 
 
+def repair_mixed_single_pol_syscal_tsys(vis):
+    """Replace missing TSYS slots only for consistently single-pol SYSCAL tables."""
+    syscal = Path(vis) / "SYSCAL"
+    if not syscal.exists():
+        return 0
+
+    from avica.ms.compat import ctable
+
+    tb = ctable(str(syscal), readonly=False, ack=False)
+    nfixed = 0
+    try:
+        mixed_rows = []
+        invalid_slots = set()
+        has_clean_rows = False
+        for row in range(tb.nrows()):
+            tsys = np.asarray(tb.getcell("TSYS", row), dtype=float)
+            invalid = (
+                ~np.isfinite(tsys)
+                | (tsys <= 0)
+                | np.isclose(np.abs(tsys), 999.0)
+                | np.isclose(np.abs(tsys), 999.9)
+            )
+            valid = ~invalid
+            if np.count_nonzero(valid) == 1 and np.any(invalid):
+                mixed_rows.append((row, tsys, invalid, valid))
+                invalid_slots.add(tuple(np.flatnonzero(invalid)))
+            elif np.any(invalid):
+                return 0
+            else:
+                has_clean_rows = True
+
+        if has_clean_rows or len(invalid_slots) != 1:
+            return 0
+
+        for row, tsys, invalid, valid in mixed_rows:
+            fixed = tsys.copy()
+            fixed[invalid] = fixed[valid][0]
+            tb.putcell("TSYS", row, fixed)
+            nfixed += 1
+        tb.flush()
+    finally:
+        tb.close()
+
+    return nfixed
+
 # ------------------------------ check the Similar MS tables and fix duplicated rows -------------------------------
 
 def chk_tbl(subt1, subt2, relax_order=False):
