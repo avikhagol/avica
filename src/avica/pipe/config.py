@@ -504,7 +504,6 @@ DEFAULT_PARAMS: dict = {
     "apply_flag_from_idi"       :   True,
 }
 
-
 class PipeConfig:
     def __init__(self, configfile):
         self.configfile = Path(configfile).name if configfile is not None else None

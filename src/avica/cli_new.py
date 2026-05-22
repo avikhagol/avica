@@ -198,8 +198,8 @@ def run_pipeline(
     #     configdata = PipeConfig(configfile=configfile)
     #     pipe_params.update(configdata.to_dict())
 
-    csvfile = _result_csv_path(pipe_params)
-    pipe_params["result_csv_file"] = str(csvfile)
+    result_csvfile = _result_csv_path(pipe_params)
+    pipe_params["result_csv_file"] = str(result_csvfile)
 
     # print(DEFAULT_PARAMS['allfitsfile'])
     main_pipeline = AvicaPipeline(pipe_params=pipe_params)
@@ -211,13 +211,13 @@ def run_pipeline(
         except ValueError as exc:
             raise typer.BadParameter(str(exc), param_hint="--resume-from") from exc
     elif resume:
-        if not csvfile.exists():
-            typer.echo(f"No result CSV found at {csvfile}; running requested steps.")
+        if not result_csvfile.exists():
+            typer.echo(f"No result CSV found at {result_csvfile}; running requested steps.")
         else:
-            resume_from = _infer_resume_step(csvfile, main_pipeline.step_names())
+            resume_from = _infer_resume_step(result_csvfile, main_pipeline.step_names())
 
-        if csvfile.exists() and resume_from is None:
-            typer.echo(f"All pipeline steps already completed according to {csvfile}.")
+        if result_csvfile.exists() and resume_from is None:
+            typer.echo(f"All pipeline steps already completed according to {result_csvfile}.")
             return
         if resume_from:
             stps = main_pipeline.steps_from(resume_from)
