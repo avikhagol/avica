@@ -46,7 +46,7 @@ import threading
 
 from avica.pipe.helpers import find_tsys, FileSize, tsys_exists, tsys_exists_in_fitsfiles, overlap_percentage, del_fl, parse_params, get_allfitsfiles
 from avica.pipe.helpers import get_targets_filenames, setup_workdir, add_O, get_logfilename
-from avica.pipe.config import DEFAULT_PARAMS, CSV_POPULATED_STEPS, _CASA_INPROCESS_MODULES,  setup_casa_path, get_added_casa_paths, get_added_casa_lib_dirs
+from avica.pipe.config import DEFAULT_PARAMS, CSV_POPULATED_STEPS, PipeConfig, _CASA_INPROCESS_MODULES,  setup_casa_path, get_added_casa_paths, get_added_casa_lib_dirs
 
 from copy import deepcopy
 
@@ -1028,6 +1028,8 @@ class AvicaPipelineCore:
         # PipelineContext.params = DEFAULT_PARAMS
 
         PipelineContext.params.clear()
+        # loaded_config = load_config_yaml(self.pipe_params.get('config_file'))
+        # PipeConfig
         PipelineContext.params.update({**DEFAULT_PARAMS, **self.pipe_params})
         PipelineContext.params['init_params'] = self.pipe_params
 

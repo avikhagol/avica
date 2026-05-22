@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import csv
+from multiprocessing import Pipe
 from pathlib import Path
 from typing import List, Optional
 
@@ -17,7 +18,7 @@ except ImportError:
 
 from avica.config import avica_data_dir
 
-from avica.util import casadir_find, rfc_find
+from avica.util import casadir_find, rfc_find, create_config
 from avica.pipe.config import CSV_POPULATED_STEPS, PipeConfig
 
 from avica.pipe.main import AvicaPipeline
@@ -152,6 +153,36 @@ def fitsidicheck(fitsfilenames: Annotated[Optional[List[str]], typer.Argument()]
 
 pipeline_app = typer.Typer(help="AVICA pipeline.")
 avica_cli.add_typer(pipeline_app, name="pipe")
+
+@pipeline_app.command("config")
+def pipe_config(
+    outfile: Optional[str] = typer.Option("avica.inp", help="output config file containing key=value"),
+    inpfile: Optional[str] = typer.Option(None, help="input config file containing key=value"),
+    default: Annotated[bool, typer.Option("--default", help="adds the configfile to the default config directory")] = False,
+    data: Annotated[Optional[List[str]], typer.Argument(help="key=value pairs")] = None,
+    ):
+    params = PipeConfig(None).defaults()
+
+    if inpfile:
+        try:
+            params = PipeConfig(inpfile).to_dict()
+        except Exception as e:
+            raise typer.BadParameter(f"Failed to read config file '{inpfile}': {e}") from e
+
+    if data:
+        for item in data:
+            if "=" not in item:
+                raise typer.BadParameter(f"Invalid key=value format: '{item}' (missing '=')")
+            key, value = item.split("=", 1)
+            params[key] = value
+
+    if not params:
+        raise typer.BadParameter("No configuration to write. Provide either --inpfile or --data arguments.")
+
+    if default:
+        outfile = str(Path(avica_data_dir) / Path(outfile).name)
+
+    create_config(params=params, out=outfile, rj=1, lj=1)
 
 @pipeline_app.command("run")
 def run_pipeline(

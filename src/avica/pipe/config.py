@@ -511,3 +511,12 @@ class PipeConfig:
 
     def to_dict(self):
         return read_inputfile(self.folder, self.configfile)[0]
+
+    def defaults(self):
+        default_params = {}
+        for k,v in DEFAULT_PARAMS.items():
+            if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',
+                                                                    # "primary_",
+                                                                    "size_"]):
+                default_params[k] = v
+        return default_params
