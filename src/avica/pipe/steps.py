@@ -137,10 +137,13 @@ class PreProcessFitsIdi(PipelineStepBase):
         log.info(msg_info)
         with step_stage(msg_info, fitsfiles=fitsfiles, tmpfitsfiles=tmpfitsfiles):
             updated_scanlists = {ff: obsdata.scanlist() for ff in fitsfiles}
+            split_sources = rfc_catalog_file is not None and len(fitsfiles) == 1
+            if rfc_catalog_file is not None and not split_sources:
+                log.info("skipping source extraction for multiple FITS files")
             for i,ff in enumerate(fitsfiles):
                 tmpff  =   tmpfitsfiles[i]
 
-                if rfc_catalog_file is not None:
+                if split_sources:
                     sids, updated_scanlists[ff] = split_by_catalog_search(tmpff, outfitsfilepath=ff, targets=targets, scanlist_arr=obsdata.scanlist(),
                                             calibrator_catalog_file=rfc_catalog_file, coord_inpfile=class_search_asciifile,
                                             matched_coord_outfile=wd_meta.matched_coord_outfile, metafolder=metafolder)
