@@ -1449,7 +1449,7 @@ class GenerateAndAppendAntab:
                     if self.verbose: print("TSYS exists in another fitsfile!")
         if self.verbose: print("Attaching TSYS finished!")
 # -------------------------------------------------------------------------------------------
-    def sort_by_time(self):
+    def sort_by_time(self, reverse=False):
         starttime = []
         endtime = []
         for i, fitsfile in enumerate(self.workingfits):
@@ -1459,7 +1459,7 @@ class GenerateAndAppendAntab:
             else:
                 print("UV data not found..")
                 self.workingfits.remove(fitsfile)
-        self.workingfits = [x for _, x in sorted(zip(starttime, self.workingfits), reverse=True)]
+        self.workingfits = [x for _, x in sorted(zip(starttime, self.workingfits), reverse=reverse)]
         return self.workingfits
 
     def sort_by_tsys(self):
