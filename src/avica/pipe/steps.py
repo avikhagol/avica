@@ -1406,7 +1406,7 @@ class Calibration(PipelineStepBase):
     # ----------------------------------------------------------
 
     def run(self, lf, wd_ifolder, casadir, target, verbose=True):
-        from avica.ms.table import repair_mixed_single_pol_syscal_tsys
+        from avica.ms.tables import repair_mixed_single_pol_syscal_tsys
         self.result.start_stamp         =   datetime.now()
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
