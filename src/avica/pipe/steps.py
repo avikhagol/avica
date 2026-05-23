@@ -522,9 +522,9 @@ class FitsIdiToMS(PipelineStepBase):
         finally:
             if mpi_runner is not None:
                 mpi_runner.close()
-            for output_vis in dict.fromkeys(output_vis_for_lock_cleanup):
-                if output_vis.exists():
-                    self._remove_casa_table_locks(output_vis)
+            # for output_vis in dict.fromkeys(output_vis_for_lock_cleanup):
+            #     if output_vis.exists():
+            #         self._remove_casa_table_locks(output_vis)
 
         self.result.end_stamp                   =   datetime.now()
         del_fl(metafolder, 0, "available_wd_ifolder.avica", rm=True)
