@@ -1323,7 +1323,8 @@ class FinalSplitMs(PipelineStepBase):
                                 msmd.done()
 
                             task            =   MsTransform(vis=str(vis_b), outputvis=str(outvis),
-                                                    scan=",".join(map(str, scans)),
+                                                    # scan=",".join(map(str, scans)),
+                                                    field=",".join(map(str, allsources)),
                                                     spw=",".join(listof_uniquespws))
 
                             step             =   task.to_step(logfile=casalogfile, casadir=casadir, errf=errcasalogfile, mpi_cores=10)
