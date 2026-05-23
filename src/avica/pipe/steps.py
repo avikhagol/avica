@@ -782,7 +782,7 @@ class AverageMS(PipelineStepBase):
                                 chanavg = (max(chanbin) > 1) if isinstance(chanbin, list) else (chanbin > 1)
 
                                 # chanbin         =   ",".join(chanbin)
-                                good_scans      =   ",".join(set.intersection(*good_scan_list))
+                                good_scans      =   ",".join(sorted(set.intersection(*good_scan_list), key=int))
                                 an_remove       =   ";".join([f"!{an}" for an in missing_antennas])
 
                                 obs_b, _, _                     =   read_inputfile(wd_ifolder, "observation.inp")
