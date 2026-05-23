@@ -1399,7 +1399,7 @@ class GenerateAndAppendAntab:
         if len(tsys_found_in_files) and (not all(tsys_found_in_files)) and self.verbose:
             print("Attaching TSYS finished!")
 
-    def sort_by_time(self):
+    def sort_by_time(self, reverse=False):
         starttime = []
         valid_fits = []
 
@@ -1411,7 +1411,7 @@ class GenerateAndAppendAntab:
             else:
                 print("UV data not found..", fitsfile)
 
-        self.workingfits = [x for _, x in sorted(zip(starttime, valid_fits), reverse=True)]
+        self.workingfits = [x for _, x in sorted(zip(starttime, valid_fits), reverse=reverse)]
         return self.workingfits
 
     def sort_by_tsys(self):
