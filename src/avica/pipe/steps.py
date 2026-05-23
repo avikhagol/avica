@@ -62,7 +62,7 @@ class PreProcessFitsIdi(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, fitsfiles, target, wd_ifolder, source_extract_multi_fitsfiles=False, verbose=False):
+    def run(self, lf, fitsfiles, target, wd_ifolder, verbose=False):
         self.result.start_stamp   = datetime.now()
         from avica.fitsidiutil.validation import fitsidi_check
         from avica.fitsidiutil.obs import ObservationSummary
@@ -137,10 +137,9 @@ class PreProcessFitsIdi(PipelineStepBase):
         log.info(msg_info)
         with step_stage(msg_info, fitsfiles=fitsfiles, tmpfitsfiles=tmpfitsfiles):
             updated_scanlists = {ff: obsdata.scanlist() for ff in fitsfiles}
-            extract_condition =  True if len(fitsfiles) == 1 else source_extract_multi_fitsfiles
-            split_sources = rfc_catalog_file is not None and extract_condition
-            if not split_sources:
-                log.info("skipping source extraction....")
+            split_sources = rfc_catalog_file is not None and len(fitsfiles) == 1
+            if rfc_catalog_file is not None and not split_sources:
+                log.info("skipping source extraction for multiple FITS files")
             for i,ff in enumerate(fitsfiles):
                 tmpff  =   tmpfitsfiles[i]
 
@@ -275,6 +274,19 @@ class FitsIdiToMS(PipelineStepBase):
 
     def _build_ms_flagcmd(self, vis, output):
         return convert_ms_flag_cmd_table(Path(vis), Path(output))
+
+    def _remove_casa_table_locks(self, vis):
+        removed = 0
+        for lock_file in Path(vis).glob("**/*.lock"):
+            try:
+                lock_file.unlink()
+                removed += 1
+            except FileNotFoundError:
+                pass
+            except OSError:
+                log.warning("failed to remove CASA table lock %s", lock_file, exc_info=True)
+        if removed:
+            self.result.desc.append(f"removed {removed} stale CASA table lock files from {Path(vis).name}")
 
     def _run_casa_step(self, mpi_runner, casastep, block=True):
         task_response = mpi_runner.run_task(
@@ -470,6 +482,7 @@ class FitsIdiToMS(PipelineStepBase):
                     if flag_success:
                         self.result.success_count    +=  1
                         self.result.desc.append(f"FITS to MS conversion successfull! for {output_vis.name}")
+                        self.result.detail[i] = output_vis.name
                         self.result.success.append(True)
                     else:
                         self.result.failed_count     +=  1
