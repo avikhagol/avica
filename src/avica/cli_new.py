@@ -190,6 +190,7 @@ def run_pipeline(
     stps: Annotated[Optional[List[str]],typer.Argument(help="steps for execution")] = CSV_POPULATED_STEPS,
     target: Annotated[str,typer.Option("--t", "--target", help="Selected field / sourc name")] = '',
     configfile: Optional[str] = typer.Option("avica.inp", help="config file containing key=value"),
+    default_configfile: Optional[str] = typer.Option("avica.inp", help="default config file name containing key=value"),
     resume: Annotated[bool, typer.Option("--resume", help="Resume after the last successful step in the result CSV.")] = False,
     resume_from: Annotated[Optional[str], typer.Option("--resume-from", help="Start from this pipeline step.")] = None,
     ):
@@ -212,6 +213,12 @@ def run_pipeline(
 
     """
 
+    default_configfile = str(Path(avica_data_dir) / Path(default_configfile).name)
+
+    if Path(default_configfile).exists():
+        _params = PipeConfig(default_configfile).to_dict()
+    else:
+        _params = {}
     pipe_params={
                 "folder_for_fits": ".",
                  "target_dir" : "reduction/",
@@ -222,8 +229,14 @@ def run_pipeline(
                  "fitsfilenames": fitsfilenames.split(","),
                  }
 
-
-    pipe_params.update(PipeConfig(configfile).to_dict())
+    pipe_params.update(_params)
+    if configfile and Path(configfile).exists():
+        try:
+            pipe_params.update(PipeConfig(configfile).to_dict())
+        except Exception as e:
+            raise typer.BadParameter(f"Failed to read config file '{configfile}': {e}") from e
+    elif configfile:
+        typer.echo(f"Warning: Config file '{configfile}' not found, skipping.", err=True)
 
     # if configfile:
     #     configdata = PipeConfig(configfile=configfile)
