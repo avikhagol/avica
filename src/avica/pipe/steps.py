@@ -686,7 +686,7 @@ class AverageMS(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, casadir, targets, mpi_cores_avgms=5, verbose=True):
+    def run(self, lf, wd_ifolder, casadir, targets, target, mpi_cores_avgms=5, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms.meta import BandInfoMS
         from avica.ms import check_and_fix_spw_partitioning
@@ -734,7 +734,6 @@ class AverageMS(PipelineStepBase):
                 global_bands_dict.update(bandms.bands_dict)
                 save_metafile(this_wd_meta.metafile_msmeta_sources, {'bands_dict': global_bands_dict})
 
-
                 band_chwidth, good_scan_list, missing_antennas  = {}, [], set()
                 msg                             =   "gathering band information"
                 log.info(msg)
@@ -742,6 +741,10 @@ class AverageMS(PipelineStepBase):
                     try:
                         for band in bandms.bands_dict:
                             band_detail = bandms.get_band_detail(band)
+                            # msmetafile_b                =   Path(wd_meta.metafolder) / f'msmeta_sources_{band}_{target}.avica'
+                            # allsd, spwsd                =   read_avica_sources_msmeta(msmetafile_b)
+                            # alls                        =   allsd[band[0]]
+
                             for bandobsid in range(bandms.bands_dict[band]['nobs']):
                                 bandobs         =   f"{band}{bandobsid}" if bandms.bands_dict[band]['nobs']>1 else f"{band}"
                                 bands_known.append(bandobs)
@@ -754,10 +757,11 @@ class AverageMS(PipelineStepBase):
                                 if not Path(iwd_b_new).exists():
                                     shutil.move(str(iwd_b), iwd_b_new)
                                 iwd_b           =   deepcopy(iwd_b_new)
-
+                                allsources      =   set()
                                 for spw in d_bands['spws']:
                                     good_scan_list.append(d_bands[spw]['good_scans'])
                                     missing_antennas.update(d_bands['missing_antennas'])
+                                    allsources.update(d_bands[spw]['fields'])
 
                                 nchan       =   [d_bands[s]['nchan'] for s in d_bands['spws']]
                                 chwidth     =   [d_bands[s]['chwidth'] for s in d_bands['spws']]
@@ -806,9 +810,10 @@ class AverageMS(PipelineStepBase):
                                         casalogfile     =   f'{wd_b}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa")}'
                                         errcasalogfile     =   f'{wd_b}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa")}'
 
-                                        task            =   MsTransform(vis=vis, outputvis=outvis, antenna=an_remove,scan=good_scans,
-                                                                chanbin=chanbin, spw=",".join(spws), chanaverage=chanavg,
-                                                                timeaverage=timeavg, timebin=timebin)
+                                        task            =   MsTransform(vis=vis, outputvis=outvis, antenna=an_remove,
+                                            scan=good_scans, field=",".join(map(str, allsources)),
+                                            chanbin=chanbin, spw=",".join(spws), chanaverage=chanavg,
+                                            timeaverage=timeavg, timebin=timebin)
 
                                         step             =   task.to_step(logfile=casalogfile, casadir=casadir, errf=errcasalogfile, mpi_cores=mpi_cores_avgms)
                                         tasks_list.append((step,outvis, band, errcasalogfile, obs_b, iwd_b, band_chwidth, spws))
@@ -1253,7 +1258,7 @@ class FinalSplitMs(PipelineStepBase):
         self.result.start_stamp   = datetime.now()
         from avica.ms import get_best_spws, check_and_fix_spw_partitioning
         from avica.ms.compat import CasaMSMetadata
-        msmd = CasaMSMetadata()
+        cmsmd = CasaMSMetadata()
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         metafolder                      =   Path(wd_meta.metafolder)
@@ -1316,11 +1321,11 @@ class FinalSplitMs(PipelineStepBase):
                         with step_stage(msg):
                             casalogfile     =   f'{wd_t}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa")}'
                             errcasalogfile  =   f'{wd_t}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa")}'
-                            msmd.open(str(vis_b))
+                            cmsmd.open(str(vis_b))
                             try:
-                                scans = sorted(set(s for fld in allsources for s in msmd.scansforfield(fld)))
+                                scans = sorted(set(s for fld in allsources for s in cmsmd.scansforfield(fld)))
                             finally:
-                                msmd.done()
+                                cmsmd.done()
 
                             task            =   MsTransform(vis=str(vis_b), outputvis=str(outvis),
                                                     scan=",".join(map(str, scans)),
