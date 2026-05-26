@@ -195,8 +195,9 @@ class BandInfoMS:
                 if found_expt <= self.min_expt :   timeavg                     =   True
 
                 bw_khz                          =   self.msmd.bandwidths(spw)/1e3
+                fields                      =   sorted({int(field) for scan in good_scans for field in self.msmd.fieldsforscan(scan)})
                 dict_result[f"{band}{i}"][spw]          =   {"nchan":nchan, "chwidth":chwidth, "bw_khz":bw_khz, "good_scans":good_scans,
-                    "fields": [self.msmd.fieldsforscan(scan) for scan in good_scans]}
+                    "fields": fields}
 
 
             dict_result[f"{band}{i}"]['timeavg']              =   timeavg
