@@ -146,18 +146,17 @@ class BandInfoMS:
         tsys_missing_ants = list(set(range(len(ants))) - set(tsys_ants))
         self.removable_antennas[band] = ants[tsys_missing_ants]
         self._missing_antennas_cache[band] = self.removable_antennas[band]
-        self.msmd.close()
         return self.removable_antennas[band]
 
     def get_band_detail(self, band):
         timeavg                         =   False
         dict_result                     =   {}
         scan_cache                      =   {}
-        antenna_names                   =   np.array(self.msmd.antennanames())
         # __________________________ missing_antennas
         if self.msmd is not None:
             self.msmd.close()
         self.msmd.open(self.vis)
+        antenna_names                   =   np.array(self.msmd.antennanames())
         for i,obsid in enumerate(range(self.bands_dict[band]['nobs'])):
             good_scans                  =   set()
             spws                            =   set([int(val) for val in self.bands_dict[band][f'obs={obsid}']['scans'].keys()])
@@ -196,7 +195,7 @@ class BandInfoMS:
                 if found_expt <= self.min_expt :   timeavg                     =   True
 
                 bw_khz                          =   self.msmd.bandwidths(spw)/1e3
-                dict_result[f"{band}{i}"][str(spw)]          =   {"nchan":nchan, "chwidth":chwidth, "bw_khz":bw_khz, "good_scans":good_scans,
+                dict_result[f"{band}{i}"][spw]          =   {"nchan":nchan, "chwidth":chwidth, "bw_khz":bw_khz, "good_scans":good_scans,
                     "fields": [self.msmd.fieldsforscan(scan) for scan in good_scans]}
 
 
