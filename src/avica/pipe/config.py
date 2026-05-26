@@ -479,7 +479,7 @@ DEFAULT_PARAMS: dict = {
     "worksheet"                 :   None,
     "picard_input_template"     :   f"{Path(__file__).parent}/input_template",
     "csv_file"                  :   "",
-    "accor_solint"              :   10.0,
+    "accor_solint"              :   "int",
     "class_search_asciifile"    :   SMILE_SAMPLE_CATALOG_ASCII,
     "rfc_catalogfile"           :   RFC_CATALOG_ASCII,
     "separation_thres"          :   850.0,
@@ -516,8 +516,6 @@ class PipeConfig:
     def defaults(self):
         default_params = {}
         for k,v in DEFAULT_PARAMS.items():
-            if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',
-                                                                    # "primary_",
-                                                                    "size_"]):
+            if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',"size_", "snr_", "flux_"]):
                 default_params[k] = v
         return default_params
