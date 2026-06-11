@@ -132,7 +132,8 @@ class FringeDetectionRating:
                                                                     caltable_folder=self.caltable_folder, gt=self.gaintables, interp=self.interp,
                                                                     spws=self.selected_spws, multiband=multiband, verbose=self.verbose)
         self.dic_field, self.refants, self.pp_out       =   find_refant_fromdf(tbls=dic_result['tbl_names'], an_dict=self.dict_antenna, sources_dict=self.dict_sources,
-                                                                    n_calib=self.n_calib, n_refant=self.n_refant, target_ants=self.target_ants)
+                                                                    n_calib=self.n_calib, n_refant=self.n_refant, target_ants=self.target_ants,
+                                                                    field_ant_scans=self.dict_field_ant_withscans)
 
         self.obs.calibrators_instrphase                             =   self.dic_field['NAME']
         self.obs.calibrators_bandpass = self.obs.calibrators_rldly  =   self.obs.calibrators_instrphase[0]
@@ -439,7 +440,7 @@ def select_df_refant_sources(tbls:List[str], an_dict:dict, autocorr=False, minsn
 
     return res, df_tbl
 
-def find_refant_fromdf(tbls:List[str], an_dict:dict, sources_dict:dict, autocorr=False, minsnr=3.0, calib_snr_thres=7.0, n_refant=4, n_calib=6, verbose=True, target_ants=None):
+def find_refant_fromdf(tbls:List[str], an_dict:dict, sources_dict:dict, autocorr=False, minsnr=3.0, calib_snr_thres=7.0, n_refant=4, n_calib=6, verbose=True, target_ants=None, field_ant_scans=None):
     """takes fringefit calibration tables path and gives refant and calibrators
 
     Args:
@@ -454,6 +455,8 @@ def find_refant_fromdf(tbls:List[str], an_dict:dict, sources_dict:dict, autocorr
         verbose (bool, optional): print output. Defaults to True.
         target_ants (List[int], optional): antenna ids present on science target.
             If not provided, ant_availability is set to 1 for every FIELD_ID.
+        field_ant_scans (dict, optional): {FIELD_ID: {ANTENNA_ID: scans}} map
+            from the original MS, used to check antenna presence per field.
 
     Returns:
         (dic_field, refants, pp_out)
@@ -475,19 +478,29 @@ def find_refant_fromdf(tbls:List[str], an_dict:dict, sources_dict:dict, autocorr
                                 .sort("SNR", descending=True))
     target_ants         =   {int(anid) for anid in (target_ants or [])}
     if target_ants:
-        target_ant_count = len(target_ants)
-        target_ant_ids = list(target_ants)
-        df_ant_availability = (
-            pl.concat([
-                df_tbl.select("FIELD_ID", pl.col("ANTENNA1").alias("anid")),
-                df_tbl.select("FIELD_ID", pl.col("ANTENNA2").alias("anid")),
-            ])
-            .unique()
-            .group_by("FIELD_ID")
-            .agg(pl.col("anid").is_in(target_ant_ids).sum().alias("target_ant_count"))
-            .with_columns((pl.col("target_ant_count") == target_ant_count).cast(pl.Int8).alias("ant_availability"))
-            .select(["FIELD_ID", "ant_availability"])
-        )
+        if field_ant_scans:
+            ant_availability_rows = []
+            for field_id, ants_with_scans in field_ant_scans.items():
+                field_ants = {int(anid) for anid in ants_with_scans.keys()}
+                ant_availability_rows.append({
+                    "FIELD_ID": int(field_id),
+                    "ant_availability": int(target_ants.issubset(field_ants)),
+                })
+            df_ant_availability = pl.DataFrame(ant_availability_rows)
+        else:
+            target_ant_count = len(target_ants)
+            target_ant_ids = list(target_ants)
+            df_ant_availability = (
+                pl.concat([
+                    df_tbl.select("FIELD_ID", pl.col("ANTENNA1").alias("anid")),
+                    df_tbl.select("FIELD_ID", pl.col("ANTENNA2").alias("anid")),
+                ])
+                .unique()
+                .group_by("FIELD_ID")
+                .agg(pl.col("anid").is_in(target_ant_ids).sum().alias("target_ant_count"))
+                .with_columns((pl.col("target_ant_count") == target_ant_count).cast(pl.Int8).alias("ant_availability"))
+                .select(["FIELD_ID", "ant_availability"])
+            )
         df_field = df_field.join(df_ant_availability, on="FIELD_ID", how="left")
         df_field = df_field.with_columns(pl.col("ant_availability").fill_null(0))
     else:
