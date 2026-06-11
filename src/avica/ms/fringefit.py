@@ -422,7 +422,7 @@ def select_df_refant_sources(tbls:List[str], an_dict:dict, autocorr=False, minsn
             (wt_d + wt_snr + wt_tsys + wt_occ)
     ).sort("c", descending=True)
 
-    res = res.group_by('refant').head(1)      # keeps row with max `c` per field because of sort done before
+    res = res.group_by('refant', 'FIELD_ID', 'SCAN').head(1)      # keeps row with max `c` per field because of sort done before
     res = res.sort("c", descending=True)
 
     return res, df_tbl
