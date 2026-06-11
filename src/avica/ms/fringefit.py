@@ -398,7 +398,7 @@ def select_df_refant_sources(tbls:List[str], an_dict:dict, autocorr=False, minsn
     )
 
     refant_snr_median = (
-        df_tbl.group_by(['FIELD_ID', 'refant', 'refantid', 'refant_D', 'STD_TSYS', 'refant_occ'])
+        df_tbl.group_by(['FIELD_ID', 'SCAN', 'refant', 'refantid', 'refant_D', 'STD_TSYS', 'refant_occ'])
         .agg(pl.col("SNR").median())
         .sort("refant_occ", descending=True)
     )
