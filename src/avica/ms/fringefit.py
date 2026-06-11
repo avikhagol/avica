@@ -378,6 +378,16 @@ def select_df_refant_sources(tbls:List[str], an_dict:dict, autocorr=False, minsn
         .join(an_df.rename({"ANNAME": "n2", "d": "d2", "STD_TSYS": "t2"}), left_on="ANTENNA2", right_on="id", how="left")
     )
 
+    ant_occ = (
+        pl.concat([
+            df_tbl.select(pl.col("ANTENNA1").alias("refantid"), "FLAG"),
+            df_tbl.select(pl.col("ANTENNA2").alias("refantid"), "FLAG"),
+        ])
+        .filter(pl.col("FLAG") == False)
+        .group_by("refantid")
+        .agg(pl.col("refantid").count().alias("refant_occ"))
+    )
+
     df_tbl = df_tbl.with_columns([
         pl.when(pl.col("d1") < pl.col("d2"))
           .then(pl.col("n1")).otherwise(pl.col("n2")).alias("refant"),
@@ -388,17 +398,13 @@ def select_df_refant_sources(tbls:List[str], an_dict:dict, autocorr=False, minsn
         pl.when(pl.col("d1") < pl.col("d2"))
           .then(pl.col("t1")).otherwise(pl.col("t2")).alias("STD_TSYS")
     ])
-    df_tbl = df_tbl.with_columns(
-        pl.col("refantid")                                # NOTE: here refantid refers to the shorter distance from centroid, hence counting "over" refantid is different than counting "over" ANTENNA for each baseline.
-        .filter(pl.col("FLAG") == False)
-        .count().over("refantid").alias("refant_occ")
-    )
+    df_tbl = df_tbl.join(ant_occ, on="refantid", how="left")
     df_tbl = df_tbl.with_columns(
         pl.col("refant_occ").fill_null(0)
     )
 
     refant_snr_median = (
-        df_tbl.group_by(['FIELD_ID', 'SCAN', 'refant', 'refantid', 'refant_D', 'STD_TSYS', 'refant_occ'])
+        df_tbl.group_by(['FIELD_ID', 'refant', 'refantid', 'refant_D', 'STD_TSYS', 'refant_occ'])
         .agg(pl.col("SNR").median())
         .sort("refant_occ", descending=True)
     )
@@ -422,7 +428,7 @@ def select_df_refant_sources(tbls:List[str], an_dict:dict, autocorr=False, minsn
             (wt_d + wt_snr + wt_tsys + wt_occ)
     ).sort("c", descending=True)
 
-    res = res.group_by('refant', 'FIELD_ID', 'SCAN').head(1)      # keeps row with max `c` per field because of sort done before
+    res = res.group_by(['refant']).head(1)      # keeps row with max `c` per field because of sort done before
     res = res.sort("c", descending=True)
 
     return res, df_tbl
