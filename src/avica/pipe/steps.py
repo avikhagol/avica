@@ -1078,8 +1078,7 @@ class SnRating(PipelineStepBase):
                                                                         # gaintables=[], interp=[], metafolder=str(metadir_b), verbose=verbose)
                             fr = FringeDetectionRating(vis=str(vis_b), caltable_folder=str(caltable_folder), n_calib=n_calib, n_refant=n_refant, n_scans=int(n_scan_snrting), iter_scan_count=iter_scan_count,
                                                         selected_sources=list(allsources), selected_scans=[], selected_ants=[], selected_spws=goodspws, gaintables=[], interp=[],
-                                                        metafolder=str(metadir_b),
-                                                        verbose=verbose)
+                                                        metafolder=str(metadir_b), target=target, verbose=verbose)
 
 
 

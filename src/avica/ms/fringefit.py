@@ -37,7 +37,7 @@ class ArrayInp(Config):
 class FringeDetectionRating:
     def __init__(self, vis:str, caltable_folder:str=None, n_refant=5, n_calib=6, n_scans=10, iter_scan_count=5,
                  selected_sources:List[str]=None, selected_scans:List[int]=None, selected_ants:List[int]=None, selected_spws=[],
-                 gaintables=[], interp=[], metafolder="", verbose=False):
+                 gaintables=[], interp=[], metafolder="", target=None, verbose=False):
         """rates antenna and sources by FFT SNR from the fringefit task.
         Args:
             vis (str): measurement set file.
@@ -50,6 +50,7 @@ class FringeDetectionRating:
             selected_spws (list, optional): filter result for only selected spws. Defaults to [].
             gaintables (list, optional): input gaintables to use for fringefit task. Defaults to [].
             interp (list, optional): input interpolation on gaintables to use for fringefit task. Defaults to [].
+            target (str, optional): science target source name for antenna availability.
 
         Example:
 
@@ -79,6 +80,7 @@ class FringeDetectionRating:
         self.gaintables             =   gaintables
         self.interp                 =   interp
         self.selected_spws          =   selected_spws
+        self.target                 =   target
         self.selected_sources       =   selected_sources or list(self.dict_sources_r.keys())
         self.selected_source_ids    =   [int(sourceid) for sourceid,sourcename in self.dict_sources.items() if sourcename in self.selected_sources]
         self.selected_scans         =   selected_scans
@@ -88,7 +90,10 @@ class FringeDetectionRating:
 
         self.dict_field_ant_withscans=   get_ant_scans(self.vis, self.selected_source_ids)   # {fid:{anid:set(scids)}]
         self.df_scans               =   get_df_scans(vis=self.vis, dict_field_ant_with_scans=self.dict_field_ant_withscans)
-        self.target_ants             =   list(self.dict_field_ant_withscans.get(self.selected_source_ids[0], {}).keys()) if self.selected_source_ids else []
+        target_source_id            =   self.dict_sources_r.get(target) if target else None
+        if target_source_id is None and self.selected_source_ids:
+            target_source_id        =   self.selected_source_ids[0]
+        self.target_ants             =   list(self.dict_field_ant_withscans.get(int(target_source_id), {}).keys()) if target_source_id is not None else []
 
         self.refants                =   []
         self.calibrators            =   {}
