@@ -93,7 +93,8 @@ class FringeDetectionRating:
         target_source_id            =   self.dict_sources_r.get(target) if target else None
         if target_source_id is None and self.selected_source_ids:
             target_source_id        =   self.selected_source_ids[0]
-        self.target_ants             =   list(self.dict_field_ant_withscans.get(int(target_source_id), {}).keys()) if target_source_id is not None else []
+        target_field_ants            =   self.dict_field_ant_withscans.get(int(target_source_id), {}).keys() if target_source_id is not None else []
+        self.target_ants             =   [int(anid) for anid in target_field_ants if int(anid) in self.tsys_antid]    # target ants restricted to those with gc/tsys (an_dic)
 
         self.refants                =   []
         self.calibrators            =   {}
@@ -453,8 +454,10 @@ def find_refant_fromdf(tbls:List[str], an_dict:dict, sources_dict:dict, autocorr
         n_refant (int, optional): Number of refant to select. Defaults to 4.
         n_calib (int, optional): Number of calibrators to select. Defaults to 6.
         verbose (bool, optional): print output. Defaults to True.
-        target_ants (List[int], optional): antenna ids present on science target.
-            If not provided, ant_availability is set to 1 for every FIELD_ID.
+        target_ants (List[int], optional): antenna ids present on science target
+            (with gc/tsys, see avica.ms.tables.an_dic). ant_availability is the
+            fraction [0-1] of these antennas present in each FIELD_ID.
+            If not provided, ant_availability is set to 1.0 for every FIELD_ID.
         field_ant_scans (dict, optional): {FIELD_ID: {ANTENNA_ID: scans}} map
             from the original MS, used to check antenna presence per field.
 
@@ -478,17 +481,17 @@ def find_refant_fromdf(tbls:List[str], an_dict:dict, sources_dict:dict, autocorr
                                 .sort("SNR", descending=True))
     target_ants         =   {int(anid) for anid in (target_ants or [])}
     if target_ants:
+        n_target_ants = len(target_ants)
         if field_ant_scans:
             ant_availability_rows = []
             for field_id, ants_with_scans in field_ant_scans.items():
                 field_ants = {int(anid) for anid in ants_with_scans.keys()}
                 ant_availability_rows.append({
                     "FIELD_ID": int(field_id),
-                    "ant_availability": int(target_ants.issubset(field_ants)),
+                    "ant_availability": len(target_ants & field_ants) / n_target_ants,
                 })
             df_ant_availability = pl.DataFrame(ant_availability_rows)
         else:
-            target_ant_count = len(target_ants)
             target_ant_ids = list(target_ants)
             df_ant_availability = (
                 pl.concat([
@@ -498,13 +501,13 @@ def find_refant_fromdf(tbls:List[str], an_dict:dict, sources_dict:dict, autocorr
                 .unique()
                 .group_by("FIELD_ID")
                 .agg(pl.col("anid").is_in(target_ant_ids).sum().alias("target_ant_count"))
-                .with_columns((pl.col("target_ant_count") == target_ant_count).cast(pl.Int8).alias("ant_availability"))
+                .with_columns((pl.col("target_ant_count") / n_target_ants).alias("ant_availability"))
                 .select(["FIELD_ID", "ant_availability"])
             )
         df_field = df_field.join(df_ant_availability, on="FIELD_ID", how="left")
-        df_field = df_field.with_columns(pl.col("ant_availability").fill_null(0))
+        df_field = df_field.with_columns(pl.col("ant_availability").fill_null(0.0))
     else:
-        df_field = df_field.with_columns(pl.lit(1).alias("ant_availability"))
+        df_field = df_field.with_columns(pl.lit(1.0).alias("ant_availability"))
 
     src_df              =   pl.DataFrame({"FIELD_ID": [int(k) for k in sources_dict.keys()],"NAME": list(sources_dict.values())})
     df_field            =   df_field.join(src_df, on="FIELD_ID", how="left")
