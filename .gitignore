@@ -139,3 +139,5 @@ docs/source/_static/avica_demo.gif
 docs/source/_static/vasco_demo.gif
 src/avica/fitsioutil/__init__.py
 uv.lock
+reduction/
+avica.logs/

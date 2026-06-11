@@ -1007,7 +1007,8 @@ class SnRating(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, init_params, casadir, target, n_refant=5, n_calib=6, multiband_snrating=True, mpi_cores_snrating=5, n_scan_snrting=7, verbose=True):
+    def run(self, lf, wd_ifolder, init_params, casadir, target, n_refant=5, n_calib=6,
+                    multiband_snrating=True, mpi_cores_snrating=5, n_scan_snrting=7, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms import get_best_spws
         from avica.pipe.tasks.fringefit import exec_FFT_fringefit
