@@ -256,6 +256,8 @@ def exec_FFT_fringefit(
         sources_dict=self.dict_sources,
         n_calib=self.n_calib,
         n_refant=self.n_refant,
+        target_ants=getattr(self, "target_ants", None),
+        field_ant_scans=getattr(self, "dict_field_ant_withscans", None),
     )
 
     self.obs.calibrators_instrphase = self.dic_field["NAME"]

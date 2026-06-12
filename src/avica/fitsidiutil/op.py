@@ -446,8 +446,14 @@ class ANTAB:
         main_antab_txt              =   ''
         allans                      =   []
 
+        from avica.fitsidiutil.io import FITSIDI
+        _fo                         =   FITSIDI(fitsfile=self.fitsfile)
+        hdul_cache                  =   _fo.read()
+        _fo.close()
+
         last_pcol_td                =   None
         pols, freq_range            =   [], []
+        bands_freq, bands_gain      =   {}, {}
         freq = None
 
         tsys_found, gain_found      =   False, False
@@ -492,6 +498,7 @@ class ANTAB:
                                 last_pcol_td = (Time(yday_start)- Time(timv[0])).value
                                 # print(last_pcol_td, "was last time diff", "timestamp from header:", timv)
                                 pols, freq_range = [], []
+                                bands_freq, bands_gain = {}, {}
                             # else:
                             #     print(last_pcol_td, "REJECTED: was last time diff", "timestamp from header:", timv)
                 if any(pol in t.lower() for pol in ['rcp', 'lcp']):
@@ -499,6 +506,23 @@ class ANTAB:
                     if p:
                         pols.append(p[0])
                         line = [l for l in t.split(' ') if l]
+                        # Per-row band info (FE column = line[1] in standard VLBA TSYS layout)
+                        if len(line) >= 2:
+                            band_name_curr = line[1]
+                            if 'K' in str(line[-3]):
+                                bw_curr = float(line[-3].replace('K',''))/2000
+                            else:
+                                bw_curr = float(line[-3].replace('M',''))/2
+                            try:
+                                center_curr = float(line[-2].replace('MHz',''))
+                                row_low, row_high = center_curr - bw_curr, center_curr + bw_curr
+                                if band_name_curr not in bands_freq:
+                                    bands_freq[band_name_curr] = [row_low, row_high]
+                                else:
+                                    bands_freq[band_name_curr][0] = min(bands_freq[band_name_curr][0], row_low)
+                                    bands_freq[band_name_curr][1] = max(bands_freq[band_name_curr][1], row_high)
+                            except ValueError:
+                                pass
                         if ti-1>0 and not any(pol in tsys_lines[ti-1].lower() for pol in ['rcp', 'lcp']):                   # checking first row with freq
 
                             if 'K' in str(line[-3]):
@@ -516,7 +540,7 @@ class ANTAB:
                                 # ---> change indent for following:
                             freq = abs(float(freq_range[0]))
 
-                            mount, dpfu, poly           =   find_gain_fromgaintable(fitsfile=self.fitsfile, vlbagainfile=vlbagainfile, an=an, date=self.dateobs, freq=freq)
+                            mount, dpfu, poly           =   find_gain_fromgaintable(fitsfile=self.fitsfile, vlbagainfile=vlbagainfile, an=an, date=self.dateobs, freq=freq, hdul=hdul_cache)
                             if mount is None:
                                 mount, dpfu, poly       =   find_gain(vlbagainfile, an, self.dateobs, freq)
                             this_an_gain_processed = True
@@ -524,6 +548,19 @@ class ANTAB:
                                 gain_missing.append(an)
                                 # if band not in dic_header_an: dic_header_an[band] = {an:{}}
                                 # dic_header_an[band][an] = {"mount":mount, "dpfu":dpfu, "poly":poly, 'pols': pols, 'freq' :freq}
+                        # Compute gain per detected band once the channel header block ends
+                        last_chan_row = (ti+1 >= len(tsys_lines)
+                                         or not any(pol in tsys_lines[ti+1].lower() for pol in ['rcp', 'lcp']))
+                        if bands_freq and not bands_gain and last_chan_row:
+                            for bn, fr in bands_freq.items():
+                                band_center = abs((fr[0] + fr[1]) / 2)
+                                bm, bd, bp = find_gain_fromgaintable(
+                                    fitsfile=self.fitsfile, vlbagainfile=vlbagainfile,
+                                    an=an, date=self.dateobs, freq=band_center, hdul=hdul_cache)
+                                if bm is None:
+                                    bm, bd, bp = find_gain(vlbagainfile, an, self.dateobs, band_center)
+                                if bm:
+                                    bands_gain[bn] = (bm, bd, bp)
 
                 # ---------- Gathering TSYS header info
                 if 'TSYS ' in t:
@@ -573,10 +610,19 @@ class ANTAB:
 
                                 an_values               =   [f"{k.upper()}={v}" for k,v in _tsys_head[an].items()]
 
-                                antab_header            =   f"GAIN {an} {mount} DPFU={','.join(map(str,dpfu))} "
-                                # antab_header            +=  f"FREQ={','.join(freq_range)} "
-                                antab_header            +=  f"POLY={','.join(map(str,poly))} /"
-                                antab_header            +=  f"\nTSYS {an} {' '.join(an_values)} INDEX={','.join(ind)} /\n"
+                                if bands_gain:
+                                    antab_header        =   ""
+                                    for bn, (b_mount, b_dpfu, b_poly) in bands_gain.items():
+                                        fr_lo, fr_hi    =   bands_freq[bn]
+                                        antab_header    +=  (
+                                            f"GAIN {an} {b_mount} "
+                                            f"FREQ={fr_lo},{fr_hi} "
+                                            f"DPFU={','.join(map(str,b_dpfu))} "
+                                            f"POLY={','.join(map(str,b_poly))} /\n"
+                                        )
+                                else:
+                                    antab_header        =   f"GAIN {an} {mount} DPFU={','.join(map(str,dpfu))} POLY={','.join(map(str,poly))} /\n"
+                                antab_header           +=  f"TSYS {an} {' '.join(an_values)} INDEX={','.join(ind)} /\n"
                                 pols, ind               =   [], []
                                 # print(antab_header)
                                 if ant_header_count:
@@ -696,16 +742,19 @@ def parse_antab(antabfile, fitsfile):
                         tsys_dic["end_time"] = maxtime
     return {"gain_dic": gain_dic, "tsys_dic": tsys_dic}
 
-def find_gain_fromgaintable(fitsfile, vlbagainfile, an, freq, gaintbname="GAIN_CURVE", date="", verbose=True):
+def find_gain_fromgaintable(fitsfile, vlbagainfile, an, freq, gaintbname="GAIN_CURVE", date="", verbose=True, hdul=None):
     """
     assumes DATE-OBS wont change anything.
 
+    Pass `hdul` to skip the FITSIDI open/read/close cycle when calling
+    repeatedly against the same fitsfile (e.g. once per band).
     """
-    from avica.fitsidiutil.io import FITSIDI
+    if hdul is None:
+        from avica.fitsidiutil.io import FITSIDI
 
-    fo = FITSIDI(fitsfile=fitsfile)
-    hdul = fo.read()
-    fo.close()
+        fo = FITSIDI(fitsfile=fitsfile)
+        hdul = fo.read()
+        fo.close()
 
     mount, sensitivity, poly = None, None, None
 

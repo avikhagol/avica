@@ -11,7 +11,7 @@ refant_minvaliddata = 0.5
 
 #Interval on which to solve for gains to correct for the digital sampler bias.
 #'int' means use the data (correlator) integration time.
-accor_solint = 10
+accor_solint = int
 
 
 #Can give the index of the spectral window that contains the line for spectral line

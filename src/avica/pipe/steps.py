@@ -62,7 +62,7 @@ class PreProcessFitsIdi(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, fitsfiles, target, wd_ifolder, verbose=False):
+    def run(self, lf, fitsfiles, target, wd_ifolder, source_extract_multi_fitsfiles=False, verbose=False):
         self.result.start_stamp   = datetime.now()
         from avica.fitsidiutil.validation import fitsidi_check
         from avica.fitsidiutil.obs import ObservationSummary
@@ -137,10 +137,14 @@ class PreProcessFitsIdi(PipelineStepBase):
         log.info(msg_info)
         with step_stage(msg_info, fitsfiles=fitsfiles, tmpfitsfiles=tmpfitsfiles):
             updated_scanlists = {ff: obsdata.scanlist() for ff in fitsfiles}
+            extract_condition =  True if len(fitsfiles) == 1 else source_extract_multi_fitsfiles
+            split_sources = rfc_catalog_file is not None and extract_condition
+            if not split_sources:
+                log.info("skipping source extraction....")
             for i,ff in enumerate(fitsfiles):
                 tmpff  =   tmpfitsfiles[i]
 
-                if rfc_catalog_file is not None:
+                if split_sources:
                     sids, updated_scanlists[ff] = split_by_catalog_search(tmpff, outfitsfilepath=ff, targets=targets, scanlist_arr=obsdata.scanlist(),
                                             calibrator_catalog_file=rfc_catalog_file, coord_inpfile=class_search_asciifile,
                                             matched_coord_outfile=wd_meta.matched_coord_outfile, metafolder=metafolder)
@@ -338,6 +342,7 @@ class FitsIdiToMS(PipelineStepBase):
         existing_flag_targets = []
         used_wd_ifolder =   []
         used_ff_wd_ifolder = []
+        output_vis_for_lock_cleanup = []
 
         wds_ifolder_for_payload  =   []
         casalogfile     =   f'{wd}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa")}'
@@ -423,33 +428,71 @@ class FitsIdiToMS(PipelineStepBase):
                 _           =   del_fl(Path(wd_ifolder_payload).parent, 1,fl="*stored*", rm=True)
                 _           =   del_fl(Path(wd_ifolder_payload).parent, 1,fl="*tmp*", rm=True)
 
-        with step_stage("MPI execution", vis=vis):
-            res         =   []
-            mpi_runner = PersistentMpiCasaRunner(casadir=casadir, mpi_cores=mpi_cores_importfitsidi)
-            for casastep in tasks_list:
-                print(f"processing vis={casastep.cmd.args['vis']}")
-                mpi_res = mpi_runner.run_task(
-                            task_name=casastep.cmd.task_casa,
-                            args=casastep.cmd.args,
-                            args_type=casastep.cmd.args_type,
-                            block=False,
-                            target_server=None,)
-                res.append(mpi_res)
+        mpi_runner = None
+        try:
+            with step_stage("MPI execution", vis=vis):
+                res         =   []
+                mpi_runner = PersistentMpiCasaRunner(casadir=casadir, mpi_cores=mpi_cores_importfitsidi)
+                for casastep in tasks_list:
+                    print(f"processing vis={casastep.cmd.args['vis']}")
+                    mpi_res = mpi_runner.run_task(
+                                task_name=casastep.cmd.task_casa,
+                                args=casastep.cmd.args,
+                                args_type=casastep.cmd.args_type,
+                                block=False,
+                                target_server=None,)
+                    res.append(mpi_res)
 
-        # ---------------- finalize outputs and metadata
+            # ---------------- finalize outputs and metadata
 
-        for i, casastep in enumerate(tasks_list):
-            final_response      =   mpi_runner.get_response(res[i]["ret"], block=True)
-            output_vis          =   Path(casastep.cmd.args['vis'])
-            if output_vis.exists():
-                print(f"processed vis={casastep.cmd.args['vis']}")
-                flag_success = True
-                if apply_flag_from_idi:
+            for i, casastep in enumerate(tasks_list):
+                final_response      =   mpi_runner.get_response(res[i]["ret"], block=True)
+                output_vis          =   Path(casastep.cmd.args['vis'])
+                output_vis_for_lock_cleanup.append(output_vis)
+                if output_vis.exists():
+                    print(f"processed vis={casastep.cmd.args['vis']}")
+                    flag_success = True
+                    if apply_flag_from_idi:
+                        try:
+                            flag_success = self._apply_flags(
+                                mpi_runner=mpi_runner,
+                                vis=output_vis,
+                                fitsfiles=casastep.cmd.args['fitsidifile'],
+                                casalogfile=casalogfile,
+                                errcasalogfile=errcasalogfile,
+                                casadir=casadir,
+                                flag_source=flag_source,
+                            )
+                        except Exception:
+                            traceback.print_exc()
+                            flag_success = False
+
+                    if flag_success:
+                        self.result.success_count    +=  1
+                        self.result.desc.append(f"FITS to MS conversion successfull! for {output_vis.name}")
+                        self.result.detail[i] = output_vis.name
+                        self.result.success.append(True)
+                    else:
+                        self.result.failed_count     +=  1
+                        self.result.desc.append(f"{flag_source} flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
+                        self.result.success.append(False)
+                else:
+                    print(f"failed vis={casastep.cmd.args['vis']}")
+                    self.result.failed_count     +=  1
+                    # last_log = latest_file(Path(output_vis).parent, '*err.out*')
+                    self.result.desc.append(f"failed! vis:{output_vis.name} check logs: {errcasalogfile}")
+                    if not all([Path(ff).exists() for ff in casastep.cmd.args['fitsidifile']]):
+                        self.result.desc.append(f"input fitsidifile not found! {casastep.cmd.args['fitsidifile']}")
+                    self.result.success.append(False)
+
+            if apply_flag_from_idi and apply_flag_to_existing_vis:
+                for output_vis, source_fitsfiles in existing_flag_targets:
+                    output_vis_for_lock_cleanup.append(output_vis)
                     try:
                         flag_success = self._apply_flags(
                             mpi_runner=mpi_runner,
                             vis=output_vis,
-                            fitsfiles=casastep.cmd.args['fitsidifile'],
+                            fitsfiles=source_fitsfiles,
                             casalogfile=casalogfile,
                             errcasalogfile=errcasalogfile,
                             casadir=casadir,
@@ -459,46 +502,18 @@ class FitsIdiToMS(PipelineStepBase):
                         traceback.print_exc()
                         flag_success = False
 
-                if flag_success:
-                    self.result.success_count    +=  1
-                    self.result.desc.append(f"FITS to MS conversion successfull! for {output_vis.name}")
-                    self.result.success.append(True)
-                else:
-                    self.result.failed_count     +=  1
-                    self.result.desc.append(f"{flag_source} flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
-                    self.result.success.append(False)
-            else:
-                print(f"failed vis={casastep.cmd.args['vis']}")
-                self.result.failed_count     +=  1
-                # last_log = latest_file(Path(output_vis).parent, '*err.out*')
-                self.result.desc.append(f"failed! vis:{output_vis.name} check logs: {errcasalogfile}")
-                if not all([Path(ff).exists() for ff in casastep.cmd.args['fitsidifile']]):
-                    self.result.desc.append(f"input fitsidifile not found! {casastep.cmd.args['fitsidifile']}")
-                self.result.success.append(False)
-
-        if apply_flag_from_idi and apply_flag_to_existing_vis:
-            for output_vis, source_fitsfiles in existing_flag_targets:
-                try:
-                    flag_success = self._apply_flags(
-                        mpi_runner=mpi_runner,
-                        vis=output_vis,
-                        fitsfiles=source_fitsfiles,
-                        casalogfile=casalogfile,
-                        errcasalogfile=errcasalogfile,
-                        casadir=casadir,
-                        flag_source=flag_source,
-                    )
-                except Exception:
-                    traceback.print_exc()
-                    flag_success = False
-
-                if flag_success:
-                    self.result.desc.append(f"{flag_source} flagging successfull! for {output_vis.name}")
-                else:
-                    self.result.failed_count     +=  1
-                    self.result.desc.append(f"{flag_source} flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
-                    self.result.success.append(False)
-        mpi_runner.close()
+                    if flag_success:
+                        self.result.desc.append(f"{flag_source} flagging successfull! for {output_vis.name}")
+                    else:
+                        self.result.failed_count     +=  1
+                        self.result.desc.append(f"{flag_source} flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
+                        self.result.success.append(False)
+        finally:
+            if mpi_runner is not None:
+                mpi_runner.close()
+            # for output_vis in dict.fromkeys(output_vis_for_lock_cleanup):
+            #     if output_vis.exists():
+            #         self._remove_casa_table_locks(output_vis)
 
         self.result.end_stamp                   =   datetime.now()
         del_fl(metafolder, 0, "available_wd_ifolder.avica", rm=True)
@@ -671,10 +686,11 @@ class AverageMS(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, casadir, targets, mpi_cores_avgms=5, verbose=True):
+    def run(self, lf, wd_ifolder, casadir, targets, target, mpi_cores_avgms=5, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms.meta import BandInfoMS
-        from avica.ms import remap_gain_curve_spws
+        from avica.ms import check_and_fix_spw_partitioning
+        from avica.ms.tables import repair_mixed_single_pol_syscal_tsys
         # log = logging.getLogger("avica.pipeline")
 
         global_bands_dict               =   {}
@@ -718,7 +734,6 @@ class AverageMS(PipelineStepBase):
                 global_bands_dict.update(bandms.bands_dict)
                 save_metafile(this_wd_meta.metafile_msmeta_sources, {'bands_dict': global_bands_dict})
 
-
                 band_chwidth, good_scan_list, missing_antennas  = {}, [], set()
                 msg                             =   "gathering band information"
                 log.info(msg)
@@ -726,6 +741,10 @@ class AverageMS(PipelineStepBase):
                     try:
                         for band in bandms.bands_dict:
                             band_detail = bandms.get_band_detail(band)
+                            # msmetafile_b                =   Path(wd_meta.metafolder) / f'msmeta_sources_{band}_{target}.avica'
+                            # allsd, spwsd                =   read_avica_sources_msmeta(msmetafile_b)
+                            # alls                        =   allsd[band[0]]
+
                             for bandobsid in range(bandms.bands_dict[band]['nobs']):
                                 bandobs         =   f"{band}{bandobsid}" if bandms.bands_dict[band]['nobs']>1 else f"{band}"
                                 bands_known.append(bandobs)
@@ -738,10 +757,11 @@ class AverageMS(PipelineStepBase):
                                 if not Path(iwd_b_new).exists():
                                     shutil.move(str(iwd_b), iwd_b_new)
                                 iwd_b           =   deepcopy(iwd_b_new)
-
+                                allsources      =   set()
                                 for spw in d_bands['spws']:
                                     good_scan_list.append(d_bands[spw]['good_scans'])
                                     missing_antennas.update(d_bands['missing_antennas'])
+                                    allsources.update(d_bands[spw]['fields'])
 
                                 nchan       =   [d_bands[s]['nchan'] for s in d_bands['spws']]
                                 chwidth     =   [d_bands[s]['chwidth'] for s in d_bands['spws']]
@@ -758,7 +778,7 @@ class AverageMS(PipelineStepBase):
                                 chanavg = (max(chanbin) > 1) if isinstance(chanbin, list) else (chanbin > 1)
 
                                 # chanbin         =   ",".join(chanbin)
-                                good_scans      =   ",".join(set.intersection(*good_scan_list))
+                                good_scans      =   ",".join(sorted(set.intersection(*good_scan_list), key=int))
                                 an_remove       =   ";".join([f"!{an}" for an in missing_antennas])
 
                                 obs_b, _, _                     =   read_inputfile(wd_ifolder, "observation.inp")
@@ -775,6 +795,9 @@ class AverageMS(PipelineStepBase):
                                     # ---------------------------------------------------   Execution
                                 if Path(outvis).exists():
                                     if targets is not None and len(targets)>1:
+                                        nfixed_tsys = repair_mixed_single_pol_syscal_tsys(outvis)
+                                        if nfixed_tsys:
+                                            self.result.desc.append(f"repaired {nfixed_tsys} mixed single-pol SYSCAL TSYS rows in {Path(outvis).name}")
                                         self.result.detail[band]     =   "vis-exists"
                                     else:
                                         del_fl(wd_b, fl=Path(outvis).name, rm=True)
@@ -787,9 +810,10 @@ class AverageMS(PipelineStepBase):
                                         casalogfile     =   f'{wd_b}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa")}'
                                         errcasalogfile     =   f'{wd_b}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa")}'
 
-                                        task            =   MsTransform(vis=vis, outputvis=outvis, antenna=an_remove,scan=good_scans,
-                                                                chanbin=chanbin, spw=",".join(spws), chanaverage=chanavg,
-                                                                timeaverage=timeavg, timebin=timebin)
+                                        task            =   MsTransform(vis=vis, outputvis=outvis, antenna=an_remove,
+                                            scan=good_scans, field=",".join(map(str, allsources)),
+                                            chanbin=chanbin, spw=",".join(spws), chanaverage=chanavg,
+                                            timeaverage=timeavg, timebin=timebin)
 
                                         step             =   task.to_step(logfile=casalogfile, casadir=casadir, errf=errcasalogfile, mpi_cores=mpi_cores_avgms)
                                         tasks_list.append((step,outvis, band, errcasalogfile, obs_b, iwd_b, band_chwidth, spws))
@@ -809,7 +833,10 @@ class AverageMS(PipelineStepBase):
                     self.result.detail[band]     =   f"check {errcasalogfile}"
                     self.result.success.append(False)
                 else:
-                    remap_gain_curve_spws(outvis, selected_spws)
+                    check_and_fix_spw_partitioning(outvis, selected_spws)
+                    nfixed_tsys = repair_mixed_single_pol_syscal_tsys(outvis)
+                    if nfixed_tsys:
+                        self.result.desc.append(f"repaired {nfixed_tsys} mixed single-pol SYSCAL TSYS rows in {Path(outvis).name}")
                     self.result.detail[band]     =   str(Path(outvis).name)
                     print(f"processed {outvis}")
                     self.result.success.append(True)
@@ -980,7 +1007,8 @@ class SnRating(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, init_params, casadir, target, n_refant=5, n_calib=6, multiband_snrating=True, mpi_cores_snrating=5, n_scan_snrting=7, verbose=True):
+    def run(self, lf, wd_ifolder, init_params, casadir, target, n_refant=5, n_calib=6,
+                    multiband_snrating=True, mpi_cores_snrating=5, n_scan_snrting=7, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms import get_best_spws
         from avica.pipe.tasks.fringefit import exec_FFT_fringefit
@@ -1050,8 +1078,7 @@ class SnRating(PipelineStepBase):
                                                                         # gaintables=[], interp=[], metafolder=str(metadir_b), verbose=verbose)
                             fr = FringeDetectionRating(vis=str(vis_b), caltable_folder=str(caltable_folder), n_calib=n_calib, n_refant=n_refant, n_scans=int(n_scan_snrting), iter_scan_count=iter_scan_count,
                                                         selected_sources=list(allsources), selected_scans=[], selected_ants=[], selected_spws=goodspws, gaintables=[], interp=[],
-                                                        metafolder=str(metadir_b),
-                                                        verbose=verbose)
+                                                        metafolder=str(metadir_b), target=target, verbose=verbose)
 
 
 
@@ -1136,7 +1163,8 @@ class FillInputMs(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, rfc_catalogfile, target, n_calib=6, flux_threshold_phref=7, hi_freq_ref=11, verbose=True):
+    def run(self, lf, wd_ifolder, rfc_catalogfile, target, n_calib=6, flux_threshold_phref=7, hi_freq_ref=11,
+            min_channel_flagging=32, sci_solints="auto", solint_max_scan_partitions=8, verbose=True):
         self.result.start_stamp         =   datetime.now()
         log                             =   logging.getLogger("avica.pipeline")
 
@@ -1173,7 +1201,9 @@ class FillInputMs(PipelineStepBase):
                                                                             refantsf        =   refantsf,
                                                                             sourcesf_snr    =   sourcesf_snr,
                                                                             band            =   band[0],
-                                                                            edgeflagging    =   True,
+                                                                            min_channel_flagging    =   min_channel_flagging,
+                                                                            sci_solints     =   sci_solints,
+                                                                            solint_max_scan_partitions =   solint_max_scan_partitions,
                                                                             pipe_params     =   PipelineContext.params,
                                                                             hi_freq_ref     =   hi_freq_ref) # TODO: complete population of input parameters from user provided config file
                     else:
@@ -1229,7 +1259,9 @@ class FinalSplitMs(PipelineStepBase):
 
     def run(self, lf, wd_ifolder, casadir, target, verbose=True):
         self.result.start_stamp   = datetime.now()
-        from avica.ms import get_best_spws, remap_gain_curve_spws
+        from avica.ms import get_best_spws, check_and_fix_spw_partitioning
+        from avica.ms.compat import CasaMSMetadata
+        cmsmd = CasaMSMetadata()
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         metafolder                      =   Path(wd_meta.metafolder)
@@ -1292,8 +1324,15 @@ class FinalSplitMs(PipelineStepBase):
                         with step_stage(msg):
                             casalogfile     =   f'{wd_t}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa")}'
                             errcasalogfile  =   f'{wd_t}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa")}'
+                            cmsmd.open(str(vis_b))
+                            try:
+                                scans = sorted(set(s for fld in allsources for s in cmsmd.scansforfield(fld)))
+                            finally:
+                                cmsmd.done()
 
-                            task            =   MsTransform(vis=str(vis_b), outputvis=str(outvis), field=",".join(allsources),
+                            task            =   MsTransform(vis=str(vis_b), outputvis=str(outvis),
+                                                    scan=",".join(map(str, scans)),
+                                                    field=",".join(map(str, allsources)),
                                                     spw=",".join(listof_uniquespws))
 
                             step             =   task.to_step(logfile=casalogfile, casadir=casadir, errf=errcasalogfile, mpi_cores=10)
@@ -1308,7 +1347,7 @@ class FinalSplitMs(PipelineStepBase):
                             msg                 =   "creating input and updating values"
                             log.info(msg)
                             with step_stage(msg):
-                                remap_gain_curve_spws(str(outvis), listof_uniquespws)
+                                check_and_fix_spw_partitioning(str(outvis), listof_uniquespws)
                                 desc[band]                 =   outvis.name
                                 self.result.success_count   +=  1
 
@@ -1376,6 +1415,7 @@ class Calibration(PipelineStepBase):
     # ----------------------------------------------------------
 
     def run(self, lf, wd_ifolder, casadir, target, verbose=True):
+        from avica.ms.tables import repair_mixed_single_pol_syscal_tsys
         self.result.start_stamp         =   datetime.now()
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
@@ -1413,6 +1453,13 @@ class Calibration(PipelineStepBase):
                     del_fl(wd_t,0, '*.uvf', rm=True)
                     del_fl(wd_t,0, '*calibration_tables', rm=True)
 
+
+                    if vis is not None and Path(vis).exists():
+                        nfixed_tsys = repair_mixed_single_pol_syscal_tsys(vis)
+                        if nfixed_tsys:
+                            msg = f"repaired {nfixed_tsys} mixed single-pol SYSCAL TSYS rows in {Path(vis).name}"
+                            print(msg)
+                            self.result.desc.append(msg)
 
                     payload         =   PicardPayload(PicardTask(input=iwd_b_t, n=PipelineContext.params['mpi_cores_rpicard']))
                     payload.run()

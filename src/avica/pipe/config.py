@@ -479,7 +479,7 @@ DEFAULT_PARAMS: dict = {
     "worksheet"                 :   None,
     "picard_input_template"     :   f"{Path(__file__).parent}/input_template",
     "csv_file"                  :   "",
-    "accor_solint"              :   10.0,
+    "accor_solint"              :   "int",
     "class_search_asciifile"    :   SMILE_SAMPLE_CATALOG_ASCII,
     "rfc_catalogfile"           :   RFC_CATALOG_ASCII,
     "separation_thres"          :   850.0,
@@ -501,9 +501,12 @@ DEFAULT_PARAMS: dict = {
     "mpi_cores_importfitsidi"   :   5,
     "snr_threshold_phref"       :   7,
     "flux_threshold_phref"      :   0.15,
+    "min_channel_flagging"      :   32,
+    "sci_solints"               :   "auto",
+    "solint_max_scan_partitions":   8,
     "apply_flag_from_idi"       :   True,
+    "source_extract_multi_fitsfiles"    :   False,
 }
-
 
 class PipeConfig:
     def __init__(self, configfile):
@@ -512,3 +515,10 @@ class PipeConfig:
 
     def to_dict(self):
         return read_inputfile(self.folder, self.configfile)[0]
+
+    def defaults(self):
+        default_params = {}
+        for k,v in DEFAULT_PARAMS.items():
+            if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',"size_", "snr_", "flux_"]):
+                default_params[k] = v
+        return default_params

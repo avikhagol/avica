@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import csv
+from multiprocessing import Pipe
 from pathlib import Path
 from typing import List, Optional
 
@@ -17,7 +18,7 @@ except ImportError:
 
 from avica.config import avica_data_dir
 
-from avica.util import casadir_find, rfc_find
+from avica.util import casadir_find, rfc_find, create_config
 from avica.pipe.config import CSV_POPULATED_STEPS, PipeConfig
 
 from avica.pipe.main import AvicaPipeline
@@ -153,12 +154,43 @@ def fitsidicheck(fitsfilenames: Annotated[Optional[List[str]], typer.Argument()]
 pipeline_app = typer.Typer(help="AVICA pipeline.")
 avica_cli.add_typer(pipeline_app, name="pipe")
 
+@pipeline_app.command("config")
+def pipe_config(
+    outfile: Optional[str] = typer.Option("avica.inp", help="output config file containing key=value"),
+    inpfile: Optional[str] = typer.Option(None, help="input config file containing key=value"),
+    default: Annotated[bool, typer.Option("--default", help="adds the configfile to the default config directory")] = False,
+    data: Annotated[Optional[List[str]], typer.Argument(help="key=value pairs")] = None,
+    ):
+    params = PipeConfig(None).defaults()
+
+    if inpfile:
+        try:
+            params = PipeConfig(inpfile).to_dict()
+        except Exception as e:
+            raise typer.BadParameter(f"Failed to read config file '{inpfile}': {e}") from e
+
+    if data:
+        for item in data:
+            if "=" not in item:
+                raise typer.BadParameter(f"Invalid key=value format: '{item}' (missing '=')")
+            key, value = item.split("=", 1)
+            params[key] = value
+
+    if not params:
+        raise typer.BadParameter("No configuration to write. Provide either --inpfile or --data arguments.")
+
+    if default:
+        outfile = str(Path(avica_data_dir) / Path(outfile).name)
+
+    create_config(params=params, out=outfile, rj=1, lj=1)
+
 @pipeline_app.command("run")
 def run_pipeline(
     fitsfilenames: Annotated[str,typer.Option("--f", "--fitsfilenames", help="fitsfile names comma separated")] = '',
     stps: Annotated[Optional[List[str]],typer.Argument(help="steps for execution")] = CSV_POPULATED_STEPS,
     target: Annotated[str,typer.Option("--t", "--target", help="Selected field / sourc name")] = '',
     configfile: Optional[str] = typer.Option("avica.inp", help="config file containing key=value"),
+    default_configfile: Optional[str] = typer.Option("avica.inp", help="default config file name containing key=value"),
     resume: Annotated[bool, typer.Option("--resume", help="Resume after the last successful step in the result CSV.")] = False,
     resume_from: Annotated[Optional[str], typer.Option("--resume-from", help="Start from this pipeline step.")] = None,
     ):
@@ -181,6 +213,12 @@ def run_pipeline(
 
     """
 
+    default_configfile = str(Path(avica_data_dir) / Path(default_configfile).name)
+
+    if Path(default_configfile).exists():
+        _params = PipeConfig(default_configfile).to_dict()
+    else:
+        _params = {}
     pipe_params={
                 "folder_for_fits": ".",
                  "target_dir" : "reduction/",
@@ -191,15 +229,21 @@ def run_pipeline(
                  "fitsfilenames": fitsfilenames.split(","),
                  }
 
-
-    pipe_params.update(PipeConfig(configfile).to_dict())
+    pipe_params.update(_params)
+    if configfile and Path(configfile).exists():
+        try:
+            pipe_params.update(PipeConfig(configfile).to_dict())
+        except Exception as e:
+            raise typer.BadParameter(f"Failed to read config file '{configfile}': {e}") from e
+    elif configfile:
+        typer.echo(f"Warning: Config file '{configfile}' not found, skipping.", err=True)
 
     # if configfile:
     #     configdata = PipeConfig(configfile=configfile)
     #     pipe_params.update(configdata.to_dict())
 
-    csvfile = _result_csv_path(pipe_params)
-    pipe_params["result_csv_file"] = str(csvfile)
+    result_csvfile = _result_csv_path(pipe_params)
+    pipe_params["result_csv_file"] = str(result_csvfile)
 
     # print(DEFAULT_PARAMS['allfitsfile'])
     main_pipeline = AvicaPipeline(pipe_params=pipe_params)
@@ -211,13 +255,13 @@ def run_pipeline(
         except ValueError as exc:
             raise typer.BadParameter(str(exc), param_hint="--resume-from") from exc
     elif resume:
-        if not csvfile.exists():
-            typer.echo(f"No result CSV found at {csvfile}; running requested steps.")
+        if not result_csvfile.exists():
+            typer.echo(f"No result CSV found at {result_csvfile}; running requested steps.")
         else:
-            resume_from = _infer_resume_step(csvfile, main_pipeline.step_names())
+            resume_from = _infer_resume_step(result_csvfile, main_pipeline.step_names())
 
-        if csvfile.exists() and resume_from is None:
-            typer.echo(f"All pipeline steps already completed according to {csvfile}.")
+        if result_csvfile.exists() and resume_from is None:
+            typer.echo(f"All pipeline steps already completed according to {result_csvfile}.")
             return
         if resume_from:
             stps = main_pipeline.steps_from(resume_from)

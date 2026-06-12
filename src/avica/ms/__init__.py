@@ -24,10 +24,20 @@ from avica import c
 
 from avica.ms.mpiclient import start_mpi
 import traceback
+from itertools import product
 
 msmd=msmetadata()
 
 SNR_THRES = 7.0
+
+SPW_FIXABLE_TABLES = (
+    "GAIN_CURVE",
+    "SYSCAL",
+    "WEATHER",
+    "FEED",
+    # "PHASE_CAL",
+    # "FLAG_CMD"
+)
 
 
 
@@ -338,18 +348,128 @@ def remap_gain_curve_spws(vis, selected_spws, verbose=True):
         "dropped_rows": int(len(drop_rows)),
     }
 
-# def get_tb_data(vis, axs=[]):
-#     tb = ctable(vis, ack=False)
-#     available_cols = tb.colnames()
-#     res = []
-#     if len(axs):
-#         for ax in axs:
-#             if ax in available_cols:
-#                 res.append(tb.getcol(ax))
-#             else:
-#                 raise NameError(f"{ax} is not a valid column, choose from {','.join(available_cols)}")
-#     tb.close()
-#     return res
+
+
+def check_and_fix_spw_partitioning(vis, selected_spws, verbose=True):
+    """
+    After mstransform splits a subset of SPWs the main MS is reindexed, but
+    sub-tables (listed in SPW_FIXABLE_TABLES) may still carry the original input SPW ids and overflow that range.
+    This may write wrong gain tables.
+
+    Each sub-table is opened read-only first; only the ones that actually need editing are reopened with readonly=False.
+
+    :vis:
+                            the MS to check and fix
+    :selected_spws:
+                            the input-MS SPW ids used to create `vis`.
+
+    """
+    selected_spws = [int(str(spw).split(":", 1)[0]) for spw in selected_spws]
+    spwmap = {old: new for new, old in enumerate(selected_spws)}
+    selected_set = set(selected_spws)
+
+    tbspw = ctable(f"{vis}/SPECTRAL_WINDOW", ack=False)
+    try:
+        nspw = tbspw.nrows()
+    finally:
+        tbspw.close()
+
+    valid_range = set(range(nspw))
+    results = {}
+
+    for tb_name in SPW_FIXABLE_TABLES:
+        tb_path = f"{vis}/{tb_name}"
+        if not Path(f"{tb_path}/table.dat").exists():
+            continue
+
+        tb = None
+        try:
+            tb = ctable(tb_path, ack=False, readonly=True)
+
+            cur_max = None
+            needs_fix = False
+            if "SPECTRAL_WINDOW_ID" not in tb.colnames():
+                continue
+
+            spwids = tb.getcol("SPECTRAL_WINDOW_ID")
+            if spwids is None or len(spwids) == 0:
+                continue
+            spwids = np.asarray(spwids).astype(int)
+
+            positive_ids = spwids[spwids >= 0]
+            if len(positive_ids) == 0:
+                continue
+
+            present = set(np.unique(positive_ids).tolist())
+            cur_max = int(positive_ids.max())
+
+            if present.issubset(valid_range):
+                results[tb_name] = {"changed": False, "reason": "already aligned", "max_spw": cur_max}
+                continue
+
+            if not selected_set.issubset(present):
+                results[tb_name] = {
+                    "changed": False,
+                    "reason": "selected SPWs not all present",
+                    "selected": selected_spws,
+                    "present": sorted(present),
+                }
+                continue
+
+            needs_fix = True
+
+        except Exception as exc:
+            results[tb_name] = {"changed": False, "reason": f"open failed: {exc}"}
+            continue
+        finally:
+            if tb is not None:
+                tb.close()
+
+        if not needs_fix:
+            continue
+
+        tb = None
+        try:
+            tb = ctable(tb_path, ack=False, readonly=False)
+        except Exception as exc:
+            results[tb_name] = {"changed": False, "reason": f"reopen rw failed: {exc}"}
+            continue
+
+        try:
+            spwids = np.asarray(tb.getcol("SPECTRAL_WINDOW_ID")).astype(int)
+            positive_mask = spwids >= 0
+            to_drop_mask = positive_mask & ~np.isin(spwids, selected_spws)
+            drop_rows = np.where(to_drop_mask)[0]
+            if len(drop_rows):
+                tb.removerows(drop_rows)
+
+            spwids = np.asarray(tb.getcol("SPECTRAL_WINDOW_ID")).astype(int)
+            positive_mask = spwids >= 0
+            remapped = spwids.copy()
+            remapped[positive_mask] = np.array(
+                [spwmap[int(old)] for old in spwids[positive_mask]],
+                dtype=spwids.dtype,
+            )
+            tb.putcol("SPECTRAL_WINDOW_ID", remapped)
+            tb.flush()
+        finally:
+            if tb is not None:
+                tb.close()
+
+        results[tb_name] = {
+            "changed": True,
+            "old_max_spw": cur_max,
+            "selected": selected_spws,
+            "output": list(range(len(selected_spws))),
+            "dropped_rows": int(len(drop_rows)),
+        }
+        if verbose:
+            print(
+                f"remapped {tb_path} SPWs {selected_spws} -> "
+                f"{list(range(len(selected_spws)))} (dropped {len(drop_rows)} rows)"
+            )
+
+    return results
 
 def select_long_scans(field_id, fields, scan_df):
     """
@@ -1539,7 +1659,23 @@ def find_phasecenter_inms(fitsfile, vis, class_searchcoord_file, sep=0.85 ):
 
     return dic_phase_center
 
-from itertools import product
+
+def get_num_chan(vis:str, spw: int=0) -> float:
+    msmd.open(vis)
+    num_chan = msmd.chanwidths(spw).size
+    msmd.done()
+    return num_chan
+
+def get_scan_lengths(vis:str, target:str):
+    res = {}
+    msmd.open(vis)
+    scids = msmd.scansforfield(target)
+    for sc in scids:
+        sctime = msmd.timesforscan(sc)
+        td = max(sctime) - min(sctime)
+        res[sc] = td
+    msmd.done()
+    return res
 
 def get_alluniquecomb_spws(vis):
     """

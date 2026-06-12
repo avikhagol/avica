@@ -152,10 +152,11 @@ class BandInfoMS:
         timeavg                         =   False
         dict_result                     =   {}
         scan_cache                      =   {}
-        antenna_names                   =   np.array(self.msmd.antennanames())
         # __________________________ missing_antennas
-
-
+        if self.msmd is not None:
+            self.msmd.close()
+        self.msmd.open(self.vis)
+        antenna_names                   =   np.array(self.msmd.antennanames())
         for i,obsid in enumerate(range(self.bands_dict[band]['nobs'])):
             good_scans                  =   set()
             spws                            =   set([int(val) for val in self.bands_dict[band][f'obs={obsid}']['scans'].keys()])
@@ -194,11 +195,13 @@ class BandInfoMS:
                 if found_expt <= self.min_expt :   timeavg                     =   True
 
                 bw_khz                          =   self.msmd.bandwidths(spw)/1e3
-                dict_result[f"{band}{i}"][spw]          =   {"nchan":nchan, "chwidth":chwidth, "bw_khz":bw_khz, "good_scans":good_scans}
+                fields                      =   sorted({int(field) for scan in good_scans for field in self.msmd.fieldsforscan(scan)})
+                dict_result[f"{band}{i}"][spw]          =   {"nchan":nchan, "chwidth":chwidth, "bw_khz":bw_khz, "good_scans":good_scans,
+                    "fields": fields}
 
 
             dict_result[f"{band}{i}"]['timeavg']              =   timeavg
-
+        self.msmd.close()
         return dict_result
 
     def spws(self, band):

@@ -363,9 +363,9 @@ def update_obsfrom_avicameta(wd_ifolder, sources_dict=None, new_wd=None, band=No
 
 
 def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  caliblist_file, sourcesf,
-                        refantsf, sourcesf_snr , band=None, edgeflagging=True, pipe_params=None, hi_freq_ref=11):
+                        refantsf, sourcesf_snr , band=None, min_channel_flagging=32, sci_solints="auto", solint_max_scan_partitions=8, pipe_params=None, hi_freq_ref=11):
     success                             =   False
-    from avica.ms import identify_sources_fromsnr_ms, get_antenna_name, has_table, get_reffreq
+    from avica.ms import identify_sources_fromsnr_ms, get_antenna_name, has_table, get_reffreq, get_num_chan, get_scan_lengths
 
 
 
@@ -392,9 +392,31 @@ def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  cal
         if 'refants' in refants_d: refants_d['refant'] = refants_d['refants']
 
         refants_d['array_type']             =   get_antenna_name(vis)
+
         if get_reffreq(vis)>hi_freq_ref and all(has_table(vis, "WEATHER", "SYSTEM_TEMPERATURE")):
             if "VLBA" in refants_d['array_type']:
                 refants_d['array_type']         =   refants_d['array_type'] + 'hi'
+        if sci_solints and "auto" in sci_solints:
+            scan_lengths = get_scan_lengths(vis=vis, target=target)
+            p, _, _         =   read_inputfile(wd_ifolder, inputfile="array.inp")
+            refants_d['fringe_solint_optimize_search_sci'] = p['fringe_solint_optimize_search_sci']
+            if isinstance(refants_d['fringe_solint_optimize_search_sci'], str):
+                solints = refants_d['fringe_solint_optimize_search_sci'].split(';')
+            else:
+                solints = refants_d['fringe_solint_optimize_search_sci']
+            if isinstance(solints, list):
+                min_scan = min(scan_lengths.values())
+                max_scan = max(scan_lengths.values())
+
+                selected = {}
+
+                for p in range(1, solint_max_scan_partitions + 1):
+                    target_min = min_scan / p
+                    target_max = max_scan / p
+                    solints = [float(s) for s in solints]
+                    selected[p] = int(min(solints,key=lambda s: min(abs(s - target_min),abs(s - target_max))))
+
+                refants_d['fringe_solint_optimize_search_sci'] = ";".join(map(str, sorted(set(selected.values()))))
 
         update_from_avicameta(wd_ifolder, val_dict=refants_d, new_wd=iwd_b, inpfile='array.inp')
 
@@ -416,7 +438,7 @@ def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  cal
             'begi_quacking' : 1,
             'end_quacking':1,
             'flag_quacking':False,
-            'flag_edge_channels' : edgeflagging,
+            'flag_edge_channels' : min_channel_flagging<=get_num_chan(vis, 0),
             'numo_edge_channels' : "7,7",
         }
 
@@ -1319,178 +1341,178 @@ def attach_antab(self, only_first=True, attach_all=False):
 
 
 
-class GenerateAndAppendAntab:
-    def __init__(self, fitsfiles, targets, metafolder, verbose, wd, valid_perc=5):
+# class GenerateAndAppendAntab:
+#     def __init__(self, fitsfiles, targets, metafolder, verbose, wd, valid_perc=5):
 
-        self.fitsfiles                  =   fitsfiles
-        self.targets                    =   targets
-        self.metafolder                 =   metafolder
-        self.verbose                    =   verbose
-        self.wd                         =   wd
-        self.valid_perc                 =   valid_perc
+#         self.fitsfiles                  =   fitsfiles
+#         self.targets                    =   targets
+#         self.metafolder                 =   metafolder
+#         self.verbose                    =   verbose
+#         self.wd                         =   wd
+#         self.valid_perc                 =   valid_perc
 
-        self.success                    =   None
-        self.desc                       =   ""
+#         self.success                    =   None
+#         self.desc                       =   ""
 
-        self.tsysfiles                  =   set()
+#         self.tsysfiles                  =   set()
 
-    def find_and_attach_antab(self, fitsfile, fitsfiles, antabfile, attach_all, verbose=False):
-        from avica.fitsidiutil import ANTAB, get_dateobs, parse_antab
-        from avica.external.jive import append_tsys as TsysData, append_gc as GCData
+#     def find_and_attach_antab(self, fitsfile, fitsfiles, antabfile, attach_all, verbose=False):
+#         from avica.fitsidiutil import ANTAB, get_dateobs, parse_antab
+#         from avica.external.jive import append_tsys as TsysData, append_gc as GCData
 
-        ans_found                       =   set()
-        dic_gf                          =   {}
-        found_gf                        =   ''
-        gain_missing                    =   []
-        bsize                           =   float(FileSize('/dev/null').B)
-
-
-        if self.verbose: print("finding tsys...")
-        _, failed, rawfs            =   find_tsys(f"{self.wd}/raw", fitsfile, 0, 0)
-        if not rawfs:
-            self.success, self.desc =   False, "Downloading failed!"
-            print(self.desc)
-        else:
-            for i,gf in enumerate(rawfs):
-                if (not '.tsys' in gf):
-                    print("using", gf)
-                    for gzippable_format in ['.Z', '.gz']:
-                        if gzippable_format in gf:
-                            subprocess.run(['gzip', '-d', gf])
-                            gf          =   gf.replace(gzippable_format,'')
-                    if attach_all or not gf in self.tsysfiles:
-                        try:
-                            an              =   ANTAB(fitsfile, gf)
-                            anfile          =   f'{antabfile}.{i}'
-                            allans, _tsys_head, gain_missing    = an.gen_antab(anfile)
-                            if bsize<float(FileSize(gf).B):
-                                found_gf    =   gf
-                                bsize       =   float(FileSize(gf).B)
-                            if allans:  dic_gf[gf]=allans,gain_missing,anfile
-                            ans_found.update(allans)
-                        except Exception as e:
-                            print(gf, e)
-                            traceback.print_exc()
-                else:
-                    print("not using", gf)
-            for _file in dic_gf.keys():
-                # if found_gf!=_file:
-                #         del_fl(_file, rm=True)
-                # else:
-                #     found_gf = ''
-
-                if _file and Path(dic_gf[_file][-1]).exists():
-                    if Path(antabfile).exists() : Path(antabfile).unlink()
-                    Path(dic_gf[_file][2]).rename(Path(self.wd) / antabfile)
-                    t1              =   time.time()
-                    self.tmpfs      =   deepcopy(fitsfiles)
+#         ans_found                       =   set()
+#         dic_gf                          =   {}
+#         found_gf                        =   ''
+#         gain_missing                    =   []
+#         bsize                           =   float(FileSize('/dev/null').B)
 
 
-                    for i, ff in enumerate(fitsfiles):
-                        tmpf            =   f"{Path(ff)}.tmp"
-                        self.tmpfs[i]   =   tmpf
-                        if Path(tmpf).exists(): Path(tmpf).unlink()
-                        shutil.copy(str(Path(ff).absolute()), tmpf)
+#         if self.verbose: print("finding tsys...")
+#         _, failed, rawfs            =   find_tsys(f"{self.wd}/raw", fitsfile, 0, 0)
+#         if not rawfs:
+#             self.success, self.desc =   False, "Downloading failed!"
+#             print(self.desc)
+#         else:
+#             for i,gf in enumerate(rawfs):
+#                 if (not '.tsys' in gf):
+#                     print("using", gf)
+#                     for gzippable_format in ['.Z', '.gz']:
+#                         if gzippable_format in gf:
+#                             subprocess.run(['gzip', '-d', gf])
+#                             gf          =   gf.replace(gzippable_format,'')
+#                     if attach_all or not gf in self.tsysfiles:
+#                         try:
+#                             an              =   ANTAB(fitsfile, gf)
+#                             anfile          =   f'{antabfile}.{i}'
+#                             allans, _tsys_head, gain_missing    = an.gen_antab(anfile)
+#                             if bsize<float(FileSize(gf).B):
+#                                 found_gf    =   gf
+#                                 bsize       =   float(FileSize(gf).B)
+#                             if allans:  dic_gf[gf]=allans,gain_missing,anfile
+#                             ans_found.update(allans)
+#                         except Exception as e:
+#                             print(gf, e)
+#                             traceback.print_exc()
+#                 else:
+#                     print("not using", gf)
+#             for _file in dic_gf.keys():
+#                 # if found_gf!=_file:
+#                 #         del_fl(_file, rm=True)
+#                 # else:
+#                 #     found_gf = ''
 
-                    # self.sort_by_time()
-                    alldobs = [get_dateobs(fitsfile_tmp) for fitsfile_tmp in self.tmpfs]
-                    dict_res = parse_antab(antabfile=antabfile, fitsfile=self.tmpfs[0])
-                    print(dict_res.keys())
-                    antab_start_time    = dict_res["tsys_dic"]['start_time']
-                    antab_end_time      = dict_res["tsys_dic"]['end_time']
-                    # print(antab_start_time, antab_end_time, alldobs)
-                    # print(self.tmpfs)
+#                 if _file and Path(dic_gf[_file][-1]).exists():
+#                     if Path(antabfile).exists() : Path(antabfile).unlink()
+#                     Path(dic_gf[_file][2]).rename(Path(self.wd) / antabfile)
+#                     t1              =   time.time()
+#                     self.tmpfs      =   deepcopy(fitsfiles)
 
-                    if any(antab_start_time.date() <= dobs.date() <= antab_end_time.date() for dobs in alldobs):
-                        for idifile in self.tmpfs:
-                            if verbose: print(f"....appending System Temperature to {idifile}")
-                            TsysData.append_tsys(antabfile=antabfile, idifiles=idifile, replace=True)
-                            if verbose: print(f"....appending Gain Curve to {idifile}")
-                            GCData.append_gc(antabfile=antabfile, idifile=idifile, replace=True)
-                        # cmd = ['/data/avi/env/casapy38/bin/python3','/data/avi/gh/casa-vlbi/append_tsys.py', str(antabfile)] + self.tmpfs + ["--replace"]
-                        # print(" ".join(cmd))
 
-                        # subprocess.run(cmd)
-                        # cmd = ['/data/avi/env/casapy38/bin/python3', '/data/avi/gh/casa-vlbi/append_gc.py', str(antabfile) ] + self.tmpfs + ["--replace"]
-                        # print(" ".join(cmd))
-                        # subprocess.run(cmd)
+#                     for i, ff in enumerate(fitsfiles):
+#                         tmpf            =   f"{Path(ff)}.tmp"
+#                         self.tmpfs[i]   =   tmpf
+#                         if Path(tmpf).exists(): Path(tmpf).unlink()
+#                         shutil.copy(str(Path(ff).absolute()), tmpf)
 
-                    for i, ff in enumerate(fitsfiles):
-                        tmpf            =   f"{Path(ff)}.tmp"
-                        Path(ff).unlink()
-                        Path(tmpf).rename(ff)
-                        self.tmpfs[i]   =   ff
-                    self.tsysfiles.add(gf)
+#                     # self.sort_by_time()
+#                     alldobs = [get_dateobs(fitsfile_tmp) for fitsfile_tmp in self.tmpfs]
+#                     dict_res = parse_antab(antabfile=antabfile, fitsfile=self.tmpfs[0])
+#                     print(dict_res.keys())
+#                     antab_start_time    = dict_res["tsys_dic"]['start_time']
+#                     antab_end_time      = dict_res["tsys_dic"]['end_time']
+#                     # print(antab_start_time, antab_end_time, alldobs)
+#                     # print(self.tmpfs)
 
-    def attach_antab(self, only_first=True, attach_all=False):
-        """
+#                     if any(antab_start_time.date() <= dobs.date() <= antab_end_time.date() for dobs in alldobs):
+#                         for idifile in self.tmpfs:
+#                             if verbose: print(f"....appending System Temperature to {idifile}")
+#                             TsysData.append_tsys(antabfile=antabfile, idifiles=idifile, replace=True)
+#                             if verbose: print(f"....appending Gain Curve to {idifile}")
+#                             GCData.append_gc(antabfile=antabfile, idifile=idifile, replace=True)
+#                         # cmd = ['/data/avi/env/casapy38/bin/python3','/data/avi/gh/casa-vlbi/append_tsys.py', str(antabfile)] + self.tmpfs + ["--replace"]
+#                         # print(" ".join(cmd))
 
-        """
-        antabfile                       =   Path(self.wd) / 'gc_dpfu_fromidi.ANTAB'
-        self.success, self.desc         =   False, "Failed"
+#                         # subprocess.run(cmd)
+#                         # cmd = ['/data/avi/env/casapy38/bin/python3', '/data/avi/gh/casa-vlbi/append_gc.py', str(antabfile) ] + self.tmpfs + ["--replace"]
+#                         # print(" ".join(cmd))
+#                         # subprocess.run(cmd)
 
-        for i, fitsfile in enumerate(self.workingfits):
-            antabfile                   =   Path(self.wd) / f'gc_dpfu_fromidi.ANTAB.{i}'
-            del_fl(Path(self.wd), fl=f'gc_dpfu_fromidi.ANTAB.{i}', rm=True)
-            tsys_found, _, _ , _, _     =   tsys_exists(fitsfile)
-            if not tsys_found:
-                if self.verbose: print("TSYS not found! Searching in other fitsfile")
+#                     for i, ff in enumerate(fitsfiles):
+#                         tmpf            =   f"{Path(ff)}.tmp"
+#                         Path(ff).unlink()
+#                         Path(tmpf).rename(ff)
+#                         self.tmpfs[i]   =   ff
+#                     self.tsysfiles.add(gf)
 
-                fitsfiles_toattach_antab = self.workingfits if not attach_all else [fitsfile]
-                if not tsys_exists_in_fitsfiles(fitsfile, fitsfiles_toattach_antab, self.valid_perc):
-                    if self.verbose: print("TSYS not found in other fitsfiles")
-                    if len(fitsfiles_toattach_antab)>1:
-                        self.sort_by_time()
-                        print("SORTED by time : ", self.workingfits)
-                    self.find_and_attach_antab(fitsfile=fitsfile, antabfile=antabfile, fitsfiles=fitsfiles_toattach_antab,
-                                               attach_all=attach_all, verbose=self.verbose) # changed fitsfile = self.workingfits[0] to fitsfile = fitsfile
-                    if only_first:   break
-                else:
-                    if self.verbose: print("TSYS exists in another fitsfile!")
-        if self.verbose: print("Attaching TSYS finished!")
-# -------------------------------------------------------------------------------------------
-    def sort_by_time(self):
-        starttime = []
-        endtime = []
-        for i, fitsfile in enumerate(self.workingfits):
-            success, starttime_tsys, lasttime_tsys, starttime_uvd, lasttime_uvd = tsys_exists(fitsfile, self.valid_perc)
-            if starttime_uvd:
-                starttime.append(starttime_uvd.mjd)
-            else:
-                print("UV data not found..")
-                self.workingfits.remove(fitsfile)
-        self.workingfits = [x for _, x in sorted(zip(starttime, self.workingfits), reverse=True)]
-        return self.workingfits
+#     def attach_antab(self, only_first=True, attach_all=False):
+#         """
 
-    def sort_by_tsys(self):
-        perc_ffs = []
-        allsuccess = []
-        for i, fitsfile in enumerate(self.workingfits):
-            success, starttime_tsys, lasttime_tsys, starttime_uvd, lasttime_uvd = tsys_exists(fitsfile, self.valid_perc)
-            if success:
-                perc_ffs.append(overlap_percentage(starttime_tsys.mjd, lasttime_tsys.mjd, starttime_uvd.mjd, lasttime_uvd.mjd))
-            else:
-                perc_ffs.append(0.0)
-            allsuccess.append(success or tsys_exists_in_fitsfiles(fitsfile, self.workingfits, self.valid_perc))
-        self.workingfits = [x for _, x in sorted(zip(perc_ffs, self.workingfits), reverse=True)]
-        allsuccess = [x for _, x in sorted(zip(perc_ffs, allsuccess), reverse=True)]
-        return allsuccess
+#         """
+#         antabfile                       =   Path(self.wd) / 'gc_dpfu_fromidi.ANTAB'
+#         self.success, self.desc         =   False, "Failed"
 
-    def validate(self):
-        """
-        tsys_exists_in_fitsfiles(fitsfile, self.fitsfiles)
-        gc_exists_in_fitsfiles(fitsfile, self.fitsfiles)
-        other things are already checked
-        """
+#         for i, fitsfile in enumerate(self.workingfits):
+#             antabfile                   =   Path(self.wd) / f'gc_dpfu_fromidi.ANTAB.{i}'
+#             del_fl(Path(self.wd), fl=f'gc_dpfu_fromidi.ANTAB.{i}', rm=True)
+#             tsys_found, _, _ , _, _     =   tsys_exists(fitsfile)
+#             if not tsys_found:
+#                 if self.verbose: print("TSYS not found! Searching in other fitsfile")
 
-        self.success = all(self.sort_by_tsys())
+#                 fitsfiles_toattach_antab = self.workingfits if not attach_all else [fitsfile]
+#                 if not tsys_exists_in_fitsfiles(fitsfile, fitsfiles_toattach_antab, self.valid_perc):
+#                     if self.verbose: print("TSYS not found in other fitsfiles")
+#                     if len(fitsfiles_toattach_antab)>1:
+#                         self.sort_by_time()
+#                         print("SORTED by time : ", self.workingfits)
+#                     self.find_and_attach_antab(fitsfile=fitsfile, antabfile=antabfile, fitsfiles=fitsfiles_toattach_antab,
+#                                                attach_all=attach_all, verbose=self.verbose) # changed fitsfile = self.workingfits[0] to fitsfile = fitsfile
+#                     if only_first:   break
+#                 else:
+#                     if self.verbose: print("TSYS exists in another fitsfile!")
+#         if self.verbose: print("Attaching TSYS finished!")
+# # -------------------------------------------------------------------------------------------
+#     def sort_by_time(self, reverse=False):
+#         starttime = []
+#         endtime = []
+#         for i, fitsfile in enumerate(self.workingfits):
+#             success, starttime_tsys, lasttime_tsys, starttime_uvd, lasttime_uvd = tsys_exists(fitsfile, self.valid_perc)
+#             if starttime_uvd:
+#                 starttime.append(starttime_uvd.mjd)
+#             else:
+#                 print("UV data not found..")
+#                 self.workingfits.remove(fitsfile)
+#         self.workingfits = [x for _, x in sorted(zip(starttime, self.workingfits), reverse=reverse)]
+#         return self.workingfits
 
-        if self.success:
-            self.desc = "TSYS found"
-        else:
-            self.desc = "TSYS not found!"
+#     def sort_by_tsys(self):
+#         perc_ffs = []
+#         allsuccess = []
+#         for i, fitsfile in enumerate(self.workingfits):
+#             success, starttime_tsys, lasttime_tsys, starttime_uvd, lasttime_uvd = tsys_exists(fitsfile, self.valid_perc)
+#             if success:
+#                 perc_ffs.append(overlap_percentage(starttime_tsys.mjd, lasttime_tsys.mjd, starttime_uvd.mjd, lasttime_uvd.mjd))
+#             else:
+#                 perc_ffs.append(0.0)
+#             allsuccess.append(success or tsys_exists_in_fitsfiles(fitsfile, self.workingfits, self.valid_perc))
+#         self.workingfits = [x for _, x in sorted(zip(perc_ffs, self.workingfits), reverse=True)]
+#         allsuccess = [x for _, x in sorted(zip(perc_ffs, allsuccess), reverse=True)]
+#         return allsuccess
 
-        return self.success
+#     def validate(self):
+#         """
+#         tsys_exists_in_fitsfiles(fitsfile, self.fitsfiles)
+#         gc_exists_in_fitsfiles(fitsfile, self.fitsfiles)
+#         other things are already checked
+#         """
+
+#         self.success = all(self.sort_by_tsys())
+
+#         if self.success:
+#             self.desc = "TSYS found"
+#         else:
+#             self.desc = "TSYS not found!"
+
+#         return self.success
 
 def meta_from_fitsfile(fitsfile, target, wd_ifolder, metafolder, reference_ifolder, do_manual_selection):
     from avica.fitsidiutil.op import identify_refant

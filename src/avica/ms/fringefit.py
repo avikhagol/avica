@@ -37,7 +37,7 @@ class ArrayInp(Config):
 class FringeDetectionRating:
     def __init__(self, vis:str, caltable_folder:str=None, n_refant=5, n_calib=6, n_scans=10, iter_scan_count=5,
                  selected_sources:List[str]=None, selected_scans:List[int]=None, selected_ants:List[int]=None, selected_spws=[],
-                 gaintables=[], interp=[], metafolder="", verbose=False):
+                 gaintables=[], interp=[], metafolder="", target=None, verbose=False):
         """rates antenna and sources by FFT SNR from the fringefit task.
         Args:
             vis (str): measurement set file.
@@ -50,6 +50,7 @@ class FringeDetectionRating:
             selected_spws (list, optional): filter result for only selected spws. Defaults to [].
             gaintables (list, optional): input gaintables to use for fringefit task. Defaults to [].
             interp (list, optional): input interpolation on gaintables to use for fringefit task. Defaults to [].
+            target (str, optional): science target source name for antenna availability.
 
         Example:
 
@@ -79,6 +80,7 @@ class FringeDetectionRating:
         self.gaintables             =   gaintables
         self.interp                 =   interp
         self.selected_spws          =   selected_spws
+        self.target                 =   target
         self.selected_sources       =   selected_sources or list(self.dict_sources_r.keys())
         self.selected_source_ids    =   [int(sourceid) for sourceid,sourcename in self.dict_sources.items() if sourcename in self.selected_sources]
         self.selected_scans         =   selected_scans
@@ -88,6 +90,11 @@ class FringeDetectionRating:
 
         self.dict_field_ant_withscans=   get_ant_scans(self.vis, self.selected_source_ids)   # {fid:{anid:set(scids)}]
         self.df_scans               =   get_df_scans(vis=self.vis, dict_field_ant_with_scans=self.dict_field_ant_withscans)
+        target_source_id            =   self.dict_sources_r.get(target) if target else None
+        if target_source_id is None and self.selected_source_ids:
+            target_source_id        =   self.selected_source_ids[0]
+        target_field_ants            =   self.dict_field_ant_withscans.get(int(target_source_id), {}).keys() if target_source_id is not None else []
+        self.target_ants             =   [int(anid) for anid in target_field_ants if int(anid) in self.tsys_antid]    # target ants restricted to those with gc/tsys (an_dic)
 
         self.refants                =   []
         self.calibrators            =   {}
@@ -126,7 +133,8 @@ class FringeDetectionRating:
                                                                     caltable_folder=self.caltable_folder, gt=self.gaintables, interp=self.interp,
                                                                     spws=self.selected_spws, multiband=multiband, verbose=self.verbose)
         self.dic_field, self.refants, self.pp_out       =   find_refant_fromdf(tbls=dic_result['tbl_names'], an_dict=self.dict_antenna, sources_dict=self.dict_sources,
-                                                                    n_calib=self.n_calib, n_refant=self.n_refant)
+                                                                    n_calib=self.n_calib, n_refant=self.n_refant, target_ants=self.target_ants,
+                                                                    field_ant_scans=self.dict_field_ant_withscans)
 
         self.obs.calibrators_instrphase                             =   self.dic_field['NAME']
         self.obs.calibrators_bandpass = self.obs.calibrators_rldly  =   self.obs.calibrators_instrphase[0]
@@ -378,6 +386,16 @@ def select_df_refant_sources(tbls:List[str], an_dict:dict, autocorr=False, minsn
         .join(an_df.rename({"ANNAME": "n2", "d": "d2", "STD_TSYS": "t2"}), left_on="ANTENNA2", right_on="id", how="left")
     )
 
+    ant_occ = (
+        pl.concat([
+            df_tbl.select(pl.col("ANTENNA1").alias("refantid"), "FLAG"),
+            df_tbl.select(pl.col("ANTENNA2").alias("refantid"), "FLAG"),
+        ])
+        .filter(pl.col("FLAG") == False)
+        .group_by("refantid")
+        .agg(pl.col("refantid").count().alias("refant_occ"))
+    )
+
     df_tbl = df_tbl.with_columns([
         pl.when(pl.col("d1") < pl.col("d2"))
           .then(pl.col("n1")).otherwise(pl.col("n2")).alias("refant"),
@@ -388,11 +406,7 @@ def select_df_refant_sources(tbls:List[str], an_dict:dict, autocorr=False, minsn
         pl.when(pl.col("d1") < pl.col("d2"))
           .then(pl.col("t1")).otherwise(pl.col("t2")).alias("STD_TSYS")
     ])
-    df_tbl = df_tbl.with_columns(
-        pl.col("refantid")                                # NOTE: here refantid refers to the shorter distance from centroid, hence counting "over" refantid is different than counting "over" ANTENNA for each baseline.
-        .filter(pl.col("FLAG") == False)
-        .count().over("refantid").alias("refant_occ")
-    )
+    df_tbl = df_tbl.join(ant_occ, on="refantid", how="left")
     df_tbl = df_tbl.with_columns(
         pl.col("refant_occ").fill_null(0)
     )
@@ -427,7 +441,7 @@ def select_df_refant_sources(tbls:List[str], an_dict:dict, autocorr=False, minsn
 
     return res, df_tbl
 
-def find_refant_fromdf(tbls:List[str], an_dict:dict, sources_dict:dict, autocorr=False, minsnr=3.0, calib_snr_thres=7.0, n_refant=4, n_calib=6, verbose=True):
+def find_refant_fromdf(tbls:List[str], an_dict:dict, sources_dict:dict, autocorr=False, minsnr=3.0, calib_snr_thres=7.0, n_refant=4, n_calib=6, verbose=True, target_ants=None, field_ant_scans=None):
     """takes fringefit calibration tables path and gives refant and calibrators
 
     Args:
@@ -440,10 +454,16 @@ def find_refant_fromdf(tbls:List[str], an_dict:dict, sources_dict:dict, autocorr
         n_refant (int, optional): Number of refant to select. Defaults to 4.
         n_calib (int, optional): Number of calibrators to select. Defaults to 6.
         verbose (bool, optional): print output. Defaults to True.
+        target_ants (List[int], optional): antenna ids present on science target
+            (with gc/tsys, see avica.ms.tables.an_dic). ant_availability is the
+            fraction [0-1] of these antennas present in each FIELD_ID.
+            If not provided, ant_availability is set to 1.0 for every FIELD_ID.
+        field_ant_scans (dict, optional): {FIELD_ID: {ANTENNA_ID: scans}} map
+            from the original MS, used to check antenna presence per field.
 
     Returns:
         (dic_field, refants, pp_out)
-        dic_field (dict): {'FIELD_ID': [...], 'NAME': [...], 'SNR': [...]}
+        dic_field (dict): {'FIELD_ID': [...], 'NAME': [...], 'SNR': [...], 'ant_availability': [...]}
         refants (List[str]): [...]
         pp_out (str): printable string output
     """
@@ -459,6 +479,35 @@ def find_refant_fromdf(tbls:List[str], an_dict:dict, sources_dict:dict, autocorr
     df_field            =   (df_tbl.group_by(['FIELD_ID', 'SCAN'])
                                 .agg(pl.col("SNR").mean())
                                 .sort("SNR", descending=True))
+    target_ants         =   {int(anid) for anid in (target_ants or [])}
+    if target_ants:
+        n_target_ants = len(target_ants)
+        if field_ant_scans:
+            ant_availability_rows = []
+            for field_id, ants_with_scans in field_ant_scans.items():
+                field_ants = {int(anid) for anid in ants_with_scans.keys()}
+                ant_availability_rows.append({
+                    "FIELD_ID": int(field_id),
+                    "ant_availability": len(target_ants & field_ants) / n_target_ants,
+                })
+            df_ant_availability = pl.DataFrame(ant_availability_rows)
+        else:
+            target_ant_ids = list(target_ants)
+            df_ant_availability = (
+                pl.concat([
+                    df_tbl.select("FIELD_ID", pl.col("ANTENNA1").alias("anid")),
+                    df_tbl.select("FIELD_ID", pl.col("ANTENNA2").alias("anid")),
+                ])
+                .unique()
+                .group_by("FIELD_ID")
+                .agg(pl.col("anid").is_in(target_ant_ids).sum().alias("target_ant_count"))
+                .with_columns((pl.col("target_ant_count") / n_target_ants).alias("ant_availability"))
+                .select(["FIELD_ID", "ant_availability"])
+            )
+        df_field = df_field.join(df_ant_availability, on="FIELD_ID", how="left")
+        df_field = df_field.with_columns(pl.col("ant_availability").fill_null(0.0))
+    else:
+        df_field = df_field.with_columns(pl.lit(1.0).alias("ant_availability"))
 
     src_df              =   pl.DataFrame({"FIELD_ID": [int(k) for k in sources_dict.keys()],"NAME": list(sources_dict.values())})
     df_field            =   df_field.join(src_df, on="FIELD_ID", how="left")
@@ -479,11 +528,11 @@ def find_refant_fromdf(tbls:List[str], an_dict:dict, sources_dict:dict, autocorr
         print(pp_out)
 
     dic_field = (
-        df_field.sort("SNR", descending=True)
+        df_field.sort(["ant_availability", "SNR"], descending=True)
         .group_by("FIELD_ID")
         .head(1)
-        .select(["FIELD_ID", "NAME", "SNR"])
-        .sort("SNR", descending=True).head(n_calib)
+        .select(["FIELD_ID", "NAME", "SNR", "ant_availability"])
+        .sort(["SNR", "ant_availability"], descending=True).head(n_calib)
         .to_dict(as_series=False) #
     )
 

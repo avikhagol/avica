@@ -46,7 +46,7 @@ import threading
 
 from avica.pipe.helpers import find_tsys, FileSize, tsys_exists, tsys_exists_in_fitsfiles, overlap_percentage, del_fl, parse_params, get_allfitsfiles
 from avica.pipe.helpers import get_targets_filenames, setup_workdir, add_O, get_logfilename
-from avica.pipe.config import DEFAULT_PARAMS, CSV_POPULATED_STEPS, _CASA_INPROCESS_MODULES,  setup_casa_path, get_added_casa_paths, get_added_casa_lib_dirs
+from avica.pipe.config import DEFAULT_PARAMS, CSV_POPULATED_STEPS, PipeConfig, _CASA_INPROCESS_MODULES,  setup_casa_path, get_added_casa_paths, get_added_casa_lib_dirs
 
 from copy import deepcopy
 
@@ -214,8 +214,17 @@ def df_search_brightcalib_fromascii_catalogfile(fitsfile, rfc_filepath, class_fi
     # checking which sources dont have any data in UV_DATA
     df_rfc_filtered = df_rfc[df_rfc['sid'].isin(set(scanlist_arr))]
 
-    # search for flux info in each band
-    for col_req in cols_req:
+    rfc_cols = set(df_rfc_filtered.columns)
+    valid_cols = [c for c in cols_req if c in rfc_cols]
+    if not valid_cols:
+        fallback_cols = sorted([c for c in rfc_cols if c.startswith('Fm')])
+        warnings.warn(
+            f"None of the derived flux columns {cols_req} found in the RFC catalog "
+            f"(available: {fallback_cols}).  Falling back to all Fm* columns.",
+            UserWarning,
+        )
+        valid_cols = fallback_cols
+    for col_req in valid_cols:
         df_res_rfcsearch = concat([df_rfc_filtered.sort_values(by=col_req, ascending=False),
                                     df_res_rfcsearch]).head(nfilter_sources)
     # add targets
@@ -1019,6 +1028,8 @@ class AvicaPipelineCore:
         # PipelineContext.params = DEFAULT_PARAMS
 
         PipelineContext.params.clear()
+        # loaded_config = load_config_yaml(self.pipe_params.get('config_file'))
+        # PipeConfig
         PipelineContext.params.update({**DEFAULT_PARAMS, **self.pipe_params})
         PipelineContext.params['init_params'] = self.pipe_params
 
@@ -1388,7 +1399,7 @@ class GenerateAndAppendAntab:
         if len(tsys_found_in_files) and (not all(tsys_found_in_files)) and self.verbose:
             print("Attaching TSYS finished!")
 
-    def sort_by_time(self):
+    def sort_by_time(self, reverse=False):
         starttime = []
         valid_fits = []
 
@@ -1400,7 +1411,7 @@ class GenerateAndAppendAntab:
             else:
                 print("UV data not found..", fitsfile)
 
-        self.workingfits = [x for _, x in sorted(zip(starttime, valid_fits), reverse=True)]
+        self.workingfits = [x for _, x in sorted(zip(starttime, valid_fits), reverse=reverse)]
         return self.workingfits
 
     def sort_by_tsys(self):
@@ -1668,6 +1679,10 @@ class PersistentMpiCasaRunner:
         return self.runner.send_and_receive(payload)
 
     def close(self):
+        try:
+            self.runner.send_and_receive({"task_casa": "stop_services", "parameters": {}})
+        except Exception:
+            pass
         self.runner.close()
 
 
