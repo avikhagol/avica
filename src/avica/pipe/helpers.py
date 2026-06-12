@@ -363,7 +363,7 @@ def update_obsfrom_avicameta(wd_ifolder, sources_dict=None, new_wd=None, band=No
 
 
 def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  caliblist_file, sourcesf,
-                        refantsf, sourcesf_snr , band=None, min_channel_flagging=32, sci_solints=None, solint_max_scan_partitions=8, pipe_params=None, hi_freq_ref=11):
+                        refantsf, sourcesf_snr , band=None, min_channel_flagging=32, sci_solints="auto", solint_max_scan_partitions=8, pipe_params=None, hi_freq_ref=11):
     success                             =   False
     from avica.ms import identify_sources_fromsnr_ms, get_antenna_name, has_table, get_reffreq, get_num_chan, get_scan_lengths
 
