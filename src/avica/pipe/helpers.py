@@ -413,8 +413,8 @@ def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  cal
                 for p in range(1, solint_max_scan_partitions + 1):
                     target_min = min_scan / p
                     target_max = max_scan / p
-                    solints = [int(s) for s in solints]
-                    selected[p] = min(solints,key=lambda s: min(abs(s - target_min),abs(s - target_max)))
+                    solints = [float(s) for s in solints]
+                    selected[p] = int(min(solints,key=lambda s: min(abs(s - target_min),abs(s - target_max))))
 
                 refants_d['fringe_solint_optimize_search_sci'] = ";".join(map(str, sorted(set(selected.values()))))
 
