@@ -363,9 +363,9 @@ def update_obsfrom_avicameta(wd_ifolder, sources_dict=None, new_wd=None, band=No
 
 
 def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  caliblist_file, sourcesf,
-                        refantsf, sourcesf_snr , band=None, edgeflagging=True, pipe_params=None, hi_freq_ref=11):
+                        refantsf, sourcesf_snr , band=None, min_channel_flagging=32, sci_solints=None, solint_max_scan_partitions=8, pipe_params=None, hi_freq_ref=11):
     success                             =   False
-    from avica.ms import identify_sources_fromsnr_ms, get_antenna_name, has_table, get_reffreq
+    from avica.ms import identify_sources_fromsnr_ms, get_antenna_name, has_table, get_reffreq, get_num_chan, get_scan_lengths
 
 
 
@@ -392,9 +392,30 @@ def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  cal
         if 'refants' in refants_d: refants_d['refant'] = refants_d['refants']
 
         refants_d['array_type']             =   get_antenna_name(vis)
+
         if get_reffreq(vis)>hi_freq_ref and all(has_table(vis, "WEATHER", "SYSTEM_TEMPERATURE")):
             if "VLBA" in refants_d['array_type']:
                 refants_d['array_type']         =   refants_d['array_type'] + 'hi'
+        if sci_solints and "auto" in sci_solints:
+            scan_lengths = get_scan_lengths(vis=vis, target=target)
+            p, _, _         =   read_inputfile(wd_ifolder, inpfile="array.inp")
+            refants_d['fringe_solint_optimize_search_sci'] = p['fringe_solint_optimize_search_sci']
+            if isinstance(refants_d['fringe_solint_optimize_search_sci'], str):
+                solints = refants_d['fringe_solint_optimize_search_sci'].split(';')
+            else:
+                solints = refants_d['fringe_solint_optimize_search_sci']
+            if isinstance(solints, list):
+                min_scan = min(scan_lengths.values())
+                max_scan = max(scan_lengths.values())
+
+                selected = {}
+
+                for p in range(1, solint_max_scan_partitions + 1):
+                    target_min = min_scan / p
+                    target_max = max_scan / p
+                    selected[p] = min(candidates,key=lambda s: min(abs(s - target_min),abs(s - target_max)))
+
+                refants_d['fringe_solint_optimize_search_sci'] = ";".join(map(str, sorted(set(selected.values()))))
 
         update_from_avicameta(wd_ifolder, val_dict=refants_d, new_wd=iwd_b, inpfile='array.inp')
 
@@ -416,7 +437,7 @@ def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  cal
             'begi_quacking' : 1,
             'end_quacking':1,
             'flag_quacking':False,
-            'flag_edge_channels' : edgeflagging,
+            'flag_edge_channels' : min_channel_flagging<=get_num_chan(vis, 0),
             'numo_edge_channels' : "7,7",
         }
 

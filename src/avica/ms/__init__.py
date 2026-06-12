@@ -24,6 +24,7 @@ from avica import c
 
 from avica.ms.mpiclient import start_mpi
 import traceback
+from itertools import product
 
 msmd=msmetadata()
 
@@ -1658,7 +1659,23 @@ def find_phasecenter_inms(fitsfile, vis, class_searchcoord_file, sep=0.85 ):
 
     return dic_phase_center
 
-from itertools import product
+
+def get_num_chan(vis:str, spw: int=0) -> float:
+    msmd.open(vis)
+    num_chan = msmd.chanwidths(spw).size
+    msmd.done()
+    return num_chan
+
+def get_scan_lengths(vis:str, target:str):
+    res = {}
+    msmd.open(vis)
+    scids = msmd.scansforfield(target)
+    for sc in scids:
+        sctime = msmd.timesforscan(sc)
+        td = max(sctime) - min(sctime)
+        res[sc] = td
+    msmd.done()
+    return res
 
 def get_alluniquecomb_spws(vis):
     """
