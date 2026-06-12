@@ -1,24 +1,49 @@
 # Changelog
 
-## [0.3.2] - 2026-05-06
+## [0.3.3] - 2026-06-12
 
 ### Added
-- handling multiple frequency id values in FITS-IDI file.
-- `python-casacore` dependency for handling table I/O operations.
-- configurations `mpi_cores_importfitsidi`
+- `solint_max_scan_partitions`, `sci_solints`, `min_channel_flagging` configuration options.
+- `sci_solints="auto"` mode for automatic solution interval selection.
+- `ant_availability` column for antenna-based source selection in S/N rating.
+- `target_ants` support for antenna filtering.
+- Switch for multi-source extraction (`source_extract_multi_fitsfiles`).
+- Default config file loaded automatically in pipeline run.
+- `python-casacore` dependency for table I/O operations.
+- `mpi_cores_importfitsidi` configuration option.
+- Handling of multiple frequency ID values in FITS-IDI files.
+- `--resume` to resume from the last successful step in `avica pipe run`.
+    - `--resume-from` to resume from a specific step in `avica pipe run`.
+- `avica pipe config` subcommand to generate and edit pipeline configuration files.
+  - `--outfile` to specify output config filename (default: `avica.inp`).
+  - `--inpfile` to base the config on an existing file.
+  - `--default` to save the config to the default config directory (`~/.avica/`).
+  - Positional `key=value` arguments to set or override individual parameters.
 
 ### Changed
-- `AvicaAverageMs` runs iteratively for each `MS` file using `mpicasa` from user provided `casadir`.
-- `ImportFitsIdi` parallelized using `mpicasa` from user provided `casadir`.
-- `numpy` version requirement updated to `<1.25.0` for compatibility with monolithic CASA used by `rPicard`.
+- Solint values now parsed and sorted as floats (previously compared as strings).
+- `AverageMS` uses scalar field IDs for `mstransform`.
+- `mstransform` passes all sources with scans; `msmd.close()` called after use.
+- Accumulation interval (`accor`) defaults to integration time.
+- `AvicaAverageMs` runs iteratively per MS file using `mpicasa` from user-provided `casadir`.
+- `ImportFitsIdi` parallelized using `mpicasa` from user-provided `casadir`.
+- `numpy` version requirement updated to `<1.25.0` for compatibility with monolithic CASA used by rPicard.
 
 ### Fixed
-- python environment collisions with `casadir`
-- issue of `binary` data in FITS-IDI table columns.
-- counting multiple frequency ID values in FREQUENCY FITS-IDI table.
+- S/N rating: SCAN missing from final FFT output; sorting by SCAN; `refant_occurance` counting.
+- `sort_by_time` for FITS files now defaults to `reverse=False`.
+- `mstransform` segfault on certain datasets.
+- Multi-frequency entries missing from ANTAB output.
+- Single polarization observations incorrectly flagged by rPicard.
+- Missing band in RFC catalog lookup.
+- Table lock handling: stale locks, read-only table access, SPW subtable partitions.
+- `mstransform` unable to split SPWs for `SYSCAL`/`GAIN_CURVE` tables.
+- Python environment collisions with `casadir`.
+- Binary data in FITS-IDI table columns.
 
 ### Removed
 - `casatools` from internal dependencies.
 
-[0.3.2]: https://github.com/avikhagol/avica/compare/v0.2.0...v0.3.2
+[0.3.3]: https://github.com/avikhagol/avica/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/avikhagol/avica/compare/v0.3.1.2...v0.3.2
 [0.3.1] : https://github.com/avikhagol/avica/compare/v0.1.2...v0.3.1
