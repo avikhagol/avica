@@ -1164,7 +1164,7 @@ class FillInputMs(PipelineStepBase):
     # ----------------------------------------------------------
 
     def run(self, lf, wd_ifolder, rfc_catalogfile, target, n_calib=6, flux_threshold_phref=7, hi_freq_ref=11,
-            min_channel_flagging=32, sci_solints="auto", verbose=True):
+            min_channel_flagging=32, sci_solints="auto", solint_max_scan_partitions=8, verbose=True):
         self.result.start_stamp         =   datetime.now()
         log                             =   logging.getLogger("avica.pipeline")
 
@@ -1203,6 +1203,7 @@ class FillInputMs(PipelineStepBase):
                                                                             band            =   band[0],
                                                                             min_channel_flagging    =   min_channel_flagging,
                                                                             sci_solints     =   sci_solints,
+                                                                            solint_max_scan_partitions =   solint_max_scan_partitions,
                                                                             pipe_params     =   PipelineContext.params,
                                                                             hi_freq_ref     =   hi_freq_ref) # TODO: complete population of input parameters from user provided config file
                     else:

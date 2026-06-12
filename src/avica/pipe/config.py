@@ -502,6 +502,8 @@ DEFAULT_PARAMS: dict = {
     "snr_threshold_phref"       :   7,
     "flux_threshold_phref"      :   0.15,
     "min_channel_flagging"      :   32,
+    "sci_solints"               :   "auto",
+    "solint_max_scan_partitions":   8,
     "apply_flag_from_idi"       :   True,
     "source_extract_multi_fitsfiles"    :   False,
 }
