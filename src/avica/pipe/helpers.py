@@ -398,7 +398,7 @@ def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  cal
                 refants_d['array_type']         =   refants_d['array_type'] + 'hi'
         if sci_solints and "auto" in sci_solints:
             scan_lengths = get_scan_lengths(vis=vis, target=target)
-            p, _, _         =   read_inputfile(wd_ifolder, inpfile="array.inp")
+            p, _, _         =   read_inputfile(wd_ifolder, inputfile="array.inp")
             refants_d['fringe_solint_optimize_search_sci'] = p['fringe_solint_optimize_search_sci']
             if isinstance(refants_d['fringe_solint_optimize_search_sci'], str):
                 solints = refants_d['fringe_solint_optimize_search_sci'].split(';')
