@@ -1218,8 +1218,6 @@ class PicardCMD:
     mpi_cores:      int             = 10
     verbose:        bool            = False
 
-
-
 @dataclass
 class CasaTaskCMD:
     casadir: str

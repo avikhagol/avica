@@ -84,10 +84,7 @@ class LogFramework:
     polars : bool
         If True, use polars as the internal backend. Falls back to pandas if unavailable.
     gsc : optional
-        A gspread-backed connection object (e.g. your existing GSC wrapper).
-        Pass None to work in CSV-only mode. No gspread import is required
-        unless you actually pass a gsc instance.
-
+        A gspread-backed connection object. Pass None to work in CSV-only mode.
 
     """
     def __init__(self,
