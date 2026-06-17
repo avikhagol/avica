@@ -23,7 +23,7 @@ Installation is recommended using [uv](https://docs.astral.sh/uv/getting-started
 using `uv`
 
 ```bash
-uv tool install avica --python 3.11
+uv tool install avica --python 3.10
 ```
 
 or using `pipx`
@@ -59,6 +59,7 @@ pip install .
 
 # Usage
 
+Since the pipeline's calibration features rely on [rPicard](https://bitbucket.org/M_Janssen/picard/src/master/) please follow the linked setup instructions first. Once rPicard is properly configured, you only need a minimal avica configuration file to get started. (see [Configuration](#configuration))
 
 ## Pipeline
 
@@ -145,14 +146,19 @@ To get the information on the observation run the following:
 avica listobs [FITSFILENAMES]... 
 ```
 
-<!--
-# Development
-After you clone the repo
-```bash
+### Configuration
 
-$ cd avica
-$ pip install -e .[dev]
-```-->
+The pipeline configuration is defined in a custom file with key=value defaults to `avica.inp` in the current directory. See the [example](src/avica/pipe/avica.inp) for a minimal configuration.
+To store default values persistently, create a `avica.inp` file in your home directory (`~/.avica/avica.inp`) using the following command, the default value is used if no `avica.inp` file is found:
+
+```bash
+avica pipe config --default --inpfile <path/to/avica.inp>
+```
+
+or 
+```bash
+avica pipe config --default key=value key2=value2 key3=value3
+```
 
 # Attribution
 

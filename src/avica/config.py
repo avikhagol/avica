@@ -6,7 +6,9 @@ from pathlib import Path
 
 
 # temp_folder =
-avica_data_dir  =   str(Path().home() / ".avica")
+avica_data_dir_path = Path().home() / ".avica"
+avica_data_dir_path.mkdir(exist_ok=True)
+avica_data_dir  =   str(avica_data_dir_path)
 
 
 class BaseConfig(type):

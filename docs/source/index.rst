@@ -83,26 +83,54 @@ The pipeline is configured via a plain-text file in the current working director
 
 .. code-block:: python
 
-   # Required
-   folder_for_fits    =  "/path/to/fitsfile/dirs/"
-   casadir            =  "path/to/monolithic-casa/casa-6.x.x-xx-py3.xx.xxx/"
+   # required
+   # assumes `folder_for_fits` is a folder containing all the raw visibility fits files.
+   # assumes `target_dir` is a folder where the pipeline output will be saved.
+   folder_for_fits           =   /path/to/source/folder/with/raw/visibility/fitsfiles
+   casadir                  =  "path/to/monolithic-casa/casa-6.x.x-xx-py3.xx.xxx/"
 
-   # Optional
-   target_dir              =  "reductions/"
-   picard_input_template   =  "/path/to/input_template"
-   mpi_cores_rpicard       =  10
-   mpi_cores_snrating      =  5
-   mpi_cores_importfitsidi =  5
-   rfc_catalogfile         =  "/path/to/rfc/catalogfile"
-   separation_thres        =  850.0
-   size_limit              =  2000.0
-   sheet_url               =  None
-   worksheet               =  None
-   n_calib                 =  5
-   n_refant                =  4
-   snr_threshold_phref     =  7
-   minsnr                  =  3.2
+   # optional-1
+   # `picard_input_template` is a template for the picard input file, see https://bitbucket.org/M_Janssen/picard/src/master/input_template/.
+   # `accor_solint` is the number of solint partitions to use.
 
+   target_dir                =   "reductions"
+   picard_input_template     =   "path/to/rpicard"
+   accor_solint              =   4
+   mpi_cores_rpicard         =   10
+   mpi_cores_snrating        =   5
+   mpi_cores_importfitsidi   =   5
+   hi_freq_ref               =   11
+   snr_threshold_phref       =   7
+   flux_threshold_phref      =   0.15
+   min_channel_flagging      =   32
+   n_calib                   =  5
+   n_refant                  =  4
+   minsnr                    =  3.2
+
+   sci_solints               =   auto
+   solint_max_scan_partitions=   8
+   apply_flag_from_idi       =   True
+   size_limit                =   2000.0
+
+   # configure google sheet
+   sheet_url                 =   None
+   worksheet                 =   None
+
+   # configure below if using CSV or google sheet to save all the result in a common sheet.
+   primary_colname           =   TARGET_NAME
+   primary_value             =   None
+   filename_col              =   FILENAMES
+   targetname_col            =   TARGET_NAME
+
+   # optional-2 sheet configurations
+   working_col               =   None
+   working_col_only          =   False
+   do_pcol_validation        =   False
+
+   # experimental
+   use_casadir_pythonpath    =   False
+   separation_thres          =   850.0
+   source_extract_multi_fitsfiles    =   False
 
 Usage
 ======
