@@ -1,7 +1,7 @@
-![PyPI - Downloads](https://img.shields.io/pypi/dm/avica)
-![Read the Docs](https://img.shields.io/readthedocs/avica)
-![GitHub commits since latest release (branch)](https://img.shields.io/github/commits-since/avikhagol/avica/latest/main)
-![PyPI - Version](https://img.shields.io/pypi/v/avica)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/avica?cacheSeconds=3600)
+[![Read the Docs](https://readthedocs.org/projects/avica/badge/?version=latest)](https://avica.readthedocs.io/en/latest/)
+![GitHub Release](https://img.shields.io/github/v/release/avikhagol/avica?cacheSeconds=3600)
+![GitHub Last Commit](https://img.shields.io/github/last-commit/avikhagol/avica?cacheSeconds=3600)
 
 # AVICA: Automated VLBI pipeline in CASA
 
