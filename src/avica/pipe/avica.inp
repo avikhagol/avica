@@ -1,11 +1,13 @@
 # required
 # assumes `folder_for_fits` is a folder containing all the raw visibility fits files.
-# assumes `target_dir` is a folder where the pipeline output will be saved.
+# `casadir` is the path to the monolithic CASA installation used for running CASA tasks.
+
 folder_for_fits           =   /path/to/source/folder/with/raw/visibility/fitsfiles
 casadir                  =  "path/to/monolithic-casa/casa-6.x.x-xx-py3.xx.xxx/"
 
 # optional-1
 # `picard_input_template` is a template for the picard input file, see https://bitbucket.org/M_Janssen/picard/src/master/input_template/.
+# assumes `target_dir` is a folder where the pipeline output will be saved.
 # `accor_solint` is the number of solint partitions to use.
 
 target_dir                =   "reductions"
