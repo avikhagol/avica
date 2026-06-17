@@ -50,7 +50,6 @@ testpaths = ["tests"]
 
 [project.optional-dependencies]
 dev = ["pytest>=3.9"]
-# all = ["casatools", "casatasks", "casampi"]
 test = ["pytest"]
 
 [project.scripts]
