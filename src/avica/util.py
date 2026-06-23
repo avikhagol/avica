@@ -118,29 +118,34 @@ def read_inputfile(folder,inputfile='.inp'):
                 with open(filepath,'r') as f:
                     pr=f.read().splitlines()
                     for p in pr:
-                        if '#' in p:
-                            continue
-                        elif '=' in p:
-                            k,v=p.split('=')
-                            # check for leading zeros
-                            if str(v).strip() and v.strip()[0] == '0':
-                                v   =   str(v).strip()
-
-                            else:
-                                try:
-                                    v=int(v)
-                                except (ValueError, TypeError):
+                        if len(p)>0 and p[0]!='#':
+                            if '=' in p:
+                                k,v=p.split('=')
+                                if '#' in v:
+                                    v, vcomment = v.split('#')
+                                    vcomment = vcomment.strip() if vcomment else ''
+                                    v = v.strip()
+                                if vcomment=='str':
+                                    v   =   str(v).strip()
+                                elif vcomment=='int':
+                                    v = int(v)
+                                elif vcomment=='float':
+                                    v = float(v)
+                                else:
                                     try:
-                                        v=float(v)
+                                        v=int(v)
                                     except (ValueError, TypeError):
-                                        v=str(v).strip()
-                                        if "*" in v:
-                                            try:
-                                                v = glob.glob(f'{v}', recursive=True)
-                                            except (ValueError, TypeError):
-                                                v = str(v)
-                                        else:
-                                            v = v.lower() == 'true' if (any(boolv == v.lower() for boolv in ['true', 'false'])) else v
+                                        try:
+                                            v=float(v)
+                                        except (ValueError, TypeError):
+                                            v=str(v).strip()
+                                            if "*" in v:
+                                                try:
+                                                    v = glob.glob(f'{v}', recursive=True)
+                                                except (ValueError, TypeError):
+                                                    v = str(v)
+                                            else:
+                                                v = v.lower() == 'true' if (any(boolv == v.lower() for boolv in ['true', 'false'])) else v
                             params[k.strip()]=v
 
     return params, files, input_folder
