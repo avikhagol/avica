@@ -125,12 +125,12 @@ def read_inputfile(folder,inputfile='.inp'):
                                     v, vcomment = v.split('#')
                                     vcomment = vcomment.strip() if vcomment else ''
                                     v = v.strip()
-                                if vcomment=='str':
-                                    v   =   str(v).strip()
-                                elif vcomment=='int':
-                                    v = int(v)
-                                elif vcomment=='float':
-                                    v = float(v)
+                                    if vcomment=='str':
+                                        v   =   str(v).strip()
+                                    elif vcomment=='int':
+                                        v = int(v)
+                                    elif vcomment=='float':
+                                        v = float(v)
                                 else:
                                     try:
                                         v=int(v)
