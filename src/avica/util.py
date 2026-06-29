@@ -131,6 +131,8 @@ def read_inputfile(folder,inputfile='.inp'):
                                         v = int(v)
                                     elif vcomment=='float':
                                         v = float(v)
+                                    elif vcomment=='bool':
+                                        v = v.lower() == 'true'
                                 else:
                                     try:
                                         v=int(v)
