@@ -468,7 +468,7 @@ lf = LogFramework(csv_file=csvio, polars=False)
 DEFAULT_PARAMS: dict = {
     "lf"                        :   lf,          # LogFrame instance, set at runtime
     "folder_for_fits"           :   "",
-    "target_dir"                :   "/path/to/target/dir",
+    "target_dir"                :   "reductions/",
     "fitsfile"                  :   [],
     "fitsfile_name"             :   None,
     "wd_ifolder"                :   None,
@@ -516,6 +516,6 @@ class PipeConfig:
     def defaults(self):
         default_params = {}
         for k,v in DEFAULT_PARAMS.items():
-            if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',"size_", "snr_", "flux_"]):
+            if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',"size_", "snr_", "flux_", "folder_", "target_"]):
                 default_params[k] = v
         return default_params
