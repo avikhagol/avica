@@ -16,7 +16,7 @@ try:
 except ImportError:
     from typing_extensions import Annotated
 
-from avica.config import avica_data_dir
+from avica.config import avica_data_dir, avica_pkg_dir
 
 from avica.util import casadir_find, rfc_find, create_config
 from avica.pipe.config import CSV_POPULATED_STEPS, PipeConfig
@@ -159,6 +159,7 @@ def pipe_config(
     outfile: Optional[str] = typer.Option("avica.inp", help="output config file containing key=value"),
     inpfile: Optional[str] = typer.Option(None, help="input config file containing key=value"),
     default: Annotated[bool, typer.Option("--default", help="adds the configfile to the default config directory")] = False,
+    global_default: Annotated[bool, typer.Option("--global", help="adds the configfile to the global config directory")] = False,
     data: Annotated[Optional[List[str]], typer.Argument(help="key=value pairs")] = None,
     ):
     params = PipeConfig(None).defaults()
@@ -181,6 +182,9 @@ def pipe_config(
 
     if default:
         outfile = str(Path(avica_data_dir) / Path(outfile).name)
+
+    if global_default:
+        outfile = str(Path(avica_pkg_dir) / Path(outfile).name)
 
     create_config(params=params, out=outfile, rj=1, lj=1)
 
@@ -213,10 +217,12 @@ def run_pipeline(
 
     """
 
+    global_configfile = str(Path(avica_pkg_dir) / "avica.inp")
     default_configfile = str(Path(avica_data_dir) / Path(default_configfile).name)
 
     if Path(default_configfile).exists():
-        _params = PipeConfig(default_configfile).to_dict()
+        _params = PipeConfig(global_configfile).to_dict()
+        _params.update(PipeConfig(default_configfile).to_dict())
     else:
         _params = {}
     pipe_params={
