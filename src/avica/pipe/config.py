@@ -516,6 +516,6 @@ class PipeConfig:
     def defaults(self):
         default_params = {}
         for k,v in DEFAULT_PARAMS.items():
-            if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',"size_", "snr_", "flux_", "folder_", "target_"]):
+            if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',"size_", "snr_", "flux_", "target_"]):
                 default_params[k] = v
         return default_params

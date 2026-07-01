@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.ms/
 *.ms
+.serena
 table.f*_TSM1
 casa*log_*
 diag*/

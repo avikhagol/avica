@@ -9,7 +9,7 @@ from pathlib import Path
 avica_data_dir_path = Path().home() / ".avica"
 avica_data_dir_path.mkdir(exist_ok=True)
 avica_data_dir  =   str(avica_data_dir_path)
-
+avica_pkg_dir = str(Path(__file__).parent)
 
 class BaseConfig(type):
     def __new__(mcs, name, bases, attrs):
