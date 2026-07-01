@@ -1,0 +1,9 @@
+folder_for_fits =  
+target_dir = reductions/
+size_limit = 2000.0
+mpi_cores_rpicard = 10
+mpi_cores_snrating = 5
+mpi_cores_importfitsidi = 5
+snr_threshold_phref = 7
+flux_threshold_phref = 0.15
+casadir = /home/avi/intelligence/env/casa-6.7.0-31-py3.10.el8/

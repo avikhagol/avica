@@ -163,7 +163,8 @@ def pipe_config(
     data: Annotated[Optional[List[str]], typer.Argument(help="key=value pairs")] = None,
     ):
     params = PipeConfig(None).defaults()
-
+    global_configfile = str(Path(avica_pkg_dir) / "avica.inp")
+    params.update(PipeConfig(global_configfile).to_dict())
     if inpfile:
         try:
             params = PipeConfig(inpfile).to_dict()
@@ -220,8 +221,8 @@ def run_pipeline(
     global_configfile = str(Path(avica_pkg_dir) / "avica.inp")
     default_configfile = str(Path(avica_data_dir) / Path(default_configfile).name)
 
+    _params = PipeConfig(global_configfile).to_dict()
     if Path(default_configfile).exists():
-        _params = PipeConfig(global_configfile).to_dict()
         _params.update(PipeConfig(default_configfile).to_dict())
     else:
         _params = {}
