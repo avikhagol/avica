@@ -148,7 +148,7 @@ avica listobs [FITSFILENAMES]...
 
 ### Configuration
 
-The pipeline configuration is defined in a custom file with key=value defaults to `avica.inp` in the current directory. See the [example](src/avica/pipe/avica.inp) for a minimal configuration.
+The pipeline configuration is defined in a custom file with key=value defaults to `avica.inp` in the current directory. See the [example](src/avica/pipe/avica_example.inp) for a minimal configuration.
 To store default values persistently, create a `avica.inp` file in your home directory (`~/.avica/avica.inp`) using the following command, the default value is used if no `avica.inp` file is found:
 
 ```bash
