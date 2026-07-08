@@ -152,6 +152,14 @@ avica listobs <file.uvfits>
 
 The pipeline configuration is a `key=value` file. By default, AVICA looks for `avica.inp` in the current directory. See the [example configuration](src/avica/pipe/avica_example.inp) for a minimal setup.
 
+Pass a custom configuration file with `--configfile`:
+
+```bash
+avica pipe run --configfile <path/to/config/file>
+```
+
+If `--configfile` is not provided, AVICA uses `avica.inp` by default.
+
 To store defaults persistently, create `~/.avica/avica.inp` from an existing file:
 
 ```bash
@@ -162,6 +170,13 @@ You can also set default values directly:
 
 ```bash
 avica pipe config --default key=value key2=value2 key3=value3
+```
+
+To set global defaults in AVICA's installed directory, use `--global` in the same way:
+
+```bash
+avica pipe config --global --inpfile <path/to/avica.inp>
+avica pipe config --global key=value key2=value2 key3=value3
 ```
 
 ## Attribution
