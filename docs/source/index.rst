@@ -6,16 +6,17 @@ Interferometry (VLBI) data in CASA. It provides tools to ingest, manipulate,
 and calibrate *FITS-IDI* and *Measurement Set* files containing raw
 visibilities.
 
+
+.. contents:: On this page
+   :local:
+   :depth: 2
+
 .. asciinema:: 1016974
    :rows: 30
    :cols: 120
    :speed: 4.5
    :theme: dracula
    :autoplay: 0
-
-.. contents:: On this page
-   :local:
-   :depth: 2
 
 .. toctree::
    :hidden:
