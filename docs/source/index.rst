@@ -6,18 +6,17 @@ Interferometry (VLBI) data in CASA. It provides tools to ingest, manipulate,
 and calibrate *FITS-IDI* and *Measurement Set* files containing raw
 visibilities.
 
+
+.. contents:: On this page
+   :local:
+   :depth: 2
+
 .. asciinema:: 1016974
    :rows: 30
    :cols: 120
    :speed: 4.5
    :theme: dracula
    :autoplay: 0
-
-.. centered:: Demo of the AVICA pipeline running end-to-end.
-
-.. contents:: On this page
-   :local:
-   :depth: 2
 
 .. toctree::
    :hidden:
@@ -99,7 +98,7 @@ Minimal configuration:
    casadir                   =   "path/to/monolithic-casa/casa-6.x.x-xx-py3.xx.xxx/"
 
    # optional-1
-   # picard_input_template is a template for the rPicard input file.
+   # picard_input_template the folder containing the rPicard input file.
    # target_dir is where pipeline output will be saved.
    # accor_solint is the number of solint partitions to use.
 
