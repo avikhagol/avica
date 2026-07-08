@@ -1,24 +1,10 @@
-.. avica documentation master file, created by
-   sphinx-quickstart on Thu Mar 12 15:27:27 2026.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+AVICA: Automated VLBI pipeline in CASA
+======================================
 
-
-
-.. toctree::
-   :hidden:
-   :maxdepth: 4
-   :caption: Contents:
-
-   pipeline
-   api
-   examples
-   genindex
-
-Getting Started
-===============
-
-AVICA: Automated VLBI pipeline in CASA.
+**AVICA** is a Python package for automated calibration of Very Long Baseline
+Interferometry (VLBI) data in CASA. It provides tools to ingest, manipulate,
+and calibrate *FITS-IDI* and *Measurement Set* files containing raw
+visibilities.
 
 .. asciinema:: 1016974
    :rows: 30
@@ -29,71 +15,93 @@ AVICA: Automated VLBI pipeline in CASA.
 
 .. centered:: Demo of the AVICA pipeline running end-to-end.
 
+.. contents:: On this page
+   :local:
+   :depth: 2
 
-About
-=====
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+   :caption: Contents:
 
-**AVICA** is a Python package for the automated calibration of Very Long Baseline Interferometry (VLBI) data.
-It provides modules to ingest, manipulate, and calibrate *FITS-IDI* and *Measurement Set* files containing raw visibilities.
+   pipeline
+   api
+   examples
 
 Installation
-============
+------------
 
+Requirements:
 
-> Needs Ubuntu 18.04+, Debian 10+, RHEL/CentOS 8+ \
-> Python >=3.9
+* Ubuntu 18.04+, Debian 10+, or RHEL/CentOS 8+
+* Python >= 3.9
 
-The `avica` package is publicly available on [PyPI](https://pypi.org/project/avica/).
-Installation is recommended using [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) or [pipx](https://pipx.pypa.io/stable/how-to/install-pipx/) within a isolated environment:
+The ``avica`` package is available on `PyPI`_. Use `uv`_ or `pipx`_ for an
+isolated command-line installation.
 
-using `uv`
-
-.. code-block:: bash
-
-    uv tool install avica --python 3.11
-
-or using `pipx`
+Using ``uv``:
 
 .. code-block:: bash
 
-    pipx install avica
+   uv tool install avica --python 3.11
 
-
-or using `pip`
+Using ``pipx``:
 
 .. code-block:: bash
 
-    pip install avica
+   pipx install avica
 
-.. note:: It is recommended to use `venv` for installation, if you are not using `pipx` or `uv`.
+Using ``pip``:
 
+.. code-block:: bash
+
+   pip install avica
+
+.. note::
+
+   If you install with ``pip``, use a virtual environment unless you already
+   manage Python packages another way.
+
+.. _PyPI: https://pypi.org/project/avica/
+.. _uv: https://docs.astral.sh/uv/getting-started/installation/#standalone-installer
+.. _pipx: https://pipx.pypa.io/stable/how-to/install-pipx/
 
 Setup
-=====
+-----
 
-Since the pipeline's calibration features rely on `rPicard`_ please follow the linked setup instructions first.
-Once **rPicard** is properly configured, you only need a minimal avica configuration file to get started.
+The pipeline calibration steps rely on `rPicard`_. Follow the rPicard setup
+instructions first. After rPicard is configured, AVICA only needs a minimal
+configuration file to get started.
 
 .. _rPicard: https://bitbucket.org/M_Janssen/picard/src/master/
 
 Configuration
-=============
+-------------
 
-The pipeline is configured via a plain-text file in the current working directory, defaulting to ``avica.inp``.
+The pipeline configuration is a plain-text ``key=value`` file. By default,
+AVICA looks for ``avica.inp`` in the current working directory.
 
-.. code-block:: python
+Pass a custom configuration file with ``--configfile``:
+
+.. code-block:: bash
+
+   avica pipe run --configfile <path/to/config/file>
+
+Minimal configuration:
+
+.. code-block:: text
 
    # required
-   # assumes `folder_for_fits` is a folder containing all the raw visibility fits files.
-   # `casadir` is the path to the monolithic CASA installation used for running CASA tasks.
+   # folder_for_fits is a folder containing the raw visibility FITS files.
+   # casadir is the path to the monolithic CASA installation used for CASA tasks.
 
    folder_for_fits           =   /path/to/source/folder/with/raw/visibility/fitsfiles
-   casadir                  =  "path/to/monolithic-casa/casa-6.x.x-xx-py3.xx.xxx/"
+   casadir                   =   "path/to/monolithic-casa/casa-6.x.x-xx-py3.xx.xxx/"
 
    # optional-1
-   # `picard_input_template` is a template for the picard input file, see https://bitbucket.org/M_Janssen/picard/src/master/input_template/.
-   # assumes `target_dir` is a folder where the pipeline output will be saved.
-   # `accor_solint` is the number of solint partitions to use.
+   # picard_input_template is a template for the rPicard input file.
+   # target_dir is where pipeline output will be saved.
+   # accor_solint is the number of solint partitions to use.
 
    target_dir                =   "reductions"
    picard_input_template     =   "path/to/rpicard"
@@ -134,60 +142,94 @@ The pipeline is configured via a plain-text file in the current working director
    separation_thres          =   850.0
    source_extract_multi_fitsfiles    =   False
 
-Usage
-======
-
-The pipeline steps can be invoked from the terminal as follows:
+To store defaults persistently in ``~/.avica/avica.inp``, pass an existing
+configuration file:
 
 .. code-block:: bash
 
-   avica pipe run --t TARGET_NAME --f FITSFILE_NAME [STEPS]
+   avica pipe config --default --inpfile <path/to/avica.inp>
 
-The output folder structure follows the following convention:
+You can also set default values directly:
+
+.. code-block:: bash
+
+   avica pipe config --default key=value key2=value2 key3=value3
+
+To set global defaults in AVICA's installed directory, use ``--global`` in the
+same way:
+
+.. code-block:: bash
+
+   avica pipe config --global --inpfile <path/to/avica.inp>
+   avica pipe config --global key=value key2=value2 key3=value3
+
+Usage
+-----
+
+Run the default pipeline from the terminal:
+
+.. code-block:: bash
+
+   avica pipe run --target <target-name> --fitsfilenames <file1.uvfits,file2.uvfits>
+
+Run selected steps by passing step names:
+
+.. code-block:: bash
+
+   avica pipe run preprocess_fitsidi fits_to_ms --fitsfilenames <file.uvfits>
+
+The default pipeline executes these steps:
+
+* ``preprocess_fitsidi``
+* ``fits_to_ms``
+* ``phaseshift``
+* ``avica_avg``
+* ``avicameta_ms``
+* ``avica_snr``
+* ``avica_fill_input``
+* ``avica_split_ms``
+* ``rpicard``
+
+Common options:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Option
+     - Description
+   * - ``--f``, ``--fitsfilenames``
+     - Comma-separated FITS-IDI file names.
+   * - ``--t``, ``--target``
+     - Selected field or source name.
+   * - ``--configfile``
+     - Configuration file containing ``key=value`` entries. Defaults to
+       ``avica.inp``.
+   * - ``--help``
+     - Show the full command help.
+
+Output Layout
+-------------
+
+The output folder structure follows this convention:
 
 ::
 
-   CWD (with avica.inp)
-   └── reductions/
-       └── PROJECT_CODE/
-           └── wd/
-               └── wd_{BAND}/
-                   └── wd_{BAND}_{TARGET_NAME}/
+   CWD/
+   |-- avica.inp
+   `-- reductions/
+       `-- PROJECT_CODE/
+           `-- wd/
+               `-- wd_{BAND}/
+                   `-- wd_{BAND}_{TARGET_NAME}/
 
-using ``--help`` will print the pipeline steps and usage instructions as follows:
+More Documentation
+------------------
 
-.. code-block:: bash
+See the dedicated pages for deeper usage notes and API reference:
 
-   Usage: avica pipe run [OPTIONS] [STPS]...
-
-   _______________________
-
-   pipeline steps:
-   -   preprocess_fitsidi
-   -   fits_to_ms
-   -   avica_avg
-   -   avicameta_ms
-   -   avica_snr
-   -   avica_fill_input
-   -   avica_split_ms
-   -   rpicard
-
-   ________________________
-
-   ╭─ Arguments ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-   │   stps      [STPS]...  steps for execution [default: preprocess_fitsidi, fits_to_ms, avica_avg, avicameta_ms, avica_snr, avica_fill_input, avica_split_ms, rpicard] │
-   ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-   ╭─ Options ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-   │ --f,--fitsfilenames        TEXT  fitsfile names comma separated                                                                                                     │
-   │ --t,--target               TEXT  Selected field / sourc name                                                                                                        │
-   │ --configfile               TEXT  config file containing key=value [default: avica.inp]                                                                              │
-   │ --help                           Show this message and exit.                                                                                                        │
-   ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-
-
-
-Index
-==================
-
+* :doc:`pipeline`
+* :doc:`examples`
+* :doc:`api`
 * :ref:`genindex`
 * :ref:`search`
