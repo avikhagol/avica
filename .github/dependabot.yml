@@ -9,6 +9,8 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+      ignore:
+      - dependency-name: "protobuf"
 
   - package-ecosystem: "github-actions"
     directory: "/"
