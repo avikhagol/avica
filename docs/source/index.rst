@@ -9,9 +9,9 @@ visibilities.
 .. asciinema:: 1016974
    :rows: 30
    :cols: 120
-   :speed: 1.5
+   :speed: 4.5
    :theme: dracula
-   :autoplay: 1
+   :autoplay: 0
 
 .. centered:: Demo of the AVICA pipeline running end-to-end.
 
