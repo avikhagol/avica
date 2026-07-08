@@ -13,8 +13,6 @@ visibilities.
    :theme: dracula
    :autoplay: 0
 
-.. centered:: Demo of the AVICA pipeline running end-to-end.
-
 .. contents:: On this page
    :local:
    :depth: 2
