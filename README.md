@@ -5,120 +5,124 @@
 
 # AVICA: Automated VLBI pipeline in CASA
 
-**Submitted to A&A**
+**Accepted for publication in Astronomy & Astrophysics journal.**
 
 [![asciicast](https://asciinema.org/a/1016974.svg)](https://asciinema.org/a/1016974)
-> Demo of the AVICA pipeline running end-to-end.
-Documentation : https://avica.readthedocs.io/en/latest/
+
+Full documentation: https://avica.readthedocs.io/en/latest/
+
+## Contents
+
+- [Installation](#installation)
+  - [Recommended installation](#recommended-installation)
+  - [Manual installation](#manual-installation)
+- [Usage](#usage)
+  - [Pipeline](#pipeline)
+  - [Manipulating FITS-IDI](#manipulating-fits-idi)
+  - [Configuration](#configuration)
+- [Attribution](#attribution)
+- [Acknowledgement](#acknowledgement)
 
 
-# Installation
+## Installation
 
-> Requires Ubuntu 18.04+, Debian 10+, RHEL/CentOS 8+ \
-> Python >=3.9
+Requirements:
+
+- Ubuntu 18.04+, Debian 10+, or RHEL/CentOS 8+
+- Python >= 3.9
 
 The `avica` package is publicly available on [PyPI](https://pypi.org/project/avica/).
-Installation is recommended using [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) or [pipx](https://pipx.pypa.io/stable/how-to/install-pipx/) within a isolated environment:
+Use [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) or [pipx](https://pipx.pypa.io/stable/how-to/install-pipx/) for an isolated command-line installation.
 
-using `uv`
+### Recommended installation
+
+Using `uv`:
 
 ```bash
 uv tool install avica --python 3.10
 ```
 
-or using `pipx`
+Using `pipx`:
 
 ```bash
 pipx install avica
 ```
 
-or using `pip`
+Using `pip`:
 
 ```bash
 pip install avica
 ```
-> Note: it is recommended to use `venv` for installation, if you are not using `pipx` or `uv`.
 
-### Manual
+If you install with `pip`, use a virtual environment unless you already manage Python packages another way.
 
-1. Clone the repository to the desired destination.
+### Manual installation
+
+Clone the repository and install it locally:
 
 ```bash
 git clone https://github.com/avikhagol/avica.git
+cd avica/
+pip install .
 ```
 
-2. Install using `pip`
+
+## Usage
+
+The pipeline calibration steps rely on [rPicard](https://bitbucket.org/M_Janssen/picard/src/master/). Follow the rPicard setup instructions first. After rPicard is configured, AVICA only needs a minimal configuration file to get started; see [Configuration](#configuration).
+
+### Pipeline
+
+Run the default pipeline:
 
 ```bash
-cd avica/
-
-pip install .
-
+avica pipe run --fitsfilenames <file1.uvfits,file2.uvfits> --target <source-name>
 ```
 
+The default pipeline executes these steps:
 
-# Usage
+- `preprocess_fitsidi`
+- `fits_to_ms`
+- `phaseshift`
+- `avica_avg`
+- `avicameta_ms`
+- `avica_snr`
+- `avica_fill_input`
+- `avica_split_ms`
+- `rpicard`
 
-Since the pipeline's calibration features rely on [rPicard](https://bitbucket.org/M_Janssen/picard/src/master/) please follow the linked setup instructions first. Once rPicard is properly configured, you only need a minimal avica configuration file to get started. (see [Configuration](#configuration))
+You can pass one or more step names to run only part of the pipeline:
 
-## Pipeline
-
-```
-Usage: avica pipe run [OPTIONS] [STPS]...                                                                                                                                                                                                                                                                                    
-                                                                                                                                                                                                                                                                                                                              
- _______________________                                                                                                                                                                                                                                                                                                      
-                                                                                                                                                                                                                                                                                                                              
- pipeline steps:
- 
- -  preprocess_fitsidi
- -  fits_to_ms
- -  phaseshift
- -  avica_avg
- -  avicameta_ms
- -  avica_snr
- -  avica_fill_input
- -  avica_split_ms
- -  rpicard
- 
- ________________________                                                     
- 
-      
-╭─ Arguments ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│   stps      [STPS]...  steps for execution [default: preprocess_fitsidi, fits_to_ms, avica_avg, avicameta_ms, avica_snr, avica_fill_input, avica_split_ms, rpicard]                                                                                                                                                        │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --f,--fitsfilenames        TEXT  fitsfile names comma separated                                                                                                                                                                                                                                                            │
-│ --t,--target               TEXT  Selected field / sourc name                                                                                                                                                                                                                                                               │
-│ --configfile               TEXT  config file containing key=value [default: avica.inp]                                                                                                                                                                                                                                     │
-│ --help                           Show this message and exit.                                                                                                                                                                                                                                                               │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-
-
+```bash
+avica pipe run preprocess_fitsidi fits_to_ms --fitsfilenames <file.uvfits>
 ```
 
-## Manipulating FITS-IDI
+Common options:
 
-To check known FITS-IDI issues run the following:
+| Option | Description |
+| --- | --- |
+| `--f`, `--fitsfilenames` | Comma-separated FITS-IDI file names. |
+| `--t`, `--target` | Selected field or source name. |
+| `--configfile` | Configuration file containing `key=value` entries. Defaults to `avica.inp`. |
+| `--help` | Show the full command help. |
 
-```
- Usage: avica fitsidi_check [OPTIONS] [FITSFILENAMES]... COMMAND [ARGS]...                                                                                                                                                                                                                                                         
-                                                                                                                                                                                                                                                                                                                              
- validate and fix, known FITS-IDI problems                                                                                                                                                                                                                                                                                    
-                                                                                                                                                                                                                                                                                                                              
-╭─ Arguments ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│   fitsfilenames      [FITSFILENAMES]...                                                                                                                                                                                                                                                                                    │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --fix     --no-fix       [default: no-fix]                                                                                                                                                                                                                                                                                 │
-│ --desc    --no-desc      [default: no-desc]                                                                                                                                                                                                                                                                                │
-│ --help                   Show this message and exit.                                                                                                                                                                                                                                                                       │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+### Manipulating FITS-IDI
 
+Check FITS-IDI files for known issues:
 
+```bash
+avica fitsidi_check <file.uvfits>
 ```
 
+Useful options:
 
-#### Example
+| Option | Description |
+| --- | --- |
+| `--fix`, `--no-fix` | Apply available fixes. Defaults to `--no-fix`. |
+| `--desc`, `--no-desc` | Show issue descriptions. Defaults to `--no-desc`. |
+| `--help` | Show the full command help. |
+
+Example output:
 
 ```
 avica fitsidi_check VLBA_VSN005412_file3.uvfits
@@ -136,34 +140,34 @@ avica fitsidi_check VLBA_VSN005412_file3.uvfits
 | GAIN_CURVE         | 0       | 8     | 0     | []             | []       |
 | SYSTEM_TEMPERATURE | 0       | 8     | 0     | []             | []       |
 +--------------------+---------+-------+-------+----------------+----------+
-
 ```
 
+List observation information:
 
-To get the information on the observation run the following:
-
-```
-avica listobs [FITSFILENAMES]... 
+```bash
+avica listobs <file.uvfits>
 ```
 
 ### Configuration
 
-The pipeline configuration is defined in a custom file with key=value defaults to `avica.inp` in the current directory. See the [example](src/avica/pipe/avica_example.inp) for a minimal configuration.
-To store default values persistently, create a `avica.inp` file in your home directory (`~/.avica/avica.inp`) using the following command, the default value is used if no `avica.inp` file is found:
+The pipeline configuration is a `key=value` file. By default, AVICA looks for `avica.inp` in the current directory. See the [example configuration](src/avica/pipe/avica_example.inp) for a minimal setup.
+
+To store defaults persistently, create `~/.avica/avica.inp` from an existing file:
 
 ```bash
 avica pipe config --default --inpfile <path/to/avica.inp>
 ```
 
-or 
+You can also set default values directly:
+
 ```bash
 avica pipe config --default key=value key2=value2 key3=value3
 ```
 
-# Attribution
+## Attribution
 
 When using AVICA, please add a link to this repository in a footnote.
 
-# Acknowledgement
+## Acknowledgement
 
-"AVICA was developed within the "Search for Milli-Lenses" (SMILE) project. SMILE has received funding from the European Research Council (ERC) under the HORIZON ERC Grants 2021 programme (grant agreement No. 101040021).
+AVICA was developed within the "Search for Milli-Lenses" (SMILE) project. SMILE has received funding from the European Research Council (ERC) under the HORIZON ERC Grants 2021 programme (grant agreement No. 101040021).
