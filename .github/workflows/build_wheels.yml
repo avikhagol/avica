@@ -19,7 +19,7 @@ jobs:
         #   submodules: recursive     # for jive scripts
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v3.4.1
+        uses: pypa/cibuildwheel@v4.1.0
         env:
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-* cp313-*"
 
