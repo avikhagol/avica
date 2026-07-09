@@ -224,8 +224,6 @@ def run_pipeline(
     _params = PipeConfig(global_configfile).to_dict()
     if Path(default_configfile).exists():
         _params.update(PipeConfig(default_configfile).to_dict())
-    else:
-        _params = {}
     pipe_params={
                 "folder_for_fits": ".",
                  "target_dir" : "reduction/",
