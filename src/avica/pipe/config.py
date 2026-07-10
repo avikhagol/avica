@@ -492,14 +492,14 @@ DEFAULT_PARAMS: dict = {
     "filename_col"              :   "FILENAMES",
     "targetname_col"            :   "TARGET_NAME",
     "mpi_cores_rpicard"         :   10,
-    "hi_freq_ref"               :   11,         # in GHz
+    "hi_freq_ref"               :   20,         # in GHz
     "use_casadir_pythonpath"    :   False,
     "mpi_cores_snrating"        :   5,
     "mpi_cores_importfitsidi"   :   5,
     "snr_threshold_phref"       :   7,
     "flux_threshold_phref"      :   0.15,
     "min_channel_flagging"      :   32,
-    "sci_solints"               :   "auto",
+    "sci_solints"               :   "manual",
     "solint_max_scan_partitions":   8,
     "apply_flag_from_idi"       :   True,
     "source_extract_multi_fitsfiles"    :   False,

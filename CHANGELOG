@@ -1,10 +1,15 @@
 # Changelog
 
-## [0.3.1.7] - 2026-07-01
+## [0.3.1.8]
 
 ### Fixed
-- bug fix: pipe config wiped out global when no default config present.
+- bug fix: populate `array_type` with `VLBAhi` when reference frequency is above 20 GHz.
+- default rPicard parameter values hold `fringe_exhaustive_refant_search_threshold` and `fringe_exhaustive_refant_search_islands` to `1.5` and `False` respectively.
 
+#### Updated
+- default `sci_solints` to `manual` instead of `auto` which was supposed to run an additional step selecting only the solints which can divide the scan in partitions maximum to the value defined `solint_max_scan_partitions`.
+
+[0.3.1.8] : https://github.com/avikhagol/avica/compare/v0.3.1.7...v0.3.1.8
 [0.3.1.7] : https://github.com/avikhagol/avica/compare/v0.3.1.6...v0.3.1.7
 [0.3.1.6] : https://github.com/avikhagol/avica/compare/v0.3.1.5...v0.3.1.6
 [0.3.1.5] : https://github.com/avikhagol/avica/compare/v0.3.1.4...v0.3.1.5
