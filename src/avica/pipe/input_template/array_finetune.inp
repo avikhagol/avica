@@ -118,7 +118,7 @@ fringe_exhaustive_refant_search_depth = -1
 
 #Multiplicative factor of fringe_minSNR thresholds, which determines "weak" detections that are
 #replaced by exhaustive fringes when those have a at least 10% higher S/N.
-# fringe_exhaustive_refant_search_threshold = 1.5
+fringe_exhaustive_refant_search_threshold = 1.5
 
 #Enable calibration of antennas even if their fringe solutions after successful instrumental
 #calibration cannot be re-referenced to the main refant in a scan when doing the exhaustive
@@ -126,7 +126,7 @@ fringe_exhaustive_refant_search_depth = -1
 #This allows isolated islands or sub-arrays of antennas to be present in the data.
 #Will slow down processing.
 #Useful for weak sources and global VLBI experiments.
-# fringe_exhaustive_refant_search_islands = False
+fringe_exhaustive_refant_search_islands = False
 
 #Set to True to re-reference all fringe solutions to a common reference station at the end.
 #Should ensure R-L phase stability across scans. Does a simple re-referencing by default.

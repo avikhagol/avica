@@ -116,11 +116,10 @@ Minimal configuration:
    n_refant                  =  4
    minsnr                    =  3.2
 
-   sci_solints               =   auto
-   solint_max_scan_partitions=   8
    apply_flag_from_idi       =   True
    size_limit                =   2000.0
 
+   # EXPERIMENTAL -------------------------
    # configure google sheet
    sheet_url                 =   None
    worksheet                 =   None
@@ -131,12 +130,13 @@ Minimal configuration:
    filename_col              =   FILENAMES
    targetname_col            =   TARGET_NAME
 
-   # optional-2 sheet configurations
+   # sheet configurations
    working_col               =   None
    working_col_only          =   False
    do_pcol_validation        =   False
 
-   # experimental
+   sci_solints               =   manual
+   solint_max_scan_partitions=   8
    use_casadir_pythonpath    =   False
    separation_thres          =   850.0
    source_extract_multi_fitsfiles    =   False
@@ -181,7 +181,6 @@ The default pipeline executes these steps:
 
 * ``preprocess_fitsidi``
 * ``fits_to_ms``
-* ``phaseshift``
 * ``avica_avg``
 * ``avicameta_ms``
 * ``avica_snr``
