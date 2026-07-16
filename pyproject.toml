@@ -7,7 +7,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "avica"
-version = "0.3.1.8"
+version = "0.3.1.9"
 description = "AVICA: Automated VLBI pipeline in CASA"
 readme = "README.md"
 requires-python = ">=3.9"
