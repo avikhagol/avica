@@ -1414,13 +1414,15 @@ class Calibration(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, casadir, target, verbose=True):
+    def run(self, lf, wd_ifolder, casadir, target, verbose=True, picard_input_template_update='', delete_previous_data=True):
         from avica.ms.tables import repair_mixed_single_pol_syscal_tsys
+        from avica.pipe.core import update_ifolderdata_from_new_ifolder
+
         self.result.start_stamp         =   datetime.now()
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         metafolder                      =   Path(wd_meta.metafolder)
-        desc                             =   {}
+        desc                            =   {}
         wds_ifolder_for_payload         =   []
 
         bands_dict                      =   read_metafile(wd_meta.metafile_msmeta_sources)['bands_dict']
@@ -1434,6 +1436,11 @@ class Calibration(PipelineStepBase):
                 wd_t, iwd_b_t                       =   wd_meta.to_new_WD(band, target=target, create=False)
                 obs_b_t                             =   wd_meta.get_inp(band=band, target=target, inpfile="observation.inp")
 
+                if picard_input_template_update and Path(picard_input_template_update).exists():
+                    if verbose:
+                        print(f"using fixed parameters from {picard_input_template_update}")
+                    update_ifolderdata_from_new_ifolder(iwd_b_t, picard_input_template_update, ['array.inp', 'observation.inp', 'array_finetune.inp', 'flagging.inp', 'constants.inp'])
+
                 if obs_b_t is not None:
                     allsources                          =   alls_fromobs(obs_b_t)
 
@@ -1445,14 +1452,14 @@ class Calibration(PipelineStepBase):
                         new_vis_path                =   vis.parent / obs_b_t['ms_name']
                         vis                         =   vis.rename(new_vis_path)
 
-                    del_fl(wd_t,0, '*.ms.flagversions', rm=True)
-                    del_fl(wd_t,0, '*ms.avg', rm=True)
-                    del_fl(wd_t,0, '*tmp*', rm=True)
-                    del_fl(wd_t, 0, '*.stored*', rm=True)
-                    del_fl(wd_t, 0, '*fringe*', rm=True)
-                    del_fl(wd_t,0, '*.uvf', rm=True)
-                    del_fl(wd_t,0, '*calibration_tables', rm=True)
-
+                    if delete_previous_data:
+                        del_fl(wd_t,0, '*.ms.flagversions', rm=True)
+                        del_fl(wd_t,0, '*ms.avg', rm=True)
+                        del_fl(wd_t,0, '*tmp*', rm=True)
+                        del_fl(wd_t, 0, '*.stored*', rm=True)
+                        del_fl(wd_t, 0, '*fringe*', rm=True)
+                        del_fl(wd_t,0, '*.uvf', rm=True)
+                        del_fl(wd_t,0, '*calibration_tables', rm=True)
 
                     if vis is not None and Path(vis).exists():
                         nfixed_tsys = repair_mixed_single_pol_syscal_tsys(vis)

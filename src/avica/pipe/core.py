@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from typing import List, Any
 
-from avica.util import read_metafile, read_inputfile, save_metafile, latest_file
+from avica.util import create_config, read_metafile, read_inputfile, save_metafile, latest_file
 from avica.util import rfc_ascii_to_df, parse_class_cat, compute_sep
 from avica.pipe.helpers import count_freqids
 from avica.fitsidiutil.io import FITSIDI, read_idi
@@ -365,6 +365,18 @@ def dic_from_inpfile(wd_ifolder, *args) -> List | None:
             res_list.append(dic_data)
     return res_list
 
+def update_ifolderdata_from_new_ifolder(old_ifolder, new_ifolder, *inpfilenames) -> List[dict] | None:
+
+    new_inp_list_ofdic = dic_from_inpfile(new_ifolder, *inpfilenames)
+    old_inp_list_ofdic = dic_from_inpfile(old_ifolder, *inpfilenames)
+
+    if old_inp_list_ofdic:
+        if new_inp_list_ofdic:
+            for i, oldinpdic in enumerate(old_inp_list_ofdic):
+                oldinpdic.update(new_inp_list_ofdic[i])
+                create_config(oldinpdic, out=f'{old_ifolder}/{inpfilenames[i]}')
+        return old_inp_list_ofdic
+    return None
 
 def merge_obs_data(base_dict, *new_dicts):
         """provide time sorted dicts to create a merged dicts of listobs.
@@ -985,16 +997,19 @@ class AvicaPipelineCore:
             ('name', str),
             ('has_default', bool),
             ('in_input_config', bool),
-            ('in_context', bool)
+            ('in_context', bool),
+            ('value', Any),
         ])
 
         _report = {}
         for param_name in allparam_names:
+            value = self.pipe_params.get(param_name, None) if param_name in self.pipe_params else None
             _report[param_name] =   ParamStatus(
                                         name=param_name,
                                         has_default = param_name in param_dict[step] and param_dict[step][param_name] is not None,
                                         in_input_config = param_name in self.pipe_params,
                                         in_context = param_name in PipelineContext.params,
+                                        value = value or param_dict[step].get(param_name, None),
                                         )
         return _report
 

@@ -2,13 +2,15 @@
 import csv
 from multiprocessing import Pipe
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Any
 
 import resource
 import typer
 
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 from avica.util import ASCII_ART, make_art
 
 try:
@@ -161,6 +163,7 @@ def pipe_config(
     default: Annotated[bool, typer.Option("--default", help="adds the configfile to the default config directory")] = False,
     global_default: Annotated[bool, typer.Option("--global", help="adds the configfile to the global config directory")] = False,
     data: Annotated[Optional[List[str]], typer.Argument(help="key=value pairs")] = None,
+    summary: Annotated[bool, typer.Option("--summary", help="print a report summary of the parameters")] = False,
     ):
     params = PipeConfig(None).defaults()
     global_configfile = str(Path(avica_pkg_dir) / "avica.inp")
@@ -178,16 +181,78 @@ def pipe_config(
             key, value = item.split("=", 1)
             params[key] = value
 
-    if not params:
+    def parameter_source(status) -> tuple[str, str, Any]:
+        if status.in_input_config:
+            return "inpfile/core", "green", status.value
+        if status.in_context:
+            return "context", "cyan", status.value
+        if status.has_default:
+            return "default", "yellow", status.value
+
+        return "required/runtime", "red", status.value
+
+
+    if summary:
+        main_pipeline = AvicaPipeline(pipe_params=params)
+        main_pipeline.filter_steps(*CSV_POPULATED_STEPS)
+
+        console = Console()
+
+        table = Table(
+            title="AVICA parameter summary",
+            header_style="bold",
+            show_lines=False,
+            row_styles=["", ""],
+        )
+
+        table.add_column("Step", style="bold cyan", no_wrap=True)
+        table.add_column("Parameter")
+        table.add_column("Source", no_wrap=True)
+        table.add_column("Value")
+
+        reported_params = set()
+        for step in main_pipeline.step_names():
+            [step_report] = main_pipeline.config_report(step)
+
+            first_row = True
+            for name, status in step_report.items():
+                source, colour, value = parameter_source(status)
+
+                table.add_row(
+                    step if first_row else "",
+                    name,
+                    Text(source, style=colour),
+                    Text(str(value), style=colour),
+                )
+                first_row = False
+
+                reported_params.add(name)
+            table.add_section()
+
+        first_row = True
+        for param, value in main_pipeline.pipe_params.items():
+            if not param in reported_params:
+                table.add_row(
+                    "other" if first_row else "",
+                    param,
+                    Text("inpfile/core", style="green"),
+                    Text(str(value), style="green"),
+                )
+                first_row = False
+        console.print(table)
+
+    elif not params:
         raise typer.BadParameter("No configuration to write. Provide either --inpfile or --data arguments.")
 
-    if default:
-        outfile = str(Path(avica_data_dir) / Path(outfile).name)
+    else:
 
-    if global_default:
-        outfile = str(Path(avica_pkg_dir) / Path(outfile).name)
+        if default:
+            outfile = str(Path(avica_data_dir) / Path(outfile).name)
 
-    create_config(params=params, out=outfile, rj=1, lj=1)
+        if global_default:
+            outfile = str(Path(avica_pkg_dir) / Path(outfile).name)
+
+        create_config(params=params, out=outfile, rj=1, lj=1)
 
 @pipeline_app.command("run")
 def run_pipeline(
@@ -271,6 +336,9 @@ def run_pipeline(
         if resume_from:
             stps = main_pipeline.steps_from(resume_from)
             typer.echo(f"Resuming from step: {resume_from}")
+
+    if resume_from is not None and resume_from.lower() == 'rpicard':
+        main_pipeline.pipe_params['delete_previous_data'] = False
 
     main_pipeline.filter_steps(*stps)
     result = main_pipeline.execute()

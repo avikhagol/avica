@@ -475,6 +475,7 @@ DEFAULT_PARAMS: dict = {
     "sheet_url"                 :   None,
     "worksheet"                 :   None,
     "picard_input_template"     :   f"{Path(__file__).parent}/input_template",
+    "picard_input_template_update"     :   "",
     "csv_file"                  :   "",
     "accor_solint"              :   "int",
     "class_search_asciifile"    :   SMILE_SAMPLE_CATALOG_ASCII,

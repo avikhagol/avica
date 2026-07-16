@@ -1,3 +1,5 @@
+from turtle import st
+
 from .core import AvicaPipelineCore, DEFAULT_PARAMS
 from .steps import PreProcessFitsIdi, FitsIdiToMS, Phaseshift, AvicaMetaMS, AverageMS, SnRating, FinalSplitMs, Calibration, FillInputMs
 
@@ -30,3 +32,13 @@ class AvicaPipeline(AvicaPipelineCore):
 
         idx_step = step_names.index(step_name)
         return step_names[idx_step:]
+
+    def config_report(self, *step_names):
+        if not step_names:
+            step_names = self.step_names()
+        step_reports = []
+        for step_name in step_names:
+            step_report = self.check_config_requirements(step_name)
+            step_reports.append(step_report)
+
+        return step_reports
