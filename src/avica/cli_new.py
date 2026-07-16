@@ -248,7 +248,7 @@ def pipe_config(
                 style = "yellow"
             else:
                 source = "unknown"
-                style = "bold yellow"
+                style = "red"
 
             table.add_row(
                 "other" if first_row else "",
