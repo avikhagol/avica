@@ -514,9 +514,12 @@ class PipeConfig:
     def to_dict(self):
         return read_inputfile(self.folder, self.configfile)[0]
 
-    def defaults(self):
+    def defaults(self, all=False):
         default_params = {}
-        for k,v in DEFAULT_PARAMS.items():
-            if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',"size_", "snr_", "flux_", "target_"]):
-                default_params[k] = v
+        if not all:
+            for k,v in DEFAULT_PARAMS.items():
+                if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',"size_", "snr_", "flux_", "target_"]):
+                    default_params[k] = v
+        else:
+            default_params = DEFAULT_PARAMS
         return default_params

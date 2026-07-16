@@ -230,15 +230,34 @@ def pipe_config(
             table.add_section()
 
         first_row = True
+        core_defaults = PipeConfig(None).defaults(all=True)
+        core_input = PipeConfig(inpfile).to_dict()
+
         for param, value in main_pipeline.pipe_params.items():
-            if not param in reported_params:
-                table.add_row(
-                    "other" if first_row else "",
-                    param,
-                    Text("inpfile/core", style="green"),
-                    Text(str(value), style="green"),
-                )
-                first_row = False
+            if param in reported_params:
+                continue
+
+            core_default = param in core_defaults
+            core_inpfile = param in core_input and core_default
+
+            if core_inpfile:
+                source = "inpfile/core"
+                style = "green"
+            elif core_default:
+                source = "default/core"
+                style = "yellow"
+            else:
+                source = "unknown"
+                style = "bold yellow"
+
+            table.add_row(
+                "other" if first_row else "",
+                param,
+                Text(source, style=style),
+                Text(str(value), style=style),
+            )
+
+            first_row = False
         console.print(table)
 
     elif not params:
