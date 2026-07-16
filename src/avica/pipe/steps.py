@@ -1439,7 +1439,7 @@ class Calibration(PipelineStepBase):
                 if picard_input_template_update and Path(picard_input_template_update).exists():
                     if verbose:
                         print(f"using fixed parameters from {picard_input_template_update}")
-                    update_ifolderdata_from_new_ifolder(iwd_b_t, picard_input_template_update, ['array.inp', 'observation.inp', 'array_finetune.inp', 'flagging.inp', 'constants.inp'])
+                    update_ifolderdata_from_new_ifolder(iwd_b_t, picard_input_template_update, 'array.inp', 'observation.inp', 'array_finetune.inp', 'flagging.inp', 'constants.inp')
 
                 if obs_b_t is not None:
                     allsources                          =   alls_fromobs(obs_b_t)
