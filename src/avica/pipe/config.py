@@ -506,6 +506,8 @@ DEFAULT_PARAMS: dict = {
     "source_extract_multi_fitsfiles"    :   False,
     "removables"                :   [],
     "rm_only"                   :   False,
+    "rm_pre"                    :   False,
+    "rm_post"                   :   False,
 }
 
 class PipeConfig:

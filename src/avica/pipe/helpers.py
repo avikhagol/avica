@@ -1182,12 +1182,12 @@ def del_fl(wd:str | Path, count:int=0, fl:str='*ms*', rm:bool=False):
     """
 
     wd          =   Path(wd)
-    filefound = glob.glob(f"{str(wd)}/{fl}")
+    filefound = glob.glob(str(wd / fl))
     if len(filefound):
         cmd = ['rm','-rf']
-        cmd.extend(str( wd / " ".join(filefound)).split(' '))
+        cmd.extend(filefound)
         print(" ".join(cmd))
-        count+=1
+        count += len(filefound)
         if rm:
             subprocess.run(cmd)
     return count

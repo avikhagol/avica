@@ -970,11 +970,14 @@ class UpdateSheet(PipelineStepValidatorBase):
 
 class AvicaPipelineCore:
 
-    def __init__(self, pipe_params, steps):
+    def __init__(self, pipe_params, steps, provided_pipe_params=None):
         self.lf                    = None
         self._steps: Dict[str, PipelineStepBase]    = {}
         self.steps                                  = steps
         self.pipe_params                            = pipe_params
+        self.provided_pipe_params                   = dict(
+            pipe_params if provided_pipe_params is None else provided_pipe_params
+        )
         self.allresults                             = AvicaResult()
 
         self.register_steps()
@@ -991,13 +994,20 @@ class AvicaPipelineCore:
         for name, param in sig.parameters.items():
             if name != 'self':
                 step_param_name = f"{step.name}.{name}" if hasattr(step, "name") else name
-                val = PipelineContext.params.get(
-                    step_param_name,
-                    PipelineContext.params.get(
-                        name,
-                        self.pipe_params.get(step_param_name, self.pipe_params.get(name)),
-                    ),
-                )
+                if step_param_name in self.provided_pipe_params:
+                    val = PipelineContext.params.get(
+                        step_param_name, self.provided_pipe_params[step_param_name]
+                    )
+                elif name in self.provided_pipe_params:
+                    val = PipelineContext.params.get(name, self.provided_pipe_params[name])
+                else:
+                    val = PipelineContext.params.get(
+                        step_param_name,
+                        PipelineContext.params.get(
+                            name,
+                            self.pipe_params.get(step_param_name, self.pipe_params.get(name)),
+                        ),
+                    )
                 if val is None and param.default is not inspect.Parameter.empty:
                     val = param.default
                 kwargs[name] = val
@@ -1027,15 +1037,22 @@ class AvicaPipelineCore:
 
         def check_param(param_name):
             step_param_name = f"{step}.{param_name}"
-            input_param_name = step_param_name if step_param_name in self.pipe_params else param_name
-            value = self.pipe_params.get(input_param_name, None) if input_param_name in self.pipe_params else None
+            if step_param_name in self.provided_pipe_params:
+                input_param_name = step_param_name
+                in_input_config = True
+            elif param_name in self.provided_pipe_params:
+                input_param_name = param_name
+                in_input_config = True
+            else:
+                input_param_name = step_param_name if step_param_name in self.pipe_params else param_name
+                in_input_config = False
             _report[param_name] =   ParamStatus(
                                         name=param_name,
                                         input_name=input_param_name,
                                         has_default = param_name in param_dict[step] and param_dict[step][param_name] is not None,
-                                        in_input_config = input_param_name in self.pipe_params,
+                                        in_input_config = in_input_config,
                                         in_context = param_name in PipelineContext.params,
-                                        value = value if value is not None else param_dict[step].get(param_name, None),
+                                        value = param_dict[step].get(param_name, None),
                                         )
             return _report[param_name]
 
