@@ -507,7 +507,12 @@ DEFAULT_PARAMS: dict = {
     "removables"                :   [],
     "rm_only"                   :   False,
     "rm_pre"                    :   False,
-    "rm_post"                   :   False,
+    "preprocess_fitsidi.removables"     :   ["raw/*.tmp"],
+    "preprocess_fitsidi.rm_pre"     :   False,
+    "rpicard.removables"     :   ["wd_[SLKQXPD]/VLBI_*.ms"],
+    "rpicard.rm_pre"     :   False,
+    "fits_to_ms.removables"     :   ["*.old"],
+    "fits_to_ms.rm_pre"     :   False,
 }
 
 class PipeConfig:

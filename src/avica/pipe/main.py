@@ -16,10 +16,12 @@ class AvicaPipeline(AvicaPipelineCore):
 
     def __init__(self, pipe_params: dict = None, steps: list = None):
 
-        merged_params = {**DEFAULT_PARAMS, **(pipe_params or {})}
+        provided_pipe_params = dict(pipe_params or {})
+        merged_params = {**DEFAULT_PARAMS, **provided_pipe_params}
         super().__init__(
             pipe_params = merged_params,
             steps       = steps or self.DEFAULT_STEPS,
+            provided_pipe_params = provided_pipe_params,
         )
 
     def step_names(self):
