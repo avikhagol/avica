@@ -504,6 +504,7 @@ DEFAULT_PARAMS: dict = {
     "solint_max_scan_partitions":   8,
     "apply_flag_from_idi"       :   True,
     "source_extract_multi_fitsfiles"    :   False,
+    "delete_removables"         :   False,
     "removables"                :   [],
     "rm_only"                   :   False,
     "rm_pre"                    :   False,
