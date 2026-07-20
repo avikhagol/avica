@@ -75,8 +75,8 @@ class PreProcessFitsIdi(PipelineStepBase):
 
         if len(removables) > 0:
             RemoveRemovables(wd, removables).rm()
-            if rm_only:
-                return self.result
+        if rm_only:
+            return self.result
 
             targets         =   PipelineContext.params['targets'] or [] if 'targets' in PipelineContext.params else []
             target          =   PipelineContext.params['target']
@@ -344,8 +344,8 @@ class FitsIdiToMS(PipelineStepBase):
 
         if len(removables) > 0:
             RemoveRemovables(wd, removables).rm()
-            if rm_only:
-                return self.result
+        if rm_only:
+            return self.result
 
         if vis is None:
             raise NameError(f"vis = {vis}; wd_ifolder ={wd_ifolder}")
@@ -571,8 +571,8 @@ class Phaseshift(PipelineStepBase):
 
         if len(removables) > 0:
             RemoveRemovables(wd, removables).rm()
-            if rm_only:
-                return self.result
+        if rm_only:
+            return self.result
         class_searchcoord_file          =   wd_meta.matched_coord_outfile
 
         metafile_av_iwd_ff              =   wd_meta.metafile_available_wd_ff
@@ -726,8 +726,8 @@ class AverageMS(PipelineStepBase):
 
         if len(removables) > 0:
             RemoveRemovables(wd, removables).rm()
-            if rm_only:
-                return self.result
+        if rm_only:
+            return self.result
 
         metafile_av_iwd_ff              =   wd_meta.metafile_available_wd_ff
         wd_ifolders                     =   read_metafile(metafile_av_iwd_ff)['input_folder'] if metafile_av_iwd_ff is not None and  Path(metafile_av_iwd_ff).exists() else [wd_ifolder]
@@ -936,8 +936,8 @@ class AvicaMetaMS(PipelineStepBase):
         wd              = wd_meta.wd
         if len(removables) > 0:
             RemoveRemovables(wd, removables).rm()
-            if rm_only:
-                return self.result
+        if rm_only:
+            return self.result
         metafolder      = Path(wd_meta.metafolder)
 
         bands_dict      = read_metafile(wd_meta.metafile_msmeta_sources)['bands_dict']
@@ -1212,8 +1212,8 @@ class FillInputMs(PipelineStepBase):
         wd                              =   wd_meta.wd
         if len(removables) > 0:
             RemoveRemovables(wd, removables).rm()
-            if rm_only:
-                return self.result
+        if rm_only:
+            return self.result
         desc                             =   {}
 
         bands_dict                      =   read_metafile(wd_meta.metafile_msmeta_sources)['bands_dict']
@@ -1314,8 +1314,8 @@ class FinalSplitMs(PipelineStepBase):
         wd                              =   wd_meta.wd
         if len(removables) > 0:
             RemoveRemovables(wd, removables).rm()
-            if rm_only:
-                return self.result
+        if rm_only:
+            return self.result
 
         metafolder                      =   Path(wd_meta.metafolder)
         desc                             =   {}
@@ -1480,8 +1480,8 @@ class Calibration(PipelineStepBase):
         wd                              =   wd_meta.wd
         if len(removables) > 0:
             RemoveRemovables(wd, removables).rm()
-            if rm_only:
-                return self.result
+        if rm_only:
+            return self.result
 
         metafolder                      =   Path(wd_meta.metafolder)
         desc                            =   {}
