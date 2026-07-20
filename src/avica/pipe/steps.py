@@ -95,7 +95,7 @@ class PreProcessFitsIdi(PipelineStepBase):
             wd              =   wd_meta.wd
             metafolder      =   wd_meta.metafolder
 
-        if not delete_removables:
+        if delete_removables:
             removables = _normalize_removables(removables)
             if rm_pre or rm_only:
                 with step_stage(f"deleting removables: {removables}", wd_ifolder=wd_ifolder):
@@ -252,7 +252,7 @@ class PreProcessFitsIdi(PipelineStepBase):
             self.result.success_count = sum(self.result.success)
             self.result.failed_count = len(self.result.success) - self.result.success_count
         self.result.end_stamp   =   datetime.now()
-        if not delete_removables:
+        if delete_removables:
             if len(removables) > 0 and not rm_pre:
                 RemoveRemovables(wd, removables).rm()
         return self.result
@@ -368,7 +368,7 @@ class FitsIdiToMS(PipelineStepBase):
         wd              =   wd_meta.wd
         metafolder      =   wd_meta.metafolder
         vis             =   wd_meta.vis
-        if not delete_removables:
+        if delete_removables:
             removables = _normalize_removables(removables)
             if rm_pre or rm_only:
                 with step_stage(f"deleting removables: {removables}", wd_ifolder=wd_ifolder):
@@ -559,7 +559,7 @@ class FitsIdiToMS(PipelineStepBase):
         self.result.end_stamp                   =   datetime.now()
         del_fl(metafolder, 0, "available_wd_ifolder.avica", rm=True)
         save_metafile(wd_meta.metafile_available_wd_ff, {"input_folder": used_wd_ifolder, "fitsfiles": used_ff_wd_ifolder})
-        if not delete_removables:
+        if delete_removables:
             if len(removables) > 0 and not rm_pre:
                 RemoveRemovables(wd, removables).rm()
         return self.result
@@ -600,7 +600,7 @@ class Phaseshift(PipelineStepBase):
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         wd                              =   wd_meta.wd
 
-        if not delete_removables:
+        if delete_removables:
             removables = _normalize_removables(removables)
             if rm_pre or rm_only:
                 removed_count = RemoveRemovables(wd, removables).rm()
@@ -712,7 +712,7 @@ class Phaseshift(PipelineStepBase):
                             self.result.failed_count               =   lf.put_value(f"{errfile}", self.colnames.comment_col, self.result.failed_count)
                             _                    =   lf.put_value("failed", self.colnames.working_col, self.result.failed_count)
         self.result.end_stamp   = datetime.now()
-        if not delete_removables:
+        if delete_removables:
             if len(removables) > 0 and not rm_pre:
                 RemoveRemovables(wd, removables).rm()
 
@@ -759,7 +759,7 @@ class AverageMS(PipelineStepBase):
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         wd                              =   wd_meta.wd
 
-        if not delete_removables:
+        if delete_removables:
             removables = _normalize_removables(removables)
             if rm_pre or rm_only:
                 removed_count = RemoveRemovables(wd, removables).rm()
@@ -934,7 +934,7 @@ class AverageMS(PipelineStepBase):
         self.result.desc = bands_known
         self.result.end_stamp   =   datetime.now()
 
-        if not delete_removables:
+        if delete_removables:
             if len(removables) > 0 and not rm_pre:
                 RemoveRemovables(wd, removables).rm()
 
@@ -973,7 +973,7 @@ class AvicaMetaMS(PipelineStepBase):
 
         wd_meta         = WorkDirMeta(wd_ifolder=wd_ifolder)
         wd              = wd_meta.wd
-        if not delete_removables:
+        if delete_removables:
             removables = _normalize_removables(removables)
 
             if rm_pre or rm_only:
@@ -1060,7 +1060,7 @@ class AvicaMetaMS(PipelineStepBase):
                 traceback.print_exc()
         self.result.detail = success_band
         self.result.end_stamp = datetime.now()
-        if not delete_removables:
+        if delete_removables:
             if len(removables) > 0 and not rm_pre:
                 RemoveRemovables(wd, removables).rm()
         return self.result
@@ -1100,7 +1100,7 @@ class SnRating(PipelineStepBase):
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         wd                              =   wd_meta.wd
 
-        if not delete_removables:
+        if delete_removables:
             removables                      =   _normalize_removables(removables)
             if rm_pre or rm_only:
                 removed_count                   =   RemoveRemovables(wd, removables).rm()
@@ -1228,7 +1228,7 @@ class SnRating(PipelineStepBase):
                             self.result.success.append(True)
             self.result.desc = desc
         self.result.end_stamp   =   datetime.now()
-        if not delete_removables:
+        if delete_removables:
             if len(removables) > 0 and not rm_pre:
                 RemoveRemovables(wd, removables).rm()
         return self.result
@@ -1262,7 +1262,7 @@ class FillInputMs(PipelineStepBase):
 
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         wd                              =   wd_meta.wd
-        if not delete_removables:
+        if delete_removables:
             removables = _normalize_removables(removables)
             if rm_pre or rm_only:
                 removed_count = RemoveRemovables(wd, removables).rm()
@@ -1332,7 +1332,7 @@ class FillInputMs(PipelineStepBase):
 
 
         self.result.end_stamp                   =   datetime.now()
-        if not delete_removables:
+        if delete_removables:
             if len(removables) > 0 and not rm_pre:
                 RemoveRemovables(wd, removables).rm()
         return self.result
@@ -1367,7 +1367,7 @@ class FinalSplitMs(PipelineStepBase):
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         wd                              =   wd_meta.wd
-        if not delete_removables:
+        if delete_removables:
             removables = _normalize_removables(removables)
             if rm_pre or rm_only:
                 removed_count = RemoveRemovables(wd, removables).rm()
@@ -1501,7 +1501,7 @@ class FinalSplitMs(PipelineStepBase):
 
         self.result.end_stamp = datetime.now()
 
-        if not delete_removables:
+        if delete_removables:
             if len(removables) > 0 and not rm_pre:
                 RemoveRemovables(wd, removables).rm()
 
@@ -1537,7 +1537,7 @@ class Calibration(PipelineStepBase):
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         wd                              =   wd_meta.wd
-        if not delete_removables:
+        if delete_removables:
             removables = _normalize_removables(removables)
             if rm_pre or rm_only:
                 removed_count = RemoveRemovables(wd, removables).rm()
@@ -1630,7 +1630,7 @@ class Calibration(PipelineStepBase):
                     self.result.detail[band] = "missing"
 
             self.result.end_stamp           =   datetime.now()
-            if not delete_removables:
+            if delete_removables:
                 if len(removables) > 0 and not rm_pre:
                     RemoveRemovables(wd, removables).rm()
             return self.result
