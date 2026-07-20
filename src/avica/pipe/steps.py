@@ -22,7 +22,7 @@ from .helpers import del_fl, count_freqids, meta_from_fitsfile, meta_from_fitsfi
 from .helpers import alls_fromobs, update_from_avicameta, check_target_in_ms, fits_has_target, fill_input_byvalues
 from .helpers import convert_flag_table, convert_ms_flag_cmd_table
 
-from .core import PipelineStepBase, StepResult, ColName, PipelineContext, WorkDirMeta
+from .core import PipelineStepBase, StepResult, ColName, PipelineContext, WorkDirMeta, RemoveRemovables
 from .core import step_stage, InitVariables, RunValidation,  UpdateResults, UpdateSheet, CasaSetup
 from .core import ImportFITSIdi, MsTransform, MpiCasaPayload, PicardPayload, GenerateAndAppendAntab, PicardTask, PersistentMpiCasaRunner
 from .core import FlagData, FlagManager
@@ -62,7 +62,7 @@ class PreProcessFitsIdi(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, fitsfiles, target, wd_ifolder, source_extract_multi_fitsfiles=False, verbose=False):
+    def run(self, lf, fitsfiles, target, wd_ifolder, source_extract_multi_fitsfiles=False, removables=[], rm_only=False, verbose=False):
         self.result.start_stamp   = datetime.now()
         from avica.fitsidiutil.validation import fitsidi_check
         from avica.fitsidiutil.obs import ObservationSummary
@@ -72,6 +72,12 @@ class PreProcessFitsIdi(PipelineStepBase):
             wd_meta         =   WorkDirMeta(wd_ifolder=wd_ifolder)
             wd              =   wd_meta.wd
             metafolder      =   wd_meta.metafolder
+
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
+            if rm_only:
+                return self.result
+
             targets         =   PipelineContext.params['targets'] or [] if 'targets' in PipelineContext.params else []
             target          =   PipelineContext.params['target']
             tmpfitsfiles        =   deepcopy(fitsfiles)
@@ -221,7 +227,8 @@ class PreProcessFitsIdi(PipelineStepBase):
             self.result.success_count = sum(self.result.success)
             self.result.failed_count = len(self.result.success) - self.result.success_count
         self.result.end_stamp   =   datetime.now()
-
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
         return self.result
 
 class FitsIdiToMS(PipelineStepBase):
@@ -320,7 +327,7 @@ class FitsIdiToMS(PipelineStepBase):
         self.result.desc.append(f"applied {nflags} {flag_source} flag rows to {Path(vis).name}")
         return True
 
-    def run(self, lf, casadir, wd_ifolder, apply_flag_from_idi=True, mpi_cores_importfitsidi=5, flag_source="ms",
+    def run(self, lf, casadir, wd_ifolder, apply_flag_from_idi=True, mpi_cores_importfitsidi=5, flag_source="ms", removables=[], rm_only=False,
         apply_flag_to_existing_vis=False,):
 
         self.result.start_stamp   = datetime.now()
@@ -334,6 +341,11 @@ class FitsIdiToMS(PipelineStepBase):
         wd              =   wd_meta.wd
         metafolder      =   wd_meta.metafolder
         vis             =   wd_meta.vis
+
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
+            if rm_only:
+                return self.result
 
         if vis is None:
             raise NameError(f"vis = {vis}; wd_ifolder ={wd_ifolder}")
@@ -518,7 +530,8 @@ class FitsIdiToMS(PipelineStepBase):
         self.result.end_stamp                   =   datetime.now()
         del_fl(metafolder, 0, "available_wd_ifolder.avica", rm=True)
         save_metafile(wd_meta.metafile_available_wd_ff, {"input_folder": used_wd_ifolder, "fitsfiles": used_ff_wd_ifolder})
-
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
         return self.result
 
 class Phaseshift(PipelineStepBase):
@@ -544,7 +557,7 @@ class Phaseshift(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, fitsfile, target, separation_thres, class_search_asciifile, verbose=False,):
+    def run(self, lf, wd_ifolder, fitsfile, target, separation_thres, class_search_asciifile, removables=[], rm_only=False, verbose=False,):
         self.result.start_stamp   = datetime.now()
         from avica.util import parse_class_cat
         from avica.fitsidiutil.op import catalog_search_from_fits
@@ -554,7 +567,12 @@ class Phaseshift(PipelineStepBase):
         # wds_ifolder_for_payload         =   []
 
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
+        wd                              =   wd_meta.wd
 
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
+            if rm_only:
+                return self.result
         class_searchcoord_file          =   wd_meta.matched_coord_outfile
 
         metafile_av_iwd_ff              =   wd_meta.metafile_available_wd_ff
@@ -661,6 +679,8 @@ class Phaseshift(PipelineStepBase):
                             self.result.failed_count               =   lf.put_value(f"{errfile}", self.colnames.comment_col, self.result.failed_count)
                             _                    =   lf.put_value("failed", self.colnames.working_col, self.result.failed_count)
         self.result.end_stamp   = datetime.now()
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
 
         return self.result
 
@@ -686,7 +706,7 @@ class AverageMS(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, casadir, targets, target, mpi_cores_avgms=5, verbose=True):
+    def run(self, lf, wd_ifolder, casadir, targets, target, mpi_cores_avgms=5, removables=[], rm_only=False, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms.meta import BandInfoMS
         from avica.ms import check_and_fix_spw_partitioning
@@ -702,6 +722,13 @@ class AverageMS(PipelineStepBase):
         wds_ifolder_for_payload         =   []
 
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
+        wd                              =   wd_meta.wd
+
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
+            if rm_only:
+                return self.result
+
         metafile_av_iwd_ff              =   wd_meta.metafile_available_wd_ff
         wd_ifolders                     =   read_metafile(metafile_av_iwd_ff)['input_folder'] if metafile_av_iwd_ff is not None and  Path(metafile_av_iwd_ff).exists() else [wd_ifolder]
 
@@ -870,6 +897,9 @@ class AverageMS(PipelineStepBase):
         self.result.desc = bands_known
         self.result.end_stamp   =   datetime.now()
 
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
+
         return self.result
 
 class AvicaMetaMS(PipelineStepBase):
@@ -894,7 +924,7 @@ class AvicaMetaMS(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, init_params, rfc_catalogfile, target, flux_threshold_phref=0.15, verbose=True):
+    def run(self, lf, wd_ifolder, init_params, rfc_catalogfile, target, flux_threshold_phref=0.15, removables=[], rm_only=False, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms import identify_sources_fromtarget_ms
 
@@ -903,6 +933,11 @@ class AvicaMetaMS(PipelineStepBase):
         self.result.detail = {}
 
         wd_meta         = WorkDirMeta(wd_ifolder=wd_ifolder)
+        wd              = wd_meta.wd
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
+            if rm_only:
+                return self.result
         metafolder      = Path(wd_meta.metafolder)
 
         bands_dict      = read_metafile(wd_meta.metafile_msmeta_sources)['bands_dict']
@@ -983,6 +1018,8 @@ class AvicaMetaMS(PipelineStepBase):
                 traceback.print_exc()
         self.result.detail = success_band
         self.result.end_stamp = datetime.now()
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
         return self.result
 
 class SnRating(PipelineStepBase):
@@ -1007,7 +1044,7 @@ class SnRating(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, init_params, casadir, target, n_refant=5, n_calib=6,
+    def run(self, lf, wd_ifolder, init_params, casadir, target, n_refant=5, n_calib=6, removables=[], rm_only=False,
                     multiband_snrating=True, mpi_cores_snrating=5, n_scan_snrting=7, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms import get_best_spws
@@ -1018,6 +1055,7 @@ class SnRating(PipelineStepBase):
         band_count                      =   0
 
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
+        wd
         metafolder                      =   Path(wd_meta.metafolder)
         desc                             =   {}
         iter_scan_count                 =   init_params['iter_scan_count_snrating'] if 'iter_scan_count_snrating' in init_params else 5
@@ -1140,6 +1178,8 @@ class SnRating(PipelineStepBase):
                             self.result.success.append(True)
             self.result.desc = desc
         self.result.end_stamp   =   datetime.now()
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
         return self.result
 
 class FillInputMs(PipelineStepBase):
@@ -1163,12 +1203,17 @@ class FillInputMs(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, rfc_catalogfile, target, n_calib=6, flux_threshold_phref=7, hi_freq_ref=11,
+    def run(self, lf, wd_ifolder, rfc_catalogfile, target, n_calib=6, flux_threshold_phref=7, hi_freq_ref=11, removables=[], rm_only=False,
             min_channel_flagging=32, sci_solints="auto", solint_max_scan_partitions=8, verbose=True):
         self.result.start_stamp         =   datetime.now()
         log                             =   logging.getLogger("avica.pipeline")
 
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
+        wd                              =   wd_meta.wd
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
+            if rm_only:
+                return self.result
         desc                             =   {}
 
         bands_dict                      =   read_metafile(wd_meta.metafile_msmeta_sources)['bands_dict']
@@ -1233,6 +1278,8 @@ class FillInputMs(PipelineStepBase):
 
 
         self.result.end_stamp                   =   datetime.now()
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
         return self.result
 
 class FinalSplitMs(PipelineStepBase):
@@ -1257,13 +1304,19 @@ class FinalSplitMs(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, casadir, target, verbose=True):
+    def run(self, lf, wd_ifolder, casadir, target, removables=[], rm_only=False, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms import get_best_spws, check_and_fix_spw_partitioning
         from avica.ms.compat import CasaMSMetadata
         cmsmd = CasaMSMetadata()
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
+        wd                              =   wd_meta.wd
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
+            if rm_only:
+                return self.result
+
         metafolder                      =   Path(wd_meta.metafolder)
         desc                             =   {}
         wds_ifolder_for_payload         =   []
@@ -1391,6 +1444,9 @@ class FinalSplitMs(PipelineStepBase):
 
         self.result.end_stamp = datetime.now()
 
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
+
         return self.result
 
 class Calibration(PipelineStepBase):
@@ -1414,13 +1470,19 @@ class Calibration(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, casadir, target, verbose=True, picard_input_template_update='', delete_previous_data=True):
+    def run(self, lf, wd_ifolder, casadir, target, verbose=True, removables=[], rm_only=False, picard_input_template_update='', delete_previous_data=True):
         from avica.ms.tables import repair_mixed_single_pol_syscal_tsys
         from avica.pipe.core import update_ifolderdata_from_new_ifolder
 
         self.result.start_stamp         =   datetime.now()
         log                             =   logging.getLogger("avica.pipeline")
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
+        wd                              =   wd_meta.wd
+        if len(removables) > 0:
+            RemoveRemovables(wd, removables).rm()
+            if rm_only:
+                return self.result
+
         metafolder                      =   Path(wd_meta.metafolder)
         desc                            =   {}
         wds_ifolder_for_payload         =   []
@@ -1476,7 +1538,7 @@ class Calibration(PipelineStepBase):
                     comment_col = self.colnames.comment_col
                     calibrated_sources = [str(Path(calfile).name).replace("_calibrated.uvf", "") for calfile in calibrated_files]
                     missing_sources = list(set(allsources).difference(calibrated_files))
-                    desc[band]                  =   f"calibrated {','.join(calibrated_sources)}"
+                    desc[band]                  =   f"calibrated {','.join(calibrated_sources)}" if len(calibrated_sources) else "failed!"
                     target_calfile = [str(calfile) for calfile in calibrated_files if target in calfile]
                     self.result.detail[band] = target_calfile[0] if len(target_calfile) else "uvf not found"
 
@@ -1507,4 +1569,6 @@ class Calibration(PipelineStepBase):
                     self.result.detail[band] = "missing"
 
             self.result.end_stamp           =   datetime.now()
+            if len(removables) > 0:
+                RemoveRemovables(wd, removables).rm()
             return self.result

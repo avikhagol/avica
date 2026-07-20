@@ -1,3 +1,5 @@
+from turtle import st
+
 from avica.pipe.config import MPI_CASA_PERL_SCRIPT, PHASESHIFT_PERL_SCRIPT, MPICASA_WORKER, VLBA_GAINS_KEY
 import subprocess
 import sys
@@ -435,6 +437,16 @@ class ColName(NamedTuple):
     comment_col     :   str
     timestamp_col   :   str
 
+
+class RemoveRemovables:
+    def __init__(self, wd, removables: List[str]):
+        self.wd = wd
+        self.removables = removables
+
+    def rm(self):
+        if len(self.removables) > 0:
+            for removable in self.removables:
+                del_fl(self.wd, 0, removable, rm=True)
 
 class AvicaResult(UserList[StepResult]):
 
@@ -1002,7 +1014,8 @@ class AvicaPipelineCore:
         ])
 
         _report = {}
-        for param_name in allparam_names:
+
+        def check_param(param_name):
             value = self.pipe_params.get(param_name, None) if param_name in self.pipe_params else None
             _report[param_name] =   ParamStatus(
                                         name=param_name,
@@ -1011,6 +1024,16 @@ class AvicaPipelineCore:
                                         in_context = param_name in PipelineContext.params,
                                         value = value or param_dict[step].get(param_name, None),
                                         )
+
+        for param_name in allparam_names:
+            if "." not in param_name:
+                _report[param_name] = check_param(param_name)
+
+        for param_name, value in allparam_names:
+            if "." in param_name and str(step) in param_name:
+                sanitized_param_name = param_name.replace(f"{str(step)}.", "")      # remove step prefix from param name step_name.param_name
+                _report[sanitized_param_name] = check_param(sanitized_param_name)
+
         return _report
 
     def filter_steps(self,*keys):
