@@ -1016,7 +1016,7 @@ class AvicaPipelineCore:
         _report = {}
 
         def check_param(param_name):
-            value = self.pipe_params.get(param_name, None)
+            value = self.pipe_params.get(param_name, None) if param_name in self.pipe_params else None
             _report[param_name] =   ParamStatus(
                                         name=param_name,
                                         has_default = param_name in param_dict[step] and param_dict[step][param_name] is not None,
@@ -1024,6 +1024,7 @@ class AvicaPipelineCore:
                                         in_context = param_name in PipelineContext.params,
                                         value = value or param_dict[step].get(param_name, None),
                                         )
+            return _report[param_name]
 
         for param_name in allparam_names:
             _report[param_name] = check_param(param_name)
