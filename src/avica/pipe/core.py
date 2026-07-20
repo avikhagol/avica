@@ -1029,7 +1029,7 @@ class AvicaPipelineCore:
             if "." not in param_name:
                 _report[param_name] = check_param(param_name)
 
-        for param_name, value in allparam_names:
+        for param_name in allparam_names:
             if "." in param_name and str(step) in param_name:
                 sanitized_param_name = param_name.replace(f"{str(step)}.", "")      # remove step prefix from param name step_name.param_name
                 _report[sanitized_param_name] = check_param(sanitized_param_name)
