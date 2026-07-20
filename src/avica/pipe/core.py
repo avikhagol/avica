@@ -1016,7 +1016,7 @@ class AvicaPipelineCore:
         _report = {}
 
         def check_param(param_name):
-            value = self.pipe_params.get(param_name, None) if param_name in self.pipe_params else None
+            value = self.pipe_params.get(param_name, None)
             _report[param_name] =   ParamStatus(
                                         name=param_name,
                                         has_default = param_name in param_dict[step] and param_dict[step][param_name] is not None,
@@ -1026,10 +1026,8 @@ class AvicaPipelineCore:
                                         )
 
         for param_name in allparam_names:
-            if "." not in param_name:
-                _report[param_name] = check_param(param_name)
+            _report[param_name] = check_param(param_name)
 
-        for param_name in allparam_names:
             if "." in param_name and str(step) in param_name:
                 sanitized_param_name = param_name.replace(f"{str(step)}.", "")      # remove step prefix from param name step_name.param_name
                 _report[sanitized_param_name] = check_param(sanitized_param_name)
