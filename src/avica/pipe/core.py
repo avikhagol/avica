@@ -444,9 +444,11 @@ class RemoveRemovables:
         self.removables = removables
 
     def rm(self):
+        count = 0
         if len(self.removables) > 0:
             for removable in self.removables:
-                del_fl(self.wd, 0, removable, rm=True)
+                count = del_fl(self.wd, count, removable, rm=True)
+        return count
 
 class AvicaResult(UserList[StepResult]):
 
@@ -989,7 +991,13 @@ class AvicaPipelineCore:
         for name, param in sig.parameters.items():
             if name != 'self':
                 step_param_name = f"{step.name}.{name}" if hasattr(step, "name") else name
-                val = PipelineContext.params.get(step_param_name, PipelineContext.params.get(name))
+                val = PipelineContext.params.get(
+                    step_param_name,
+                    PipelineContext.params.get(
+                        name,
+                        self.pipe_params.get(step_param_name, self.pipe_params.get(name)),
+                    ),
+                )
                 if val is None and param.default is not inspect.Parameter.empty:
                     val = param.default
                 kwargs[name] = val
@@ -1008,6 +1016,7 @@ class AvicaPipelineCore:
         allparam_names  = list(param_dict[step].keys())
         ParamStatus = NamedTuple('ParamStatus', [
             ('name', str),
+            ('input_name', str),
             ('has_default', bool),
             ('in_input_config', bool),
             ('in_context', bool),
@@ -1022,6 +1031,7 @@ class AvicaPipelineCore:
             value = self.pipe_params.get(input_param_name, None) if input_param_name in self.pipe_params else None
             _report[param_name] =   ParamStatus(
                                         name=param_name,
+                                        input_name=input_param_name,
                                         has_default = param_name in param_dict[step] and param_dict[step][param_name] is not None,
                                         in_input_config = input_param_name in self.pipe_params,
                                         in_context = param_name in PipelineContext.params,

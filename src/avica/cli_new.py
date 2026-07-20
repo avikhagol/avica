@@ -168,6 +168,8 @@ def pipe_config(
     params = PipeConfig(None).defaults()
     global_configfile = str(Path(avica_pkg_dir) / "avica.inp")
     params.update(PipeConfig(global_configfile).to_dict())
+    if summary and inpfile is None and outfile and Path(outfile).exists():
+        inpfile = outfile
     if inpfile:
         try:
             params = PipeConfig(inpfile).to_dict()
@@ -183,6 +185,8 @@ def pipe_config(
 
     def parameter_source(status) -> tuple[str, str, Any]:
         if status.in_input_config:
+            if getattr(status, "input_name", status.name) != status.name:
+                return "inpfile/step", "green", status.value
             return "inpfile/core", "green", status.value
         if status.in_context:
             return "context", "cyan", status.value
@@ -227,11 +231,12 @@ def pipe_config(
                 first_row = False
 
                 reported_params.add(name)
+                reported_params.add(f"{step}.{name}")
             table.add_section()
 
         first_row = True
         core_defaults = PipeConfig(None).defaults(all=True)
-        core_input = PipeConfig(inpfile).to_dict()
+        core_input = PipeConfig(inpfile).to_dict() if inpfile else {}
 
         for param, value in main_pipeline.pipe_params.items():
             if param in reported_params:

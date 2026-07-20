@@ -47,11 +47,11 @@ def _normalize_removables(removables):
     return list(removables)
 
 
-def _rm_only_result(result, removables):
+def _rm_only_result(result, removed_count):
     result.success = [True]
     result.success_count = 1
     result.failed_count = 0
-    result.desc.append(f"removed {len(removables)} requested pattern(s)")
+    result.desc.append(f"removed {removed_count} filesystem entr{'y' if removed_count == 1 else 'ies'}")
     result.end_stamp = datetime.now()
     return result
 
@@ -95,10 +95,9 @@ class PreProcessFitsIdi(PipelineStepBase):
             metafolder      =   wd_meta.metafolder
 
         removables = _normalize_removables(removables)
-        if len(removables) > 0:
-            RemoveRemovables(wd, removables).rm()
+        removed_count = RemoveRemovables(wd, removables).rm()
         if rm_only:
-            return _rm_only_result(self.result, removables)
+            return _rm_only_result(self.result, removed_count)
 
             targets         =   PipelineContext.params['targets'] or [] if 'targets' in PipelineContext.params else []
             target          =   PipelineContext.params['target']
@@ -365,10 +364,9 @@ class FitsIdiToMS(PipelineStepBase):
         vis             =   wd_meta.vis
 
         removables = _normalize_removables(removables)
-        if len(removables) > 0:
-            RemoveRemovables(wd, removables).rm()
+        removed_count = RemoveRemovables(wd, removables).rm()
         if rm_only:
-            return _rm_only_result(self.result, removables)
+            return _rm_only_result(self.result, removed_count)
 
         if vis is None:
             raise NameError(f"vis = {vis}; wd_ifolder ={wd_ifolder}")
@@ -593,10 +591,9 @@ class Phaseshift(PipelineStepBase):
         wd                              =   wd_meta.wd
 
         removables = _normalize_removables(removables)
-        if len(removables) > 0:
-            RemoveRemovables(wd, removables).rm()
+        removed_count = RemoveRemovables(wd, removables).rm()
         if rm_only:
-            return _rm_only_result(self.result, removables)
+            return _rm_only_result(self.result, removed_count)
         class_searchcoord_file          =   wd_meta.matched_coord_outfile
 
         metafile_av_iwd_ff              =   wd_meta.metafile_available_wd_ff
@@ -749,10 +746,9 @@ class AverageMS(PipelineStepBase):
         wd                              =   wd_meta.wd
 
         removables = _normalize_removables(removables)
-        if len(removables) > 0:
-            RemoveRemovables(wd, removables).rm()
+        removed_count = RemoveRemovables(wd, removables).rm()
         if rm_only:
-            return _rm_only_result(self.result, removables)
+            return _rm_only_result(self.result, removed_count)
 
         metafile_av_iwd_ff              =   wd_meta.metafile_available_wd_ff
         wd_ifolders                     =   read_metafile(metafile_av_iwd_ff)['input_folder'] if metafile_av_iwd_ff is not None and  Path(metafile_av_iwd_ff).exists() else [wd_ifolder]
@@ -960,10 +956,9 @@ class AvicaMetaMS(PipelineStepBase):
         wd_meta         = WorkDirMeta(wd_ifolder=wd_ifolder)
         wd              = wd_meta.wd
         removables = _normalize_removables(removables)
-        if len(removables) > 0:
-            RemoveRemovables(wd, removables).rm()
+        removed_count = RemoveRemovables(wd, removables).rm()
         if rm_only:
-            return _rm_only_result(self.result, removables)
+            return _rm_only_result(self.result, removed_count)
         metafolder      = Path(wd_meta.metafolder)
 
         bands_dict      = read_metafile(wd_meta.metafile_msmeta_sources)['bands_dict']
@@ -1083,10 +1078,9 @@ class SnRating(PipelineStepBase):
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         wd                              =   wd_meta.wd
         removables                      =   _normalize_removables(removables)
-        if len(removables) > 0:
-            RemoveRemovables(wd, removables).rm()
+        removed_count                   =   RemoveRemovables(wd, removables).rm()
         if rm_only:
-            return _rm_only_result(self.result, removables)
+            return _rm_only_result(self.result, removed_count)
         metafolder                      =   Path(wd_meta.metafolder)
         desc                             =   {}
         iter_scan_count                 =   init_params['iter_scan_count_snrating'] if 'iter_scan_count_snrating' in init_params else 5
@@ -1242,10 +1236,9 @@ class FillInputMs(PipelineStepBase):
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         wd                              =   wd_meta.wd
         removables = _normalize_removables(removables)
-        if len(removables) > 0:
-            RemoveRemovables(wd, removables).rm()
+        removed_count = RemoveRemovables(wd, removables).rm()
         if rm_only:
-            return _rm_only_result(self.result, removables)
+            return _rm_only_result(self.result, removed_count)
         desc                             =   {}
 
         bands_dict                      =   read_metafile(wd_meta.metafile_msmeta_sources)['bands_dict']
@@ -1345,10 +1338,9 @@ class FinalSplitMs(PipelineStepBase):
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         wd                              =   wd_meta.wd
         removables = _normalize_removables(removables)
-        if len(removables) > 0:
-            RemoveRemovables(wd, removables).rm()
+        removed_count = RemoveRemovables(wd, removables).rm()
         if rm_only:
-            return _rm_only_result(self.result, removables)
+            return _rm_only_result(self.result, removed_count)
 
         metafolder                      =   Path(wd_meta.metafolder)
         desc                             =   {}
@@ -1512,10 +1504,9 @@ class Calibration(PipelineStepBase):
         wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
         wd                              =   wd_meta.wd
         removables = _normalize_removables(removables)
-        if len(removables) > 0:
-            RemoveRemovables(wd, removables).rm()
+        removed_count = RemoveRemovables(wd, removables).rm()
         if rm_only:
-            return _rm_only_result(self.result, removables)
+            return _rm_only_result(self.result, removed_count)
 
         metafolder                      =   Path(wd_meta.metafolder)
         desc                            =   {}
