@@ -475,6 +475,7 @@ DEFAULT_PARAMS: dict = {
     "sheet_url"                 :   None,
     "worksheet"                 :   None,
     "picard_input_template"     :   f"{Path(__file__).parent}/input_template",
+    "picard_input_template_update"     :   "",
     "csv_file"                  :   "",
     "accor_solint"              :   "int",
     "class_search_asciifile"    :   SMILE_SAMPLE_CATALOG_ASCII,
@@ -503,6 +504,16 @@ DEFAULT_PARAMS: dict = {
     "solint_max_scan_partitions":   8,
     "apply_flag_from_idi"       :   True,
     "source_extract_multi_fitsfiles"    :   False,
+    "delete_removables"         :   False,
+    "removables"                :   [],
+    "rm_only"                   :   False,
+    "rm_pre"                    :   False,
+    "preprocess_fitsidi.removables"     :   ["raw/*.tmp"],
+    "preprocess_fitsidi.rm_pre"     :   False,
+    "rpicard.removables"     :   ["wd_[SLKQXPD]/VLBI_*.ms"],
+    "rpicard.rm_pre"     :   False,
+    "fits_to_ms.removables"     :   ["*.old"],
+    "fits_to_ms.rm_pre"     :   False,
 }
 
 class PipeConfig:
@@ -513,9 +524,12 @@ class PipeConfig:
     def to_dict(self):
         return read_inputfile(self.folder, self.configfile)[0]
 
-    def defaults(self):
+    def defaults(self, all=False):
         default_params = {}
-        for k,v in DEFAULT_PARAMS.items():
-            if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',"size_", "snr_", "flux_", "target_"]):
-                default_params[k] = v
+        if not all:
+            for k,v in DEFAULT_PARAMS.items():
+                if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',"size_", "snr_", "flux_", "target_"]):
+                    default_params[k] = v
+        else:
+            default_params = DEFAULT_PARAMS
         return default_params

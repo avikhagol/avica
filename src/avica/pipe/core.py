@@ -1,10 +1,12 @@
+from turtle import st
+
 from avica.pipe.config import MPI_CASA_PERL_SCRIPT, PHASESHIFT_PERL_SCRIPT, MPICASA_WORKER, VLBA_GAINS_KEY
 import subprocess
 import sys
 from pathlib import Path
 from typing import List, Any
 
-from avica.util import read_metafile, read_inputfile, save_metafile, latest_file
+from avica.util import create_config, read_metafile, read_inputfile, save_metafile, latest_file
 from avica.util import rfc_ascii_to_df, parse_class_cat, compute_sep
 from avica.pipe.helpers import count_freqids
 from avica.fitsidiutil.io import FITSIDI, read_idi
@@ -365,6 +367,18 @@ def dic_from_inpfile(wd_ifolder, *args) -> List | None:
             res_list.append(dic_data)
     return res_list
 
+def update_ifolderdata_from_new_ifolder(old_ifolder, new_ifolder, *inpfilenames) -> List[dict] | None:
+
+    new_inp_list_ofdic = dic_from_inpfile(new_ifolder, *inpfilenames)
+    old_inp_list_ofdic = dic_from_inpfile(old_ifolder, *inpfilenames)
+
+    if old_inp_list_ofdic:
+        if new_inp_list_ofdic:
+            for i, oldinpdic in enumerate(old_inp_list_ofdic):
+                oldinpdic.update(new_inp_list_ofdic[i])
+                create_config(oldinpdic, out=f'{old_ifolder}/{inpfilenames[i]}')
+        return old_inp_list_ofdic
+    return None
 
 def merge_obs_data(base_dict, *new_dicts):
         """provide time sorted dicts to create a merged dicts of listobs.
@@ -423,6 +437,18 @@ class ColName(NamedTuple):
     comment_col     :   str
     timestamp_col   :   str
 
+
+class RemoveRemovables:
+    def __init__(self, wd, removables: List[str]):
+        self.wd = wd
+        self.removables = removables
+
+    def rm(self):
+        count = 0
+        if len(self.removables) > 0:
+            for removable in self.removables:
+                count = del_fl(self.wd, count, removable, rm=True)
+        return count
 
 class AvicaResult(UserList[StepResult]):
 
@@ -944,11 +970,14 @@ class UpdateSheet(PipelineStepValidatorBase):
 
 class AvicaPipelineCore:
 
-    def __init__(self, pipe_params, steps):
+    def __init__(self, pipe_params, steps, provided_pipe_params=None):
         self.lf                    = None
         self._steps: Dict[str, PipelineStepBase]    = {}
         self.steps                                  = steps
         self.pipe_params                            = pipe_params
+        self.provided_pipe_params                   = dict(
+            pipe_params if provided_pipe_params is None else provided_pipe_params
+        )
         self.allresults                             = AvicaResult()
 
         self.register_steps()
@@ -964,7 +993,21 @@ class AvicaPipelineCore:
 
         for name, param in sig.parameters.items():
             if name != 'self':
-                val = PipelineContext.params.get(name)
+                step_param_name = f"{step.name}.{name}" if hasattr(step, "name") else name
+                if step_param_name in self.provided_pipe_params:
+                    val = PipelineContext.params.get(
+                        step_param_name, self.provided_pipe_params[step_param_name]
+                    )
+                elif name in self.provided_pipe_params:
+                    val = PipelineContext.params.get(name, self.provided_pipe_params[name])
+                else:
+                    val = PipelineContext.params.get(
+                        step_param_name,
+                        PipelineContext.params.get(
+                            name,
+                            self.pipe_params.get(step_param_name, self.pipe_params.get(name)),
+                        ),
+                    )
                 if val is None and param.default is not inspect.Parameter.empty:
                     val = param.default
                 kwargs[name] = val
@@ -983,19 +1026,43 @@ class AvicaPipelineCore:
         allparam_names  = list(param_dict[step].keys())
         ParamStatus = NamedTuple('ParamStatus', [
             ('name', str),
+            ('input_name', str),
             ('has_default', bool),
             ('in_input_config', bool),
-            ('in_context', bool)
+            ('in_context', bool),
+            ('value', Any),
         ])
 
         _report = {}
-        for param_name in allparam_names:
+
+        def check_param(param_name):
+            step_param_name = f"{step}.{param_name}"
+            if step_param_name in self.provided_pipe_params:
+                input_param_name = step_param_name
+                in_input_config = True
+            elif param_name in self.provided_pipe_params:
+                input_param_name = param_name
+                in_input_config = True
+            else:
+                input_param_name = step_param_name if step_param_name in self.pipe_params else param_name
+                in_input_config = False
             _report[param_name] =   ParamStatus(
                                         name=param_name,
+                                        input_name=input_param_name,
                                         has_default = param_name in param_dict[step] and param_dict[step][param_name] is not None,
-                                        in_input_config = param_name in self.pipe_params,
+                                        in_input_config = in_input_config,
                                         in_context = param_name in PipelineContext.params,
+                                        value = param_dict[step].get(param_name, None),
                                         )
+            return _report[param_name]
+
+        for param_name in allparam_names:
+            _report[param_name] = check_param(param_name)
+
+            if "." in param_name and str(step) in param_name:
+                sanitized_param_name = param_name.replace(f"{str(step)}.", "")      # remove step prefix from param name step_name.param_name
+                _report[sanitized_param_name] = check_param(sanitized_param_name)
+
         return _report
 
     def filter_steps(self,*keys):

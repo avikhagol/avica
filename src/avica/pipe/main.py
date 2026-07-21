@@ -1,3 +1,5 @@
+from turtle import st
+
 from .core import AvicaPipelineCore, DEFAULT_PARAMS
 from .steps import PreProcessFitsIdi, FitsIdiToMS, Phaseshift, AvicaMetaMS, AverageMS, SnRating, FinalSplitMs, Calibration, FillInputMs
 
@@ -14,10 +16,12 @@ class AvicaPipeline(AvicaPipelineCore):
 
     def __init__(self, pipe_params: dict = None, steps: list = None):
 
-        merged_params = {**DEFAULT_PARAMS, **(pipe_params or {})}
+        provided_pipe_params = dict(pipe_params or {})
+        merged_params = {**DEFAULT_PARAMS, **provided_pipe_params}
         super().__init__(
             pipe_params = merged_params,
             steps       = steps or self.DEFAULT_STEPS,
+            provided_pipe_params = provided_pipe_params,
         )
 
     def step_names(self):
@@ -30,3 +34,13 @@ class AvicaPipeline(AvicaPipelineCore):
 
         idx_step = step_names.index(step_name)
         return step_names[idx_step:]
+
+    def config_report(self, *step_names):
+        if not step_names:
+            step_names = self.step_names()
+        step_reports = []
+        for step_name in step_names:
+            step_report = self.check_config_requirements(step_name)
+            step_reports.append(step_report)
+
+        return step_reports

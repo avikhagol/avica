@@ -1,6 +1,6 @@
 # from alfrd import Pipeline, c # FIXME: revive
 from pathlib import Path
-import time, glob, numpy as np, subprocess, os, shutil, sys, json
+import time, glob, numpy as np, subprocess, os, shutil, sys, json, shlex
 # from alfrd.util import timeinmin, read_inputfile, del_fl, read_metafile
 from avica.util import create_config, read_metafile, read_inputfile
 from collections import defaultdict
@@ -1181,15 +1181,30 @@ def del_fl(wd:str | Path, count:int=0, fl:str='*ms*', rm:bool=False):
         _type_: _description_
     """
 
-    wd          =   Path(wd)
-    filefound = glob.glob(f"{str(wd)}/{fl}")
+    wd = Path(wd).resolve()
+    relative_pattern = str(fl).lstrip("/\\")
+    filefound = []
+    for match in glob.glob(str(wd / relative_pattern)):
+        match_path = Path(match)
+        try:
+            resolved_match = match_path.resolve()
+            resolved_match.relative_to(wd)
+        except (OSError, ValueError):
+            continue
+        if resolved_match != wd:
+            filefound.append(str(match_path))
+
+    filefound = list(dict.fromkeys(filefound))
     if len(filefound):
         cmd = ['rm','-rf']
-        cmd.extend(str( wd / " ".join(filefound)).split(' '))
-        print(" ".join(cmd))
-        count+=1
+        cmd.extend(filefound)
+        print(shlex.join(cmd))
         if rm:
-            subprocess.run(cmd)
+            existing_matches = [path for path in filefound if os.path.lexists(path)]
+            subprocess.run(cmd, check=False)
+            count += sum(not os.path.lexists(path) for path in existing_matches)
+        else:
+            count += len(filefound)
     return count
 
 def find_tsys(wd_ifolder, fitsfile, count, failed):

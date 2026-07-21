@@ -121,6 +121,7 @@ def read_inputfile(folder,inputfile='.inp'):
                         if len(p)>0 and p[0]!='#':
                             if '=' in p:
                                 k,v=p.split('=')
+                                key = k.strip()
                                 if '#' in v:
                                     v, vcomment = v.split('#')
                                     vcomment = vcomment.strip() if vcomment else ''
@@ -141,14 +142,14 @@ def read_inputfile(folder,inputfile='.inp'):
                                             v=float(v)
                                         except (ValueError, TypeError):
                                             v=str(v).strip()
-                                            if "*" in v:
+                                            if "*" in v and not key.endswith("removables"):
                                                 try:
                                                     v = glob.glob(f'{v}', recursive=True)
                                                 except (ValueError, TypeError):
                                                     v = str(v)
                                             else:
                                                 v = v.lower() == 'true' if (any(boolv == v.lower() for boolv in ['true', 'false'])) else v
-                            params[k.strip()]=v
+                            params[key]=v
 
     return params, files, input_folder
 
