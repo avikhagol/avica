@@ -3,7 +3,7 @@
 ## [0.3.1.9]
 
 ### Fixed
-- Added configuration summary option to show configurations that will be used in avica.inp
+- Added configuration summary using `--summary` in `avica pipe config` option to show configurations that will be used.
 - Option to supersede the `input_template` used by the rpicard.
 - option to remove data like tmp filies, measurement set etc
 

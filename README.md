@@ -20,6 +20,8 @@ Full documentation: https://avica.readthedocs.io/en/latest/
   - [Pipeline](#pipeline)
   - [Manipulating FITS-IDI](#manipulating-fits-idi)
   - [Configuration](#configuration)
+    - [Parameter summary](#parameter-summary)
+    - [Cleaning up intermediate data](#cleaning-up-intermediate-data)
 - [Attribution](#attribution)
 - [Acknowledgement](#acknowledgement)
 
@@ -178,6 +180,44 @@ To set global defaults in AVICA's installed directory, use `--global` in the sam
 avica pipe config --global --inpfile <path/to/avica.inp>
 avica pipe config --global key=value key2=value2 key3=value3
 ```
+
+To supersede the rPicard `input_template` files (`array.inp`, `observation.inp`, `array_finetune.inp`, `flagging.inp`, `constants.inp`) used by the `rpicard` step, point `picard_input_template_update` at a folder containing the parameters you want to fix:
+
+```text
+picard_input_template_update   =   "path/to/folder/with/fixed/inp/files"
+```
+
+#### Parameter summary
+
+Use `--summary` to print a report of every pipeline parameter, its resolved value, and where that value came from (`inpfile`, `default`, `context`, or a per-step override):
+
+```bash
+avica pipe config --summary --inpfile <path/to/avica.inp>
+```
+
+If `--inpfile` is omitted and `avica.inp` exists in the current directory, it's read automatically. Combine `--summary` with `key=value` overrides on the command line to preview how they would change the resolved configuration before writing it out.
+
+#### Cleaning up intermediate data
+
+Each pipeline step can remove its own intermediate files (temporary files, superseded Measurement Sets, etc.) once it finishes. This is controlled by:
+
+| Option | Description |
+| --- | --- |
+| `delete_removables` | Master switch; must be `True` for any cleanup to happen. Defaults to `False`. |
+| `removables` | List of glob patterns (relative to the step's working directory) to delete. Can be set globally or per step as `<step_name>.removables`. |
+| `rm_pre` / `<step_name>.rm_pre` | If `True`, delete the matching files *before* the step runs instead of after. |
+| `rm_only` | Only perform the deletion and skip running the step itself. |
+
+Several steps ship with sensible defaults, e.g.:
+
+```text
+delete_removables            =   True
+preprocess_fitsidi.removables    =   ["raw/*.tmp"]
+rpicard.removables               =   ["wd_[SLKQXPD]/VLBI_*.ms"]
+fits_to_ms.removables            =   ["*.old"]
+```
+
+Deletion is always confined to the step's working directory; patterns that resolve outside it are ignored.
 
 ## Attribution
 

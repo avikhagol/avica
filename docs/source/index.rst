@@ -104,6 +104,7 @@ Minimal configuration:
 
    target_dir                =   "reductions"
    picard_input_template     =   "path/to/rpicard"
+   picard_input_template_update  =   ""    # optional: folder with fixed rpicard inp files to supersede defaults
    accor_solint              =   4
    mpi_cores_rpicard         =   10
    mpi_cores_snrating        =   5
@@ -162,6 +163,58 @@ same way:
    avica pipe config --global --inpfile <path/to/avica.inp>
    avica pipe config --global key=value key2=value2 key3=value3
 
+Parameter summary
+~~~~~~~~~~~~~~~~~
+
+Use ``--summary`` to print a report of every pipeline parameter, its resolved
+value, and where that value came from (``inpfile``, ``default``, ``context``,
+or a per-step override):
+
+.. code-block:: bash
+
+   avica pipe config --summary --inpfile <path/to/avica.inp>
+
+If ``--inpfile`` is omitted and ``avica.inp`` exists in the current directory,
+it is read automatically. Combine ``--summary`` with ``key=value`` overrides
+on the command line to preview how they would change the resolved
+configuration before writing it out.
+
+Cleaning up intermediate data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each pipeline step can remove its own intermediate files (temporary files,
+superseded Measurement Sets, etc.) once it finishes.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Option
+     - Description
+   * - ``delete_removables``
+     - Master switch; must be ``True`` for any cleanup to happen. Defaults to
+       ``False``.
+   * - ``removables``
+     - List of glob patterns (relative to the step's working directory) to
+       delete. Can be set globally or per step as ``<step_name>.removables``.
+   * - ``rm_pre`` / ``<step_name>.rm_pre``
+     - If ``True``, delete the matching files before the step runs instead of
+       after.
+   * - ``rm_only``
+     - Only perform the deletion and skip running the step itself.
+
+Several steps ship with sensible defaults, e.g.:
+
+.. code-block:: text
+
+   delete_removables               =   True
+   preprocess_fitsidi.removables   =   ["raw/*.tmp"]
+   rpicard.removables              =   ["wd_[SLKQXPD]/VLBI_*.ms"]
+   fits_to_ms.removables           =   ["*.old"]
+
+Deletion is always confined to the step's working directory; patterns that
+resolve outside it are ignored.
+
 Usage
 -----
 
@@ -181,6 +234,7 @@ The default pipeline executes these steps:
 
 * ``preprocess_fitsidi``
 * ``fits_to_ms``
+* ``phaseshift``
 * ``avica_avg``
 * ``avicameta_ms``
 * ``avica_snr``
