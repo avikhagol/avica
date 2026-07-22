@@ -236,6 +236,7 @@ def pipe_config(
 
         first_row = True
         core_defaults = PipeConfig(None).defaults(all=True)
+        core_global = PipeConfig(global_configfile).to_dict() if global_configfile else {}
         core_input = PipeConfig(inpfile).to_dict() if inpfile else {}
 
         for param, value in main_pipeline.pipe_params.items():
@@ -248,6 +249,9 @@ def pipe_config(
             if core_inpfile:
                 source = "inpfile/core"
                 style = "green"
+            elif param in core_global:
+                source = "global/core"
+                style = "yellow"
             elif core_default:
                 source = "default/core"
                 style = "yellow"
