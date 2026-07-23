@@ -178,7 +178,7 @@ def pipe_config(
             raise typer.BadParameter(f"Failed to read config file '{inpfile}': {e}") from e
 
     else:
-        if Path("avica.inp").exists() and not no_inpfile:
+        if (Path("avica.inp").exists() and not no_inpfile) and not (global_default or default):
             inpfile = "avica.inp"
             try:
                 params = PipeConfig(inpfile).to_dict()
