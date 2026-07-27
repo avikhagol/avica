@@ -160,6 +160,7 @@ avica_cli.add_typer(pipeline_app, name="pipe")
 def pipe_config(
     outfile: Optional[str] = typer.Option("avica.inp", help="output config file containing key=value"),
     inpfile: Optional[str] = typer.Option(None, help="input config file containing key=value"),
+    no_inpfile: Annotated[bool, typer.Option("--no-inpfile", help="do not use the default avica.inp file")] = False,
     default: Annotated[bool, typer.Option("--default", help="adds the configfile to the default config directory")] = False,
     global_default: Annotated[bool, typer.Option("--global", help="adds the configfile to the global config directory")] = False,
     data: Annotated[Optional[List[str]], typer.Argument(help="key=value pairs")] = None,
@@ -175,6 +176,14 @@ def pipe_config(
             params = PipeConfig(inpfile).to_dict()
         except Exception as e:
             raise typer.BadParameter(f"Failed to read config file '{inpfile}': {e}") from e
+
+    else:
+        if (Path("avica.inp").exists() and not no_inpfile) and not (global_default or default):
+            inpfile = "avica.inp"
+            try:
+                params = PipeConfig(inpfile).to_dict()
+            except Exception as e:
+                raise typer.BadParameter(f"Failed to read config file '{inpfile}'\n use --no-inpfile to disable reading from avica.inp:\n {e}") from e
 
     if data:
         for item in data:
@@ -236,6 +245,7 @@ def pipe_config(
 
         first_row = True
         core_defaults = PipeConfig(None).defaults(all=True)
+        core_global = PipeConfig(global_configfile).to_dict() if global_configfile else {}
         core_input = PipeConfig(inpfile).to_dict() if inpfile else {}
 
         for param, value in main_pipeline.pipe_params.items():
@@ -248,6 +258,9 @@ def pipe_config(
             if core_inpfile:
                 source = "inpfile/core"
                 style = "green"
+            elif param in core_global:
+                source = "global/core"
+                style = "yellow"
             elif core_default:
                 source = "default/core"
                 style = "yellow"

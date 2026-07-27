@@ -174,6 +174,13 @@ or a per-step override):
 
    avica pipe config --summary --inpfile <path/to/avica.inp>
 
+.. asciinema:: mBmNuDbzI1S2dpqN
+    :rows: 30
+    :cols: 133
+    :speed: 1
+    :theme: dracula
+    :autoplay: 0
+
 If ``--inpfile`` is omitted and ``avica.inp`` exists in the current directory,
 it is read automatically. Combine ``--summary`` with ``key=value`` overrides
 on the command line to preview how they would change the resolved
