@@ -152,6 +152,8 @@ avica listobs <file.uvfits>
 
 ### Configuration
 
+[![asciicast](https://asciinema.org/a/mBmNuDbzI1S2dpqN.svg)](https://asciinema.org/a/mBmNuDbzI1S2dpqN)
+
 The pipeline configuration is a `key=value` file. By default, AVICA looks for `avica.inp` in the current directory. See the [example configuration](src/avica/pipe/avica_example.inp) for a minimal setup.
 
 Pass a custom configuration file with `--configfile`:
