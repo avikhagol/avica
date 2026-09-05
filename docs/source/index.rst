@@ -100,7 +100,7 @@ Minimal configuration:
    # optional-1
    # picard_input_template the folder containing the rPicard input file.
    # target_dir is where pipeline output will be saved.
-   # accor_solint is the number of solint partitions to use.
+   # accor_solint is the solution interval in seconds for the CASA accor task.
 
    target_dir                =   "reductions"
    picard_input_template     =   "path/to/rpicard"
