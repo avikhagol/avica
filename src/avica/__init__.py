@@ -15,21 +15,21 @@ avicadir = str(Path.home())+'/.avica/'
 c={"x":"\033[0m","g":"\033[32m", "r":"\033[31m", "b":"\033[34m","c":"\033[36m","w":"\033[0m", "y":"\033[33m"}
 rfc_filepath        =   f"{avicadir}/rfc_path.txt"
 
-def ascii_art():
-    art="""
-   ____     __    __    _____     ____     ____
-  (    )    ) )  ( (   (_   _)   / ___)   (    )
-  / /\ \   ( (    ) )    | |    / /       / /\ \
- ( (__) )   \ \  / /     | |   ( (       ( (__) )
-  )    (     \ \/ /      | |   ( (        )    (
- /  /\  \     \  /      _| |__  \ \___   /  /\  \
-/__(  )__\     \/      /_____(   \____) /__(  )__\
+# def ascii_art():
+#     art="""
+#    ____     __    __    _____     ____     ____
+#   (    )    ) )  ( (   (_   _)   / ___)   (    )
+#   / /\ \   ( (    ) )    | |    / /       / /\ \
+#  ( (__) )   \ \  / /     | |   ( (       ( (__) )
+#   )    (     \ \/ /      | |   ( (        )    (
+#  /  /\  \     \  /      _| |__  \ \___   /  /\  \
+# /__(  )__\     \/      /_____(   \____) /__(  )__\
 
 
-    Automated VLBI pipeline in CASA.
+#     Automated VLBI pipeline in CASA.
 
-    """
-    return art
+#     """
+#     return art
 
 # parser = argparse.ArgumentParser('avica', description=ascii_art(),
 # formatter_class=argparse.RawDescriptionHelpFormatter)
