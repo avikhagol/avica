@@ -39,85 +39,50 @@ Use [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-inst
 
 ### Full installation script
 
-[`install.sh`](install.sh) installs AVICA plus the rPICARD/CASA pipeline and
-plotting dependencies from the Docker setup on **x86-64 Linux**.
-By default, it only checks system dependencies, lists
-missing ones, and continues without running apt or requesting sudo. Missing
-dependencies may cause errors when running AVICA, CASA, or plotting tools. It
-installs Python tools in isolated environments using
-[uv](https://docs.astral.sh/uv/guides/tools/).
-
-Once `install.sh` is published on this repository's `main` branch:
+Run [`install.sh`](install.sh) as your normal user:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/avikhagol/avica/main/install.sh -o install.sh
 bash install.sh
 source "$HOME/.local/share/avica-stack/env.sh"
-avica --help
 ```
 
-Automatic system package installation is **experimental**, limited to
-Ubuntu/Debian and compatible derivatives with apt. To opt in explicitly:
+The script installs AVICA using uv. If `picard` is already on PATH, it reuses that
+installation and skips all CASA/rPICARD downloads and plotting/data setup.
+Otherwise, it installs rPICARD, jiveplot (with `python-pgplot==1.6.1`), and CASA
+reference data. It does not use apt, scan system dependencies, or restrict the
+Linux distribution.
+
+For a new rPICARD installation, set `CASA_PATH` to an existing CASA installation
+directory (containing `bin/casa` and `bin/mpicasa`) or an archive URL:
 
 ```bash
-sudo bash install.sh --experimental-apt
+CASA_PATH=/path/to/casa bash install.sh
 ```
 
-Running `sudo bash install.sh` alone does **not** enable apt. The experimental
-flag runs apt as root only on a recognized Debian/Ubuntu system, then continues
-the AVICA/pipeline installation as the user who invoked sudo, using that user's
-home directory. If apt is unavailable or fails, it continues with warnings.
-`--skip-apt` overrides `--experimental-apt`. Direct installation as the root user
-is not supported.
+If unset, the script prompts for the location. Press Enter to download:
 
-On Debian/Ubuntu, package checks use the dpkg database and print a command an
-administrator can use to install missing packages. On other distributions (or
-when dpkg is unavailable), the installer checks commands in PATH and shared
-libraries in the system linker cache, and continues with warnings. Dependencies
-provided by environment modules or custom library paths may already be usable.
-These checks do not guarantee runtime compatibility on every Linux distribution.
-The installer must still stop if a command needed to perform the installation
-itself is unavailable (for example, curl when uv needs to be downloaded).
-If rsync is missing, it skips CASA reference data with a warning. AVICA startup
-or configuration errors are reported as warnings so the remaining setup can
-continue; rerun after resolving them to finish configuration.
-
-You can also run a local checkout with `bash install.sh`. The full installation
-clones rPICARD, downloads the CASA version specified in that clone's README,
-installs jiveplot and `python-pgplot==1.6.1`, synchronizes CASA reference data,
-and sets AVICA's `casadir` and `picard_input_template` defaults. Allow several GB
-of disk space and time for the downloads. CASA archives are cached in
-`~/.local/share/avica-stack/downloads` for reuse and interrupted downloads resume.
-The CASA data sync uses rsync (outbound TCP port 873 must be available).
-
-The installer adds its environment file to `~/.bashrc`. Existing AVICA settings
-are preserved apart from the two installation paths; the previous configuration
-is backed up as `~/.avica/avica.inp.before-install` (with numbered backups on reruns).
-Existing rPICARD clones and CASA installations are reused without updating them.
-The script checks the AVICA command and pipeline paths; it does not run a CASA
-calibration job or guarantee compatibility with every derivative distribution.
-
-```bash
-bash install.sh --help
-bash install.sh --avica-only                     # No CASA/rPICARD/plotting downloads
-bash install.sh --casa-dir /path/to/matching/casa # Reuse the CASA version rPICARD needs
-bash install.sh --prefix "$HOME/avica-stack"      # Choose the pipeline directory
-bash install.sh --no-shell                       # Check packages; no bashrc edit
-sudo bash install.sh --experimental-apt          # Experimental: try apt on Debian/Ubuntu
+```text
+ftp://ftp.mpifr-bonn.mpg.de/outgoing/mjanssen/casa-6.7.5-18-py3.12.el8.tar.xz
 ```
 
-`--skip-casa-data` omits reference data synchronization when it is already
-available. To synchronize it later, run:
+Without an interactive terminal, the same default is used. `CASA_DIR` and
+`CASA_URL` are also accepted, after `CASA_PATH` in that order.
+Set `AVICA_INSTALL_DIR` to change the default `~/.local/share/avica-stack`
+directory, or `PICARD_REF` to select the branch/tag of a new rPICARD clone.
+Choose a CASA version that matches the selected rPICARD version.
 
-```bash
-mkdir -p "$HOME/.casa/data"
-rsync -az --partial rsync://casa-rsync.nrao.edu/casa-data "$HOME/.casa/data/"
-```
+When setting up rPICARD, the downloaded or supplied CASA directory is also saved
+in AVICA's global configuration using `avica pipe config --global casadir=...`.
 
-Set `AVICA_VERSION` to pin a PyPI release, `PICARD_REF` to select a branch/tag for
-a fresh clone, or `CASA_URL` to supply an HTTPS mirror of the matching CASA archive.
-Use a new `--prefix` when changing rPICARD versions. `--casa-dir` takes precedence
-over `CASA_URL`; the supplied CASA build must match the selected rPICARD version.
+The script adds an environment file to `~/.bashrc`. It configures AVICA's CASA
+and input-template paths when it can identify them, preserving other settings
+and backing up an existing `~/.avica/avica.inp`. For an existing `picard` command,
+it reads the adjacent rPICARD `your_casapath.txt` when available; otherwise,
+existing AVICA settings are left unchanged.
+
+Run `bash install.sh --help` for the environment options. The previous apt and
+dependency-check options have been removed.
 
 ### Recommended installation
 
