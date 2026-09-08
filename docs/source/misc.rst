@@ -1,6 +1,7 @@
 Miscellaneous
 ================
 
+Any miscellaneous outside the main AVICA workflow.
 
 .. toctree::
    :maxdepth: 2
