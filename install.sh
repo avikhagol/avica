@@ -4,6 +4,7 @@ set -euo pipefail
 
 main() {
     local install_dir="${AVICA_INSTALL_DIR:-$HOME/.local/share/avica-stack}"
+    local avica_source_dir="${AVICA_SOURCE_DIR:-}"
     local default_casa_url='ftp://ftp.mpifr-bonn.mpg.de/outgoing/mjanssen/casa-6.7.5-18-py3.12.el8.tar.xz'
     local casa_source="${CASA_PATH:-${CASA_DIR:-${CASA_URL:-}}}"
     local casa_dir='' picard_dir='' picard_bin='' tool_bin
@@ -14,6 +15,7 @@ main() {
             'CASA_DIR and CASA_URL are also accepted, in that order.' \
             "Default CASA archive: $default_casa_url" \
             'AVICA_INSTALL_DIR: installation directory (default: ~/.local/share/avica-stack).' \
+            'AVICA_SOURCE_DIR: local AVICA source directory to install instead of the latest PyPI version.' \
             'PICARD_REF: branch/tag for a new rPICARD clone (default: master).'
         return
     fi
@@ -21,14 +23,25 @@ main() {
 
     mkdir -p "$install_dir" "$HOME/.local/bin"
     install_dir=$(realpath "$install_dir")
+    if [[ -n $avica_source_dir ]]; then
+        avica_source_dir=$(realpath "$avica_source_dir")
+    fi
     export PATH="$HOME/.local/bin:$PATH"
 
-    printf '\nInstalling AVICA...\n'
+    if [[ -n $avica_source_dir ]]; then
+        printf '\nUsing AVICA_SOURCE_DIR instead of the latest PyPI version: %s\n' "$avica_source_dir"
+    else
+        printf '\nInstalling AVICA...\n'
+    fi
     if ! command -v uv >/dev/null; then
         curl -fsSL https://astral.sh/uv/install.sh -o "$install_dir/uv-install.sh"
         UV_INSTALL_DIR="$HOME/.local/bin" UV_NO_MODIFY_PATH=1 sh "$install_dir/uv-install.sh" </dev/null
     fi
-    uv tool install --python 3.10 avica </dev/null
+    if [[ -n $avica_source_dir ]]; then
+        uv tool install --python 3.10 "$avica_source_dir" </dev/null
+    else
+        uv tool install --python 3.10 avica </dev/null
+    fi
     tool_bin=$(uv tool dir --bin)
     export PATH="$tool_bin:$PATH"
 
