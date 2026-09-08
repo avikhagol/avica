@@ -14,6 +14,7 @@ Full documentation: https://avica.readthedocs.io/en/latest/
 ## Contents
 
 - [Installation](#installation)
+  - [Full installation script](#full-installation-script)
   - [Recommended installation](#recommended-installation)
   - [Manual installation](#manual-installation)
 - [Usage](#usage)
@@ -35,6 +36,59 @@ Requirements:
 
 The `avica` package is publicly available on [PyPI](https://pypi.org/project/avica/).
 Use [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) or [pipx](https://pipx.pypa.io/stable/how-to/install-pipx/) for an isolated command-line installation.
+
+### Full installation script
+
+[`install.sh`](install.sh) installs AVICA plus the rPICARD/CASA pipeline and
+plotting dependencies from the Docker setup on **x86-64 Ubuntu 22.04+/Debian 12+**
+or compatible derivatives. Run it as your normal user; it uses `sudo` for apt
+packages and installs Python tools in isolated environments using
+[uv](https://docs.astral.sh/uv/guides/tools/).
+
+Once `install.sh` is published on this repository's `main` branch:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/avikhagol/avica/main/install.sh -o install.sh
+bash install.sh
+source "$HOME/.local/share/avica-stack/env.sh"
+avica --help
+```
+
+You can also run a local checkout with `bash install.sh`. The full installation
+clones rPICARD, downloads the CASA version specified in that clone's README,
+installs jiveplot and `python-pgplot==1.6.1`, synchronizes CASA reference data,
+and sets AVICA's `casadir` and `picard_input_template` defaults. Allow several GB
+of disk space and time for the downloads. CASA archives are cached in
+`~/.local/share/avica-stack/downloads` for reuse and interrupted downloads resume.
+The CASA data sync uses rsync (outbound TCP port 873 must be available).
+
+The installer adds its environment file to `~/.bashrc`. Existing AVICA settings
+are preserved apart from the two installation paths; the previous configuration
+is backed up as `~/.avica/avica.inp.before-install` (with numbered backups on reruns).
+Existing rPICARD clones and CASA installations are reused without updating them.
+The script checks the AVICA command and pipeline paths; it does not run a CASA
+calibration job or guarantee compatibility with every derivative distribution.
+
+```bash
+bash install.sh --help
+bash install.sh --avica-only                     # No CASA/rPICARD/plotting downloads
+bash install.sh --casa-dir /path/to/matching/casa # Reuse the CASA version rPICARD needs
+bash install.sh --prefix "$HOME/avica-stack"      # Choose the pipeline directory
+bash install.sh --skip-apt --no-shell             # Admin prepared packages; no bashrc edit
+```
+
+`--skip-casa-data` omits reference data synchronization when it is already
+available. To synchronize it later, run:
+
+```bash
+mkdir -p "$HOME/.casa/data"
+rsync -az --partial rsync://casa-rsync.nrao.edu/casa-data "$HOME/.casa/data/"
+```
+
+Set `AVICA_VERSION` to pin a PyPI release, `PICARD_REF` to select a branch/tag for
+a fresh clone, or `CASA_URL` to supply an HTTPS mirror of the matching CASA archive.
+Use a new `--prefix` when changing rPICARD versions. `--casa-dir` takes precedence
+over `CASA_URL`; the supplied CASA build must match the selected rPICARD version.
 
 ### Recommended installation
 
