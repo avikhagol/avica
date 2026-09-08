@@ -290,5 +290,6 @@ See the dedicated pages for deeper usage notes and API reference:
 * :doc:`pipeline`
 * :doc:`examples`
 * :doc:`api`
+* :doc:`misc`
 * :ref:`genindex`
 * :ref:`search`

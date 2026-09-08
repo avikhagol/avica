@@ -1,0 +1,1761 @@
+From: <Saved by Blink>
+Snapshot-Content-Location: file:///home/avi/Downloads/AIPS%20HELP%20file%20(version%2031DEC26)%20for%20ANTAB.html
+Subject: AIPS HELP file (version 31DEC26) for ANTAB
+Date: Tue, 8 Sep 2026 13:41:45 +0300
+MIME-Version: 1.0
+Content-Type: multipart/related;
+	type="text/html";
+	boundary="----MultipartBoundary--UiTcF3WeVzNO8xX1UeJ0ZRyBoLtWqFJjffCOuaJ0li----"
+
+
+------MultipartBoundary--UiTcF3WeVzNO8xX1UeJ0ZRyBoLtWqFJjffCOuaJ0li----
+Content-Type: text/html
+Content-ID: <frame-4305EC5BC1949D6FA8B7556B0BA63ED3@mhtml.blink>
+Content-Transfer-Encoding: quoted-printable
+Content-Location: file:///home/avi/Downloads/AIPS%20HELP%20file%20(version%2031DEC26)%20for%20ANTAB.html
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN"><!-- saved from url=
+=3D(0092)https://web.archive.org/web/20260418141224/https://www.aips.nrao.e=
+du/cgi-bin/ZXHLP2.PL?ANTAB --><html style=3D"--wm-toolbar-height: 67px;" da=
+ta-immersive-translate-page-theme=3D"light" data-qb-installed=3D"true"><hea=
+d><meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3DUTF-8">=
+<link rel=3D"stylesheet" type=3D"text/css" href=3D"cid:css-c3b3f00b-c49c-47=
+82-9bc5-57cf14801183@mhtml.blink" />
+
+
+
+
+
+
+<link rel=3D"stylesheet" type=3D"text/css" href=3D"file:///home/avi/Downloa=
+ds/AIPS%20HELP%20file%20(version%2031DEC26)%20for%20ANTAB_files/banner-styl=
+es.css">
+<link rel=3D"stylesheet" type=3D"text/css" href=3D"file:///home/avi/Downloa=
+ds/AIPS%20HELP%20file%20(version%2031DEC26)%20for%20ANTAB_files/iconochive.=
+css">
+<!-- End Wayback Rewrite JS Include -->
+
+<title>AIPS HELP file (version 31DEC26) for ANTAB</title>
+</head><body><!-- BEGIN WAYBACK TOOLBAR INSERT -->
+
+<div id=3D"wm-ipp-base" lang=3D"en" style=3D"display: block; direction: ltr=
+; height: 67px;" toolbar-mode=3D"auto"><template shadowmode=3D"closed"><lin=
+k rel=3D"stylesheet" type=3D"text/css" href=3D"https://web-static.archive.o=
+rg/_static/css/banner-styles.css?v=3D1utQkbB3"><link rel=3D"stylesheet" typ=
+e=3D"text/css" href=3D"https://web-static.archive.org/_static/css/iconochiv=
+e.css?v=3D3PDvdIFv"></template>
+</div><div id=3D"wm-ipp-print">The Wayback Machine - https://web.archive.or=
+g/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?ANTAB</div=
+>
+
+<!-- END WAYBACK TOOLBAR INSERT -->
+=20
+<h1 align=3D"CENTER"><a href=3D"https://web.archive.org/web/20260418141224/=
+http://www.aips.nrao.edu/"><img border=3D"1" align=3D"LEFT" src=3D"file:///=
+home/avi/Downloads/AIPS%20HELP%20file%20(version%2031DEC26)%20for%20ANTAB_f=
+iles/aips.gif" alt=3D"AIPS"></a>
+<a href=3D"https://web.archive.org/web/20260418141224/http://www.nrao.edu/"=
+><img border=3D"0" align=3D"RIGHT" src=3D"file:///home/avi/Downloads/AIPS%2=
+0HELP%20file%20(version%2031DEC26)%20for%20ANTAB_files/nraologo_tiny.gif" a=
+lt=3D"NRAO"></a>
+ AIPS HELP file for ANTAB in 31DEC26
+</h1>
+<br clear=3D"ALL"><hr><h4 align=3D"CENTER">As of Sat Apr 18  8:12:24 2026
+</h4>
+<hr>
+<strong>ANTAB</strong>: Task to read amplitude calibration info. into AIPS
+<h3>INPUTS</h3><pre><a href=3D"https://web.archive.org/web/20260418141224/h=
+ttps://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?INNAME">INNAME</a>              =
+               Input UV file name (name)
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?INCLASS">INCLASS</a>                            Inpu=
+t UV file name (class)
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?INSEQ">INSEQ</a>             0.0     9999.0   Input =
+UV file name (seq. #)
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?INDISK">INDISK</a>            0.0        9.0   Input=
+ UV file disk unit #
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?CALIN">CALIN</a>                              Calibr=
+ation file name.
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?SUBARRAY">SUBARRAY</a>          0.0     9999.0   Sub=
+array (0=3D&gt; 1)
+                                   Output table versions:
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?TYVER">TYVER</a>                               TY ta=
+ble to update
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?GCVER">GCVER</a>                               GC ta=
+ble to update
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?BLVER">BLVER</a>                               BL ta=
+ble to update
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?SPARM">SPARM</a>                              List o=
+f stations to ignore
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?PRTLEV">PRTLEV</a>                             Print=
+ level (0=3D&gt;none;
+                                   1=3D&gt; echo cal. file)
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?OFFSET">OFFSET</a>                             Incre=
+ase the scan length of
+                                   each side, minutes
+</pre><hr><pre></pre><h3>HELP SECTION</h3><pre>ANTAB
+Task: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      ! WARNING: If you are using Tsys infomation from the *cal.vlba* !
+      ! file for data observed with the RDBE/MARK5C system (all data  !
+      ! from the VLBA after Jan 31, 2014 and occasional data before   !
+      ! this date), please be aware that *cal.vlba files from between !
+      ! the dates of Jan 31, 2014 and October 19, 2015 are from the   !
+      ! VLBA LEGACY system.  The LEGACY system signal path is very    !
+      ! different from the RDBE/MARK5C system.  Do not use *cal.vlba* !
+      ! file from BETWEEN THE ABOVE DATES unless you understand what  !
+      ! you are doing.                                                !
+      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+       This task reads amplitude calibration information
+       supplied in an external text file and stores the
+       information in the <a href=3D"https://web.archive.org/web/2026041814=
+1224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?AIPS">AIPS</a> tables asso=
+ciated with the
+       input uv-data file. This information, which includes
+       system and antenna temperatures and antenna gain curves,
+       can then be used to generate a solution (SN) table
+       using task <a href=3D"https://web.archive.org/web/20260418141224/htt=
+ps://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?APCAL">APCAL</a>. The solution tab=
+le is applied using
+       task <a href=3D"https://web.archive.org/web/20260418141224/https://w=
+ww.aips.nrao.edu/cgi-bin/ZXHLP2.PL?CLCAL">CLCAL</a> in the standard manner,=
+ after optional
+       editing or smoothing. In addition, baseline-dependent
+       amplitude correction factors can also be entered which
+       update the BL table directly. The BL table is applied by
+       specifying a non-zero <a href=3D"https://web.archive.org/web/2026041=
+8141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?BLVER">BLVER</a> in tho=
+se tasks that apply
+       calibration. ANTAB must be executed separately for
+       each subarray present in the data.
+          ANTAB is intended primarily for use in calibrating
+       VLBI data sets, and requires that the input uv-file
+       be in the <a href=3D"https://web.archive.org/web/20260418141224/http=
+s://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?AIPS">AIPS</a> multi-source format =
+with an associated
+       index (<a href=3D"https://web.archive.org/web/20260418141224/https:/=
+/www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?NX">NX</a>) table. This task, in conju=
+nction with <a href=3D"https://web.archive.org/web/20260418141224/https://w=
+ww.aips.nrao.edu/cgi-bin/ZXHLP2.PL?APCAL">APCAL</a>,
+       is a direct replacement for <a href=3D"https://web.archive.org/web/2=
+0260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?ANCAL">ANCAL</a>.
+          ANTAB should be run before <a href=3D"https://web.archive.org/web=
+/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?USUBA">USUBA</a=
+>.  In this way the correct
+       subarray can be put with each TY and GC record by <a href=3D"https:/=
+/web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP=
+2.PL?USUBA">USUBA</a>.
+       Running it after <a href=3D"https://web.archive.org/web/202604181412=
+24/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?USUBA">USUBA</a> requires ne=
+ar duplicate TY and GC
+       records for each subarray even though only one applies at any
+       one time, antenna, etc.
+Adverbs:
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?INNAME">INNAME</a>.....Input UV file name (name). =
+     Standard defaults.
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?INCLASS">INCLASS</a>....Input UV file name (class)=
+.     Standard defaults.
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?INSEQ">INSEQ</a>......Input UV file name (seq. #).=
+    0 =3D&gt; highest.
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?INDISK">INDISK</a>.....Disk drive # of input UV fi=
+le.  0 =3D&gt; any.
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?CALIN">CALIN</a>......Calibration text file eg. 'F=
+ITS:ANTAB.CAL'.
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?SUBARRAY">SUBARRAY</a>...The subarray to calibrate=
+. Run ANTAB separately for each
+             subarray in the uv-data file.  You must use the <a href=3D"htt=
+ps://web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/Z=
+XHLP2.PL?CALIN">CALIN</a>
+             appropriate for <a href=3D"https://web.archive.org/web/2026041=
+8141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?SUBARRAY">SUBARRAY</a>,=
+ no KEYIN parameters are
+             available in <a href=3D"https://web.archive.org/web/2026041814=
+1224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?CALIN">CALIN</a> to limit =
+the subarray.
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?TYVER">TYVER</a>......Version number of the Tsys/T=
+ant (TY) table to
+             write (0 =3D&gt; highest).
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?GCVER">GCVER</a>......Version number of the gain c=
+urve (GC) table to
+             write (0 =3D&gt; highest).
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?BLVER">BLVER</a>......Version number of the baseli=
+ne based calibration
+             (BL) table to write. (Only if <a href=3D"https://web.archive.o=
+rg/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?BASELINE"=
+>BASELINE</a> cards
+             specified; 0 =3D&gt; highest)
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?SPARM">SPARM</a>......List of additional 'stations=
+' that KEYIN should
+             ignore in the input file.
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?PRTLEV">PRTLEV</a>.....Print level. A positive val=
+ue will echo each line
+             in the calibration file to the message console,
+             which is useful for locating errors in the format
+             of the calibration information.
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?OFFSET">OFFSET</a>.....Increase the scan length of=
+ each side. For non VLBA
+             stations the TSYS measurement is provided between
+             scans. As a result ANTAB can not match the measurement
+             with source ID and frequency ID. <a href=3D"https://web.archiv=
+e.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?OFFSET=
+">OFFSET</a> solves
+             the problem increasing the scan by <a href=3D"https://web.arch=
+ive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?OFFS=
+ET">OFFSET</a> minutes
+             of each side. For VLBA and <a href=3D"https://web.archive.org/=
+web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?VLA">VLA</a>=
+ it should be zero.
+</pre><hr><pre></pre><h3>EXPLAIN SECTION</h3><pre>ANTAB: Task to read exter=
+nal amplitude calibration info. into <a href=3D"https://web.archive.org/web=
+/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?AIPS">AIPS</a>
+Documentor: A. J. Kemball, A. Mioduszewski
+Related programs: <a href=3D"https://web.archive.org/web/20260418141224/htt=
+ps://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?APCAL">APCAL</a>, <a href=3D"https=
+://web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXH=
+LP2.PL?CLCAL">CLCAL</a>, <a href=3D"https://web.archive.org/web/20260418141=
+224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?FITLD">FITLD</a>, <a href=
+=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cg=
+i-bin/ZXHLP2.PL?SNPLT">SNPLT</a>, <a href=3D"https://web.archive.org/web/20=
+260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?PRTAB">PRTAB</a>
+
+                 CALIBRATION TRANSFER
+
+   Amplitude calibration information for VLBA antennas is included
+in FITS files generated by the VLBA correlator from April 1 1999
+onwards. ANTAB need only be run to load amplitude calibration
+data that was not transferred automatically.
+
+                        PURPOSE
+
+   ANTAB reads external amplitude calibration information and stores
+that information in the <a href=3D"https://web.archive.org/web/202604181412=
+24/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?AIPS">AIPS</a> tables associ=
+ated with the input uv-data
+file. This information, which is supplied in a free-format text file,
+includes system and antenna temperature measurements taken during the
+observations, antenna gain curves and baseline-dependent amplitude
+correction factors. This information can subsequently be used to
+generate a solution (SN) table using task <a href=3D"https://web.archive.or=
+g/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?APCAL">APC=
+AL</a> which, in conjunction
+with the baseline-dependent gains written directly into the BL table,
+can be applied to the uv-data in the standard manner (eg. task
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?CLCAL">CLCAL</a>). The generation of an intermediate=
+ solution (SN) table allows
+editing, smoothing and proper interpolation. This task, taken together
+with <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips=
+.nrao.edu/cgi-bin/ZXHLP2.PL?APCAL">APCAL</a>, is a direct replacement for <=
+a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao.=
+edu/cgi-bin/ZXHLP2.PL?ANCAL">ANCAL</a>.
+
+                       <a href=3D"https://web.archive.org/web/2026041814122=
+4/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?INPUTS">INPUT</a> <a href=3D"=
+https://web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bi=
+n/ZXHLP2.PL?FILEBOX">FILE</a>
+
+   The user must create an external text file containing the amplitude
+calibration information. The VLBA supplies amplitude calibration
+information in a format which can be processed by the task <a href=3D"https=
+://web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXH=
+LP2.PL?VLOG">VLOG</a> so that
+it is suitable for use by ANTAB.
+   Examples:
+      The directory path or environmental variables may be used.
+      <a href=3D"https://web.archive.org/web/20260418141224/https://www.aip=
+s.nrao.edu/cgi-bin/ZXHLP2.PL?CALIN">CALIN</a>=3D  '/home/mycomputer/calfile=
+s/cal.dat
+      <a href=3D"https://web.archive.org/web/20260418141224/https://www.aip=
+s.nrao.edu/cgi-bin/ZXHLP2.PL?CALIN">CALIN</a> =3D 'myarea:cal.dat'         =
+                (UNIX)
+      <a href=3D"https://web.archive.org/web/20260418141224/https://www.aip=
+s.nrao.edu/cgi-bin/ZXHLP2.PL?CALIN">CALIN</a> =3D 'disk$res:[username]cal.d=
+at'             (VMS)
+        where $MYAREA is an environment variable set before starting
+        <a href=3D"https://web.archive.org/web/20260418141224/https://www.a=
+ips.nrao.edu/cgi-bin/ZXHLP2.PL?AIPS">AIPS</a>. Under UNIX:
+            percent setenv MYAREA /mnt/username        (csh)
+           $ export MYAREA=3D"/mnt/username"      (ksh)
+
+   If your VLBI data contains modes that are different enough that
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?FITLD">FITLD</a> automatically creates multiple file=
+s (e.g., different numbers
+of IFs or polarizations) then the cal file provided by the VLBA also
+contains mixed modes.   ANTAB cannot handle this and will die when
+the mode change is encountered.  Therefor you must create separate
+cal files for each mode from the original cal file and run <a href=3D"https=
+://web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXH=
+LP2.PL?VLOG">VLOG</a> on
+them separately.
+
+************************************************************************
+  Sometimes the KEYIN file contains additional lines for antennas
+  that do not appear in the current data set. In this case ANTAB
+  will fail citing 'UNKNOWN PARAMETER' and '<a href=3D"https://web.archive.=
+org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?ERROR">E=
+RROR</a> READING KEYIN
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?FILEBOX">FILE</a>'.  If, for example, the <a href=
+=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cg=
+i-bin/ZXHLP2.PL?CALIN">CALIN</a> file contains records for MK
+  [Mauna Kea] but MK does not occur in the data set, KEYIN would
+  normally crash.  This can be circumvented by setting <a href=3D"https://w=
+eb.archive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.=
+PL?SPARM">SPARM</a> =3D
+  'MK',''.  Any element of <a href=3D"https://web.archive.org/web/202604181=
+41224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?SPARM">SPARM</a> which is=
+ not itself already
+  recognized as a valid antenna, becomes an ignorable station.
+  Any line in the input file containing an ignorable antenna is
+  skipped - BE CAREFUL WITH <a href=3D"https://web.archive.org/web/20260418=
+141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?SPARM">SPARM</a>, it is =
+recommended that you first
+  try running ANTAB with <a href=3D"https://web.archive.org/web/20260418141=
+224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?SPARM">SPARM</a> =3D '' to =
+see what parts of the KEYIN
+  file, if any, cause problems.
+************************************************************************
+
+The calibration text file can contain five different types of entries,
+identified by the following group keywords:
+
+  i) CONTROL group:     specifies default input format for Tsys or
+                        Tant entries.
+ ii) <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips=
+.nrao.edu/cgi-bin/ZXHLP2.PL?BASELINE">BASELINE</a> group:    baseline-depen=
+dent ampl. gain factors.
+iii) <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips=
+.nrao.edu/cgi-bin/ZXHLP2.PL?GAIN">GAIN</a> group:        gain curve entries
+ iv) TSYS group:        system temperature entries
+  v) TANT group:        antenna temperature entries.
+
+Each entry can extend over multiple lines and is terminated by a
+backslash "/". Only 2560 characters per line are allowed and the
+delimiter (/) must be separated from the preceding character by at
+least one blank space. The input is free-format with no specific
+column requirements. Arithmetic expressions within parentheses will
+be evaluated, with allowed operators (+,-,*,/) eg. DPFU =3D (0.25*1.9).
+Any characters to the right of "!" are treated as comments.
+
+ANTAB may be run multiple times with the same values of <a href=3D"https://=
+web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2=
+.PL?TYVER">TYVER</a>, <a href=3D"https://web.archive.org/web/20260418141224=
+/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?GCVER">GCVER</a>
+or <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.n=
+rao.edu/cgi-bin/ZXHLP2.PL?BLVER">BLVER</a>. The more recent entries will ov=
+erwrite older entries and the
+tables will be consolidated. Source identifications for the time
+entries in the calibration file are made using the index (<a href=3D"https:=
+//web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHL=
+P2.PL?NX">NX</a>) table.
+Consequently entries in the calibration file for time intervals not
+present in the uv-data file itself are ignored. If Tsys values are
+supplied for separate IF's in different text files (eg. <a href=3D"https://=
+web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2=
+.PL?VLA">VLA</a>) these
+can all be appended to the same calibration file and identified
+with the appropriate index keywords as described below. All entries
+for a given antenna are consolidated over IF and polarization at
+the end of each ANTAB run.
+
+Specific descriptions of each group format are given below. Two
+important keywords, INDEX and INDEX2, which can be used in the
+CONTROL, TSYS and TANT groups, are explained in advance. These
+keywords specify the mapping between the column order used in the TSYS
+and TANT entries and the actual IF numbers and polarizations present
+in the <a href=3D"https://web.archive.org/web/20260418141224/https://www.ai=
+ps.nrao.edu/cgi-bin/ZXHLP2.PL?AIPS">AIPS</a> uv-data file. The INDEX keywor=
+d consists of an array of
+8-character strings which specify the mapping to be used for each
+column in the Tsys or Tant entry. The INDEX2 keyword supplements the
+information contained in the INDEX keyword and has exactly the same
+format. The allowed syntax for each entry is as follows (subject to an
+8-character limit, and a unique mapping),
+
+ a) 'R3'            assign the colum to IF 3, RCP polarization.
+ b) 'L1'            assign the colum to IF 1, LCP polarization.
+ c) 'R4|L4'         assign the column to both IF 4 RCP and IF 4 LCP.
+ d) 'R1:8'          assign the column to all IF's 1-8 RCP.
+ e) 'L10:16:2'      assign the column to all even IF's 10-16 LCP.
+ f) 'X'             do not assign the column to any IF or polzn.
+
+If further assignments need to be made for a given column then use
+the keyword INDEX2 to supplement the above information. In all cases
+an INDEX entry must be provided for each Tsys or Tant column in the
+text file. For a sample Tsys format given below,
+
+321 20:02.07   33.5  36.7  34.2  32.1  38.9  39.7  23.7 !
+
+the index keywords could be used as follows:
+
+INDEX  =3D 'R1:8:2', 'R3',  'X', 'X', 'X',  'X', 'X'
+INDEX2 =3D 'L1:8:2', 'L3',  'X', 'X', 'X', 'L7', 'X'
+
+This would map column 1 to IF 1-8 RCP and LCP, column 2 to IF 3 LCP and
+RCP, and column 6 to IF 7 LCP. The INDEX2 keyword is not necessary
+in all cases.
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+
+1) The CONTROL group
+
+This must be the first group in the text file and is used to specify
+the default input format for the TSYS and TANT entries which may
+follow.  The CONTROL group is optional; if not specified it will be
+assumed that Tsys values are supplied for all IF's and polarizations
+present in the uv-data file in IF-polarization column order at each
+Tsys or Tant time stamp (ie. 'R1', 'L1', 'R2', 'L2' .. or 'R1', 'R2',
+depending on the number of polarizations). An alternative default
+format may be specified using keywords INDEX and INDEX2 in the control
+group, in the manner described above. This will then be used for all
+antennas for which a specific INDEX format is not given.
+
+Example:
+   CONTROL
+      INDEX =3D 'R1', 'L1', 'R2', 'L2', 'R3', 'L3' /
+
+Note: INDEX2 keyword can optionally be added but the CONTROL keyword
+is required. No other keywords are expected in the control
+group. Unrecognized entries in the input calibration file are simply
+counted and reported by number. This minimises the editing necessary
+in modifying VLBA calibration files which may contain other
+information.
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+
+2) The <a href=3D"https://web.archive.org/web/20260418141224/https://www.ai=
+ps.nrao.edu/cgi-bin/ZXHLP2.PL?BASELINE">BASELINE</a> group
+
+The baseline group is used to specify baseline-dependent amplitude
+gain corrections. These are entered directly into the BL table and
+are applied by general <a href=3D"https://web.archive.org/web/2026041814122=
+4/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?AIPS">AIPS</a> calibration ta=
+sks that accept a <a href=3D"https://web.archive.org/web/20260418141224/htt=
+ps://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?BLVER">BLVER</a>
+adverb. The format of these entries is as follows:
+
+<a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao=
+.edu/cgi-bin/ZXHLP2.PL?BASELINE">BASELINE</a> SC MK B =3D 1.9 /     (* mult=
+iply all data in the St. Croix to
+                                Mauna Kea baseline by 1.9 in ampl. *)
+
+The exact form of the station names expected can be obtained by
+examining the AN table using <a href=3D"https://web.archive.org/web/2026041=
+8141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?PRTAB">PRTAB</a> or <a =
+href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nrao.ed=
+u/cgi-bin/ZXHLP2.PL?PRTAN">PRTAN</a>.  Multiple <a href=3D"https://web.arch=
+ive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?BASE=
+LINE">BASELINE</a>
+entries can be specified. These factors will be applied to all
+sources, IF's and polarizations on that baseline.
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+
+3) The <a href=3D"https://web.archive.org/web/20260418141224/https://www.ai=
+ps.nrao.edu/cgi-bin/ZXHLP2.PL?GAIN">GAIN</a> group
+
+This group is used to specify antenna-based gain curves, which are
+written in the gain curve (GC) table. Several formats are allowed for
+the gain curve entries but all require the following keywords:
+
+  i) Antenna name as given in the AN table :   eg. SC
+ ii) Zenith point source sensitivity (K/Jy):
+        DPFU =3D X:    Single polarization
+        DPFU =3D X,Y:  Dual circular polarization (see RCP/LCP below).
+iii) Gain curve type                       :
+        EQUAT :     equatorial gain curve (function of Hour Angle/deg)
+        ALTAZ :     alt-az gain curve (function of Zenith Angle/deg)
+        <a href=3D"https://web.archive.org/web/20260418141224/https://www.a=
+ips.nrao.edu/cgi-bin/ZXHLP2.PL?ELEVLIM">ELEV</a>  :     elevation gain curv=
+e (in deg).
+        GCNRAO:     2-d spherical harmonic expansion (Hour Angle/deg
+                    and (90-Declination)/deg), as used by GB 140 foot.
+
+With no further information the relative gain curves (with respect to
+zenith) will be assumed flat. Additional keywords can be supplied
+however, as follows:
+
+ i) For EQUAT, ALTAZ or <a href=3D"https://web.archive.org/web/202604181412=
+24/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?ELEVLIM">ELEV</a> gain curve=
+s:
+
+    a) TABLE or POLY =3D a0, a1, a2, ...
+       The former indicates that the gain values are tabulated
+       immediately after the <a href=3D"https://web.archive.org/web/2026041=
+8141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?GAIN">GAIN</a> group in=
+ a two-column format
+       eg.
+          10.4 0.98
+          20.5 0.97
+          50.7 0.67
+          78.9 0.44 /
+       where the first column is the gain ordinate (of type specified
+       by EQUAT, ALTAZ or <a href=3D"https://web.archive.org/web/2026041814=
+1224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?ELEVLIM">ELEV</a>) and the=
+ second column the relative
+       gain value.
+          The POLY array specifies that the gain curve is a simple
+       polynomial in the gain ordinate with coefficients of increasing
+       order a0, a1, a2..etc. The POLY keyword can be used in
+       conjunction with an <a href=3D"https://web.archive.org/web/202604181=
+41224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?OFFSET">OFFSET</a> =3D x =
+keyword which will shift the
+       polynomial by x in the gain ordinate. This is the only case in
+       which <a href=3D"https://web.archive.org/web/20260418141224/https://=
+www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?OFFSET">OFFSET</a> can be used.
+
+    b) DEC =3D x
+       Specify the declination for which the gain curve is valid. Only
+       allowed for EQUAT gain curves. Multiple <a href=3D"https://web.archi=
+ve.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?GAIN"=
+>GAIN</a> entries can be
+       given for each antenna with different DEC values to construct
+       a two-dimensional gain curve for equatorially-mounted antennas.
+
+ ii) For GCNRAO gain curves:
+
+    a) The spherical harmonic coefficients are specified using the
+       keywords:
+                 Gain curve term
+          A00    1
+          A10    cos(90-dec)
+          A11E   sin(90-dec) cos(ha)
+          A11O   sin(90-dec) sin(ha)
+          A20    0.5 (3 cos^2(90-dec) - 1)
+          A21E   3 sin(90-dec) cos(90-dec) cos(ha)
+          A21O   3 sin(90-dec) cos(90-dec) sin(ha)
+          A22E   3 (sin^2(90-dec) cos(2 ha))
+          A22O   3 (sin^2(90-dec) sin(2 ha))
+          A30    2.5 cos^3(90-dec) - 1.5 cos(90-dec)
+
+Additional keywords for all gain curve types (EQUAT, ALTAZ, <a href=3D"http=
+s://web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZX=
+HLP2.PL?ELEVLIM">ELEV</a>,
+           GCNRAO)
+
+  i) RCP or LCP
+     Specify the polarization to which the gain curve applies. If
+     not specified then assume it applies to all polarizations in
+     the data. If DPFU =3D X, Y is specified, and the uv-data file has
+     dual polarization, then X will be interpreted as the RCP value
+     and Y as the LCP value. Separate gains for RCP and LCP in this
+     case can also be specified as separate gain entries with the
+     RCP or LCP keywords and DPFU =3D X.
+
+     eg.   a) RCP DPFU =3D 0.1       : Specify RCP gain
+           b) DPFU =3D 0.2           : One gain for both RCP and LCP
+           c) DPFU =3D 0.3, 0.4      : RCP =3D 0.3, LCP =3D 0.4 (only use
+                                     this mode for dual-polzn. data)
+
+ ii) <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips=
+.nrao.edu/cgi-bin/ZXHLP2.PL?FREQID">FREQ</a> =3D f1, f2  (* in MHz *)
+     Sky frequency (in MHz) to which the gain curve applies. ANTAB
+     will determine which IF and FQ-ID's are implied.
+
+Example:
+
+  <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nr=
+ao.edu/cgi-bin/ZXHLP2.PL?GAIN">GAIN</a> SC <a href=3D"https://web.archive.o=
+rg/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?ELEVLIM">=
+ELEV</a> DPFU =3D 0.13 RCP <a href=3D"https://web.archive.org/web/202604181=
+41224/https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?FREQID">FREQ</a> =3D 4000=
+,6000 TABLE /
+  10.0 0.56
+  20.0 0.78
+  .
+  .
+  70.0 0.94
+  80.0 0.95 /
+
+  (* This specifies the RCP gain curve at St Croix over the sky
+ frequency range 4-6 GHz, with a zenith point source sensitivity
+ of 0.13 K/Jy and a relative gain tabulated as a function of
+ elevation. *)
+
+ <a href=3D"https://web.archive.org/web/20260418141224/https://www.aips.nra=
+o.edu/cgi-bin/ZXHLP2.PL?GAIN">GAIN</a> MK ALTAZ DPFU =3D 0.1 POLY =3D 1.0 /
+
+  (* Flat gain curve for Mauna Kea, all IF's and polarizations,
+ zenith point source sensitivity of 0.1 K/Jy *)
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+
+3) The TSYS or TANT group
+
+These entries are used to identify a station with a list of Tsys or
+Tant values which follow it. The TSYS and TANT groups require a
+station name (as it appears in the AN table) and allow the following
+additional keywords:
+
+   i) FT      :     Factor by which to multiply all values. Default
+                    of 1.0.
+  ii) TIMEOFF :     Time offset to be added to all entries. Default
+                    is zero.
+ iii) SRC/SYS :     All Tsys entries are actually Ta/Tsys (<a href=3D"https=
+://web.archive.org/web/20260418141224/https://www.aips.nrao.edu/cgi-bin/ZXH=
+LP2.PL?VLA">VLA</a>)
+  iv) RANGE =3D low,high:
+                    Range for permitted values.
+   v) INDEX and INDEX2:   see above.
+
+The format of the Tsys or Tant values which follow are:
+
+Day_no  hh.hh        col1 col2 ... etc
+Day_no  hh:mm.mm     col1 col2 ... etc
+Day_no  hh:mm:ss.ss  col1 col2 ... etc
+
+Example:
+ TSYS SC FT =3D 1.05 INDEX =3D 'R1:8', 'L1:8' /
+ 321 20:32.78  32.6 33.4 ! Values for RCP, LCP
+ 321 20:34:01  31.6 35.8
+.
+.
+
+The format of the time stamp is flexible; use decimal hours or
+sexagesimal with decimal minutes or seconds.
+
+Note: TANT entries are identical to TSYS entries except that the group
+keyword is different (TSYS vs TANT). Antenna temperatures may be
+measured in a wider bandwidth and should be assigned to all applicable
+IF's using the INDEX and INDEX2 keywords. Negative values or values of
+999.9 are assumed indefinite. Records with invalid time formats are
+reported as an error.
+</pre><hr><pre>
+
+
+</pre><hr><div align=3D"RIGHT"><a href=3D"https://web.archive.org/web/20260=
+418141224/http://www.aips.nrao.edu/">AIPS</a></div><address><!--see above--=
+></address>
+
+
+
+<div id=3D"immersive-translate-browser-popup" style=3D"all: initial"><templ=
+ate shadowmode=3D"open"><div id=3D"mount" style=3D"display: block;"></div><=
+/template></div></body></html>
+------MultipartBoundary--UiTcF3WeVzNO8xX1UeJ0ZRyBoLtWqFJjffCOuaJ0li----
+Content-Type: image/gif
+Content-Transfer-Encoding: base64
+Content-Location: file:///home/avi/Downloads/AIPS%20HELP%20file%20(version%2031DEC26)%20for%20ANTAB_files/nraologo_tiny.gif
+
+R0lGODlhRwBHAIAAAP///wAA/yH5BAEAAAAALAAAAABHAEcAQAL/jI+py+2vgASw2rsmDRr773Tc
+BHraJh1kI4rleKZIvBpytrqvrYf0lmjVVMMR4xf5AYlI2BKGgxSDM2VV1jsFraAnTutUisfksph3
+26krwvTa0mTlpmswsy3H0k308fU4ZyYY82GG5iXHltXnFna4VcTFA4l4aOdkOai5WZbJ+QkaWPlG
++ohZikppmsraNsqa9Hq3Cku51Kh6CnsJhjur+xJ31et72tN1M/j3hbLHV+z5m3u8Q+1D+BsqeM1J
+W7UltXgJSAxte4xNdO7magt+/c5Mkx0pPv+GW/40fiZf79WvlsBY2gp2C2MwYSdgA9W0a4hPFMSI
+esxNVFRR1sVwphk3VpPoscTDkOnyNLOIyo65kQPHGeHmLZVKITAZkiqJDRrLOvzuOdtZ6N46ID9B
+BiORUxIUZjGDpjHEhNxJjRhHCaMGVKSzO4GY2jy6leCUrB9RikUqSmFJjgvVKh32qWk9bv/WwjUa
+ji07a/KaSnW5tm5db77eLs0w9BZemxaHFPNjyt6+V+JM8lrc8yqyzFPd3eV7cydnu1zZ0U3rNrU+
+1axTFAAAOw==
+
+------MultipartBoundary--UiTcF3WeVzNO8xX1UeJ0ZRyBoLtWqFJjffCOuaJ0li----
+Content-Type: image/gif
+Content-Transfer-Encoding: base64
+Content-Location: file:///home/avi/Downloads/AIPS%20HELP%20file%20(version%2031DEC26)%20for%20ANTAB_files/aips.gif
+
+R0lGODdhQABAAMIAAAAAABn/Gf8ZGf//AP//GRkZ/wAA/wAAACwAAAAAQABAAAAD/gi63P4wShmq
+vUHozbv/YOgpWFmJaKpupFmucMwCrivfaItpNu53uh3v9SsGiabi7ygUJJU3ZtN5gUZpFmqVs7XC
+gsNu2BvTccVD66CMzXSybzduQK9/259TfF7vr1VmHnpQfnQafymBe4R9AoaOjyKKZ4x2hXaSeIJy
+P36Ql4gfk1ydl4egmXBeoKiNIaNKrKiAmpWyrDm1RbeNhYm6pbyGmL+qwcKRK7AxyJ4yyyvNzmzG
+KdK4z8Ah17JX1dvc2HffH+Hd1IMi5ufK2uXrs+3k7/C+8unq9fa08x7rp/ty9etgTgABAgBdCcQH
+ThgkDQcRJkz2yp0/T5ZCRJRo7Wohp4YUJYLYyCGgKIslG208iCLiRWInB36ys1LkSJcpFY4AQAWF
+p5otSeaECYSnE58qhYpYOZQoBwUqnAFdqnSm0xlRXdVkqRHnBpNPjVr7OfXGtJ3MrpIBAXWt27Bv
+4wqYQLeu3bsACujdy7ev37+AA+s1IJivgsKIExcmnPiw4r4D+PYpUGhvHcp7GSN2/FjvZcuRPYem
+Q3l06AKaC3Pu/Fk0aNekPWdWvFqx6deuS5eOPbtx3s6YdefezZt4782/H18aXjy4cNS0k9uWfHt4
+bt6pBdcWPJmVccu7+WYPvB24eb/jAeNdz95uAgA7
+
+------MultipartBoundary--UiTcF3WeVzNO8xX1UeJ0ZRyBoLtWqFJjffCOuaJ0li----
+Content-Type: text/css
+Content-Transfer-Encoding: quoted-printable
+Content-Location: https://web-static.archive.org/_static/css/iconochive.css?v=3PDvdIFv
+
+@charset "utf-8";
+
+@font-face { font-family: Iconochive-Regular; src: url("../fonts/Iconochive=
+-Regular.woff") format("woff"), url("../fonts/Iconochive-Regular.ttf") form=
+at("truetype"); font-weight: normal; font-style: normal; }
+
+[class^=3D"iconochive-"], [class*=3D" iconochive-"] { speak: none; font-sty=
+le: normal; font-weight: normal; font-variant: normal; text-transform: none=
+; line-height: 1; -webkit-font-smoothing: antialiased; font-family: Iconoch=
+ive-Regular !important; }
+
+.iconochive-Uplevel::before { content: "=E2=86=B5"; }
+
+.iconochive-exit::before { content: "=F0=9F=9A=A3"; }
+
+.iconochive-beta::before { content: "=CE=B2"; }
+
+.iconochive-logo::before { content: "=F0=9F=8F=9B"; }
+
+.iconochive-audio::before { content: "=F0=9F=95=A8"; }
+
+.iconochive-movies::before { content: "=F0=9F=8E=9E"; }
+
+.iconochive-software::before { content: "=F0=9F=92=BE"; }
+
+.iconochive-texts::before { content: "=F0=9F=95=AE"; }
+
+.iconochive-etree::before { content: "=F0=9F=8E=A4"; }
+
+.iconochive-image::before { content: "=F0=9F=96=BC"; }
+
+.iconochive-web::before { content: "=F0=9F=97=94"; }
+
+.iconochive-collection::before { content: "=E2=88=91"; }
+
+.iconochive-folder::before { content: "=F0=9F=93=82"; }
+
+.iconochive-data::before { content: "=F0=9F=97=83"; }
+
+.iconochive-tv::before { content: "=F0=9F=93=BA"; }
+
+.iconochive-article::before { content: "=F0=9F=97=8F"; }
+
+.iconochive-question::before { content: "=E2=8D=B0"; }
+
+.iconochive-question-dark::before { content: "?"; }
+
+.iconochive-info::before { content: "i"; }
+
+.iconochive-info-small::before { content: "=E2=93=98"; }
+
+.iconochive-comment::before { content: "=F0=9F=97=A9"; }
+
+.iconochive-comments::before { content: "=F0=9F=97=AA"; }
+
+.iconochive-person::before { content: "=F0=9F=91=A4"; }
+
+.iconochive-people::before { content: "=F0=9F=91=A5"; }
+
+.iconochive-eye::before { content: "=F0=9F=91=81"; }
+
+.iconochive-rss::before { content: "=E2=88=9E"; }
+
+.iconochive-time::before { content: "=F0=9F=95=91"; }
+
+.iconochive-quote::before { content: "=E2=9D=9D"; }
+
+.iconochive-disc::before { content: "=F0=9F=92=BF"; }
+
+.iconochive-tv-commercial::before { content: "=F0=9F=92=B0"; }
+
+.iconochive-search::before { content: "=F0=9F=94=8D"; }
+
+.iconochive-search-star::before { content: "=E2=9C=BD"; }
+
+.iconochive-tiles::before { content: "=E2=8A=9E"; }
+
+.iconochive-list::before { content: "=E2=87=B6"; }
+
+.iconochive-list-bulleted::before { content: "=E2=8C=97"; }
+
+.iconochive-latest::before { content: "=E2=88=88"; }
+
+.iconochive-left::before { content: "=CB=82"; }
+
+.iconochive-right::before { content: "=CB=83"; }
+
+.iconochive-left-solid::before { content: "=E2=97=82"; }
+
+.iconochive-right-solid::before { content: "=E2=96=B8"; }
+
+.iconochive-up-solid::before { content: "=E2=96=B4"; }
+
+.iconochive-down-solid::before { content: "=E2=96=BE"; }
+
+.iconochive-dot::before { content: "=E2=8F=A4"; }
+
+.iconochive-dots::before { content: "=E2=96=A6"; }
+
+.iconochive-columns::before { content: "=E2=96=AF"; }
+
+.iconochive-sort::before { content: "=E2=87=95"; }
+
+.iconochive-atoz::before { content: "=F0=9F=94=A4"; }
+
+.iconochive-ztoa::before { content: "=F0=9F=94=A5"; }
+
+.iconochive-upload::before { content: "=F0=9F=93=A4"; }
+
+.iconochive-download::before { content: "=F0=9F=93=A5"; }
+
+.iconochive-favorite::before { content: "=E2=98=85"; }
+
+.iconochive-heart::before { content: "=E2=99=A5"; }
+
+.iconochive-play::before { content: "=E2=96=B6"; }
+
+.iconochive-play-framed::before { content: "=F0=9F=8E=AC"; }
+
+.iconochive-fullscreen::before { content: "=E2=9B=B6"; }
+
+.iconochive-mute::before { content: "=F0=9F=94=87"; }
+
+.iconochive-unmute::before { content: "=F0=9F=94=8A"; }
+
+.iconochive-share::before { content: "=F0=9F=8E=81"; }
+
+.iconochive-edit::before { content: "=E2=9C=8E"; }
+
+.iconochive-reedit::before { content: "=E2=9C=90"; }
+
+.iconochive-gear::before { content: "=E2=9A=99"; }
+
+.iconochive-remove-circle::before { content: "=E2=9D=8E"; }
+
+.iconochive-plus-circle::before { content: "=F0=9F=97=96"; }
+
+.iconochive-minus-circle::before { content: "=F0=9F=97=95"; }
+
+.iconochive-x::before { content: "=F0=9F=97=99"; }
+
+.iconochive-fork::before { content: "=E2=8B=94"; }
+
+.iconochive-trash::before { content: "=F0=9F=97=91"; }
+
+.iconochive-warning::before { content: "=E2=9A=A0"; }
+
+.iconochive-flash::before { content: "=F0=9F=97=B2"; }
+
+.iconochive-world::before { content: "=F0=9F=97=BA"; }
+
+.iconochive-lock::before { content: "=F0=9F=94=92"; }
+
+.iconochive-unlock::before { content: "=F0=9F=94=93"; }
+
+.iconochive-twitter::before { content: "=F0=9F=90=A6"; }
+
+.iconochive-facebook::before { content: "f"; }
+
+.iconochive-googleplus::before { content: "g"; }
+
+.iconochive-reddit::before { content: "=F0=9F=91=BD"; }
+
+.iconochive-tumblr::before { content: "T"; }
+
+.iconochive-pinterest::before { content: "=F0=9D=93=9F"; }
+
+.iconochive-popcorn::before { content: "=F0=9F=92=A5"; }
+
+.iconochive-email::before { content: "=F0=9F=93=A7"; }
+
+.iconochive-embed::before { content: "=F0=9F=94=97"; }
+
+.iconochive-gamepad::before { content: "=F0=9F=95=B9"; }
+
+.iconochive-Zoom_In::before { content: "+"; }
+
+.iconochive-Zoom_Out::before { content: "-"; }
+
+.iconochive-RSS::before { content: "=F0=9F=93=A8"; }
+
+.iconochive-Light_Bulb::before { content: "=F0=9F=92=A1"; }
+
+.iconochive-Add::before { content: "=E2=8A=95"; }
+
+.iconochive-Tab_Activity::before { content: "=E2=8C=98"; }
+
+.iconochive-Forward::before { content: "=E2=8F=A9"; }
+
+.iconochive-Backward::before { content: "=E2=8F=AA"; }
+
+.iconochive-No_Audio::before { content: "=F0=9F=94=88"; }
+
+.iconochive-Pause::before { content: "=E2=8F=B8"; }
+
+.iconochive-No_Favorite::before { content: "=E2=98=86"; }
+
+.iconochive-Unike::before { content: "=E2=99=A1"; }
+
+.iconochive-Song::before { content: "=E2=99=AB"; }
+
+.iconochive-No_Flag::before { content: "=E2=9A=90"; }
+
+.iconochive-Flag::before { content: "=E2=9A=91"; }
+
+.iconochive-Done::before { content: "=E2=9C=93"; }
+
+.iconochive-Check::before { content: "=E2=9C=94"; }
+
+.iconochive-Refresh::before { content: "=E2=9F=B3"; }
+
+.iconochive-Headphones::before { content: "=F0=9F=8E=A7"; }
+
+.iconochive-Chart::before { content: "=F0=9F=93=88"; }
+
+.iconochive-Bookmark::before { content: "=F0=9F=93=91"; }
+
+.iconochive-Documents::before { content: "=F0=9F=93=9A"; }
+
+.iconochive-Newspaper::before { content: "=F0=9F=93=B0"; }
+
+.iconochive-Podcast::before { content: "=F0=9F=93=B6"; }
+
+.iconochive-Radio::before { content: "=F0=9F=93=BB"; }
+
+.iconochive-Cassette::before { content: "=F0=9F=93=BC"; }
+
+.iconochive-Shuffle::before { content: "=F0=9F=94=80"; }
+
+.iconochive-Loop::before { content: "=F0=9F=94=81"; }
+
+.iconochive-Low_Audio::before { content: "=F0=9F=94=89"; }
+
+.iconochive-First::before { content: "=F0=9F=8E=96"; }
+
+.iconochive-Invisible::before { content: "=F0=9F=95=B6"; }
+
+.iconochive-Computer::before { content: "=F0=9F=96=B3"; }
+------MultipartBoundary--UiTcF3WeVzNO8xX1UeJ0ZRyBoLtWqFJjffCOuaJ0li----
+Content-Type: text/css
+Content-Transfer-Encoding: quoted-printable
+Content-Location: https://web-static.archive.org/_static/css/banner-styles.css?v=1utQkbB3
+
+@charset "utf-8";
+
+:root { --wm-toolbar-height: 65px; }
+
+#wm-ipp-base { height: 65px; padding: 0px; margin: 0px; border-width: mediu=
+m; border-style: none; border-color: currentcolor; border-image: none; back=
+ground: none transparent; }
+
+#wm-ipp { z-index: 2147483647; }
+
+#wm-ipp, #wm-ipp * { font-family: "Lucida Grande", Helvetica, Arial, sans-s=
+erif; font-size: 12px; line-height: 1.2; letter-spacing: 0px; width: auto; =
+height: auto; max-width: none; max-height: none; min-height: 0px; outline: =
+none; float: none; text-align: left; border-width: medium; border-style: no=
+ne; border-color: currentcolor; border-image: none; color: rgb(0, 0, 0); te=
+xt-indent: 0px; position: initial; background: none; min-width: 0px !import=
+ant; }
+
+#wm-ipp div, #wm-ipp canvas { display: block; }
+
+#wm-ipp div, #wm-ipp tr, #wm-ipp td, #wm-ipp a, #wm-ipp form { padding: 0px=
+; margin: 0px; border-width: medium; border-style: none; border-color: curr=
+entcolor; border-image: none; border-radius: 0px; background-color: transpa=
+rent; background-image: none; height: auto; }
+
+#wm-ipp table { border-width: medium; border-style: none; border-color: cur=
+rentcolor; border-image: none; border-collapse: collapse; margin: 0px; padd=
+ing: 0px; width: auto; font-size: inherit; }
+
+#wm-ipp form input { height: auto; display: inline; margin: 0px; color: rgb=
+(0, 0, 0); background: none rgb(255, 255, 255); border: 1px solid rgb(102, =
+102, 102); padding: 1px !important; }
+
+#wm-ipp form input[type=3D"submit"] { padding: 0px 8px !important; margin: =
+1px 0px 1px 5px !important; width: auto !important; border: 1px solid rgb(0=
+, 0, 0) !important; background: rgb(255, 255, 255) !important; color: rgb(0=
+, 0, 0) !important; }
+
+#wm-ipp form input[type=3D"submit"]:hover { background: rgb(238, 238, 238) =
+!important; cursor: pointer !important; }
+
+#wm-ipp form input[type=3D"submit"]:active { transform: translateY(1px); }
+
+#wm-ipp a { display: inline; }
+
+#wm-ipp a:hover { text-decoration: underline; }
+
+#wm-ipp a.wm-btn:hover { text-decoration: none; color: rgb(255, 255, 0) !im=
+portant; }
+
+#wm-ipp a.wm-btn:hover span { color: rgb(255, 255, 0) !important; }
+
+#wm-ipp #wm-ipp-inside { margin: 0px 6px; border-width: medium 5px 5px; bor=
+der-style: none solid solid; border-color: currentcolor rgb(0, 0, 0) rgb(0,=
+ 0, 0); border-image: none; background-color: rgba(255, 255, 255, 0.9); box=
+-shadow: rgb(51, 51, 51) 1px 1px 4px; border-radius: 0px 0px 8px 8px; }
+
+#wm-ipp #wm-logo { padding: 0px 10px; vertical-align: middle; min-width: 10=
+0px; flex: 0 0 100px; }
+
+#wm-ipp .c { padding-left: 4px; }
+
+#wm-ipp .c .u { margin-top: 4px !important; }
+
+#wm-ipp .n { vertical-align: bottom; padding: 0px 0px 0px 5px !important; }
+
+#wm-ipp .n a { text-decoration: none; color: rgb(51, 51, 255); font-weight:=
+ bold; }
+
+#wm-ipp .n .b { overflow: visible; white-space: nowrap; color: rgb(153, 153=
+, 170); vertical-align: middle; padding: 0px 6px 0px 0px !important; text-a=
+lign: right !important; }
+
+#wm-ipp .n .y .b { padding: 0px 6px 2px 0px !important; }
+
+#wm-ipp .n .c { background: rgb(0, 0, 0); color: rgb(255, 255, 0); font-wei=
+ght: bold; text-align: center; padding: 0px !important; }
+
+#wm-ipp .n .d span.ta { display: inline-block; width: 0px; height: 0px; bor=
+der-color: transparent rgb(153, 153, 170); border-style: solid; }
+
+#wm-ipp .n .d .b span.ta { border-width: 8px 14px 8px 0px; }
+
+#wm-ipp .n .d .f span.ta { border-width: 8px 0px 8px 14px; }
+
+#wm-ipp .n .d a span.ta { border-color: transparent rgb(51, 51, 255); }
+
+#wm-ipp .n .d a span.ta:hover { border-color: transparent rgb(119, 119, 255=
+); }
+
+#wm-ipp.hi .n td.c { color: rgb(236, 0, 140); }
+
+#wm-ipp .n td.f { overflow: visible; white-space: nowrap; color: rgb(153, 1=
+53, 170); vertical-align: middle; padding: 0px 0px 0px 6px !important; text=
+-align: left !important; }
+
+#wm-ipp .n tr.m td { text-transform: uppercase; white-space: nowrap; paddin=
+g: 2px 0px; }
+
+#wm-ipp .c .s { vertical-align: bottom; padding: 0px 5px 0px 0px !important=
+; }
+
+#wm-ipp #wm-nav-captures { white-space: nowrap; }
+
+#wm-ipp .c .s a.t { color: rgb(51, 51, 255); font-weight: bold; line-height=
+: 1.8; }
+
+#wm-ipp .c .s div.r { color: rgb(102, 102, 102); font-size: 9px; white-spac=
+e: nowrap; }
+
+#wm-ipp .c .k { padding-bottom: 1px; }
+
+#wm-ipp .c .s { padding: 0px 5px 2px 0px !important; }
+
+#wm-ipp td#displayMonthEl { padding: 2px 0px !important; }
+
+#wm-ipp td#displayYearEl { padding: 0px 0px 2px !important; }
+
+div#wm-ipp-sparkline { position: relative; white-space: nowrap; background-=
+color: rgb(255, 255, 255); cursor: pointer; line-height: 0.9; }
+
+#sparklineImgId, #wm-sparkline-canvas { position: relative; z-index: 9012; =
+max-width: none; }
+
+#wm-ipp-sparkline div.yt { position: absolute; top: 0px; z-index: 9010 !imp=
+ortant; background-color: rgb(255, 255, 0) !important; }
+
+#wm-ipp-sparkline div.mt { position: absolute; top: 0px; z-index: 9013 !imp=
+ortant; background-color: rgb(236, 0, 140) !important; }
+
+#wm-ipp .r { margin-left: 4px; }
+
+#wm-ipp .r a { color: rgb(51, 51, 255); border-width: medium; border-style:=
+ none; border-color: currentcolor; border-image: none; position: relative; =
+background-color: transparent; text-decoration: none; background-repeat: no=
+-repeat !important; background-position: 100% 100% !important; }
+
+#wm-ipp #wm-capinfo { border-radius: 0px 0px 4px 4px; }
+
+#wm-ipp #wm-capinfo .c-logo { display: block; float: left; margin-right: 3p=
+x; width: 90px; min-height: 90px; max-height: 290px; border-radius: 45px; o=
+verflow: hidden; background-position: 50% center; background-size: auto 90p=
+x; box-shadow: rgb(208, 208, 208) 0px 0px 2px 2px inset; }
+
+#wm-ipp #wm-capinfo .c-logo span { display: inline-block; }
+
+#wm-ipp #wm-capinfo .c-logo img { height: 90px; position: relative; left: -=
+50%; }
+
+#wm-ipp #wm-capinfo .wm-title { font-size: 130%; }
+
+#wm-ipp #wm-capinfo a.wm-selector { display: inline-block; color: rgb(170, =
+170, 170); padding: 2px 8px; text-decoration: none !important; }
+
+#wm-ipp #wm-capinfo a.wm-selector.selected { background-color: rgb(102, 102=
+, 102); }
+
+#wm-ipp #wm-capinfo a.wm-selector:hover { color: rgb(255, 255, 255); }
+
+#wm-ipp #wm-capinfo.notice-only #wm-capinfo-collected-by, #wm-ipp #wm-capin=
+fo.notice-only #wm-capinfo-timestamps { display: none; }
+
+#wm-ipp #wm-capinfo #wm-capinfo-notice .wm-capinfo-content { background-col=
+or: rgb(255, 255, 0); padding: 5px; font-size: 14px; text-align: center; }
+
+#wm-ipp #wm-capinfo #wm-capinfo-notice .wm-capinfo-content * { font-size: 1=
+4px; text-align: center; }
+
+#wm-ipp #wm-expand { right: 1px; bottom: -1px; color: rgb(255, 255, 255); b=
+ackground-color: rgb(102, 102, 102) !important; padding: 0px 5px 0px 3px !i=
+mportant; border-radius: 3px 3px 0px 0px !important; }
+
+#wm-ipp #wm-expand span { color: rgb(255, 255, 255); }
+
+#wm-ipp #wm-expand #wm-expand-icon { display: inline-block; transition: tra=
+nsform 0.5s; transform-origin: 50% 45%; }
+
+#wm-ipp #wm-expand.wm-open #wm-expand-icon { transform: rotate(180deg); }
+
+#wm-ipp #wmtb { text-align: right; }
+
+#wm-ipp #wmtb #wmtbURL { width: calc(100% - 45px); }
+
+#wm-ipp #wm-graph-anchor { border-right: 1px solid rgb(204, 204, 204); }
+
+html.wb-highlight { box-shadow: rgb(165, 14, 58) 0px 0px 0px 3px inset !imp=
+ortant; }
+
+.wb-highlight { outline: rgb(165, 14, 58) solid 3px !important; }
+
+#wm-ipp-print { display: none !important; }
+
+@media print {
+  #wm-ipp-base { display: none !important; }
+  #wm-ipp-print { white-space: nowrap; overflow: hidden; text-overflow: ell=
+ipsis; display: block !important; }
+}
+
+@media (max-width: 414px) {
+  #wm-ipp .xxs { display: none !important; }
+}
+
+@media (min-width: 1055px) {
+  #wm-ipp #wm-graph-anchor { display: block !important; }
+}
+
+@media (max-width: 1054px) {
+  #wm-ipp #wm-graph-anchor { display: none !important; }
+}
+
+@media (max-width: 1163px) {
+  #wm-logo { display: none !important; }
+}
+
+#wm-btns { white-space: nowrap; margin-top: -2px; }
+
+#wm-btns #wm-save-snapshot-open { margin-right: 7px; top: -6px; }
+
+#wm-btns #wm-sign-in { box-sizing: content-box; display: none; margin-right=
+: 7px; top: -8px; border: 2px solid rgb(0, 0, 0); border-radius: 14px; padd=
+ing-right: 2px; padding-bottom: 2px; width: 11px; height: 11px; }
+
+#wm-btns #wm-sign-in > .iconochive-person { font-size: 12.5px; }
+
+#wm-save-snapshot-open > .iconochive-web { color: rgb(0, 0, 0); font-size: =
+160%; }
+
+#wm-ipp #wm-share { display: flex; align-items: flex-end; justify-content: =
+space-between; }
+
+#wm-share > #wm-screenshot { display: inline-block; margin-right: 3px; visi=
+bility: hidden; }
+
+#wm-screenshot > .iconochive-image { color: rgb(0, 0, 0); font-size: 160%; =
+}
+
+#wm-share > #wm-video { display: inline-block; margin-right: 3px; visibilit=
+y: hidden; }
+
+#wm-video > .iconochive-movies { color: rgb(0, 0, 0); display: inline-block=
+; font-size: 150%; margin-bottom: 2px; }
+
+#wm-btns #wm-save-snapshot-in-progress { display: none; font-size: 160%; op=
+acity: 0.5; position: relative; margin-right: 7px; top: -5px; }
+
+#wm-btns #wm-save-snapshot-success { display: none; color: green; position:=
+ relative; top: -7px; }
+
+#wm-btns #wm-save-snapshot-fail { display: none; color: red; position: rela=
+tive; top: -7px; }
+
+.wm-icon-screen-shot { display: inline-block; background: url("../images/we=
+b-screenshot.svg") 0% 0% / contain no-repeat !important; width: 22px !impor=
+tant; height: 19px !important; }
+
+#donato { height: 0px; margin: 0px; padding: 0px; border-bottom: 1px solid =
+rgb(153, 153, 153) !important; }
+
+body.wm-modal { height: auto !important; overflow: hidden !important; }
+
+#donato #donato-base { width: 100%; height: 100%; margin: 0px; padding: 0px=
+; position: absolute; z-index: 2147483639; }
+
+body.wm-modal #donato #donato-base { position: fixed; inset: 0px; z-index: =
+2147483640; }
+
+.wb-autocomplete-suggestions { font-family: "Lucida Grande", Helvetica, Ari=
+al, sans-serif; font-size: 12px; text-align: left; cursor: default; border-=
+width: 0px 1px 1px; border-style: none solid solid; border-color: currentco=
+lor rgb(204, 204, 204) rgb(204, 204, 204); border-image: none; background: =
+rgb(255, 255, 255); box-shadow: rgba(0, 0, 0, 0.1) -1px 1px 3px; position: =
+absolute; display: none; z-index: 2147483647; max-height: 254px; overflow: =
+hidden auto; box-sizing: border-box; }
+
+.wb-autocomplete-suggestion { position: relative; padding: 0px 0.6em; line-=
+height: 23px; white-space: nowrap; overflow: hidden; text-overflow: ellipsi=
+s; font-size: 1.02em; color: rgb(51, 51, 51); }
+
+.wb-autocomplete-suggestion b { font-weight: bold; }
+
+.wb-autocomplete-suggestion.selected { background: rgb(240, 240, 240); }
+------MultipartBoundary--UiTcF3WeVzNO8xX1UeJ0ZRyBoLtWqFJjffCOuaJ0li----
+Content-Type: text/css
+Content-Transfer-Encoding: quoted-printable
+Content-Location: file:///home/avi/Downloads/AIPS%20HELP%20file%20(version%2031DEC26)%20for%20ANTAB_files/iconochive.css
+
+@charset "utf-8";
+
+@font-face { font-family: Iconochive-Regular; src: url("../fonts/Iconochive=
+-Regular.woff") format("woff"), url("../fonts/Iconochive-Regular.ttf") form=
+at("truetype"); font-weight: normal; font-style: normal; }
+
+[class^=3D"iconochive-"], [class*=3D" iconochive-"] { speak: none; font-sty=
+le: normal; font-weight: normal; font-variant: normal; text-transform: none=
+; line-height: 1; -webkit-font-smoothing: antialiased; font-family: Iconoch=
+ive-Regular !important; }
+
+.iconochive-Uplevel::before { content: "=E2=86=B5"; }
+
+.iconochive-exit::before { content: "=F0=9F=9A=A3"; }
+
+.iconochive-beta::before { content: "=CE=B2"; }
+
+.iconochive-logo::before { content: "=F0=9F=8F=9B"; }
+
+.iconochive-audio::before { content: "=F0=9F=95=A8"; }
+
+.iconochive-movies::before { content: "=F0=9F=8E=9E"; }
+
+.iconochive-software::before { content: "=F0=9F=92=BE"; }
+
+.iconochive-texts::before { content: "=F0=9F=95=AE"; }
+
+.iconochive-etree::before { content: "=F0=9F=8E=A4"; }
+
+.iconochive-image::before { content: "=F0=9F=96=BC"; }
+
+.iconochive-web::before { content: "=F0=9F=97=94"; }
+
+.iconochive-collection::before { content: "=E2=88=91"; }
+
+.iconochive-folder::before { content: "=F0=9F=93=82"; }
+
+.iconochive-data::before { content: "=F0=9F=97=83"; }
+
+.iconochive-tv::before { content: "=F0=9F=93=BA"; }
+
+.iconochive-article::before { content: "=F0=9F=97=8F"; }
+
+.iconochive-question::before { content: "=E2=8D=B0"; }
+
+.iconochive-question-dark::before { content: "?"; }
+
+.iconochive-info::before { content: "i"; }
+
+.iconochive-info-small::before { content: "=E2=93=98"; }
+
+.iconochive-comment::before { content: "=F0=9F=97=A9"; }
+
+.iconochive-comments::before { content: "=F0=9F=97=AA"; }
+
+.iconochive-person::before { content: "=F0=9F=91=A4"; }
+
+.iconochive-people::before { content: "=F0=9F=91=A5"; }
+
+.iconochive-eye::before { content: "=F0=9F=91=81"; }
+
+.iconochive-rss::before { content: "=E2=88=9E"; }
+
+.iconochive-time::before { content: "=F0=9F=95=91"; }
+
+.iconochive-quote::before { content: "=E2=9D=9D"; }
+
+.iconochive-disc::before { content: "=F0=9F=92=BF"; }
+
+.iconochive-tv-commercial::before { content: "=F0=9F=92=B0"; }
+
+.iconochive-search::before { content: "=F0=9F=94=8D"; }
+
+.iconochive-search-star::before { content: "=E2=9C=BD"; }
+
+.iconochive-tiles::before { content: "=E2=8A=9E"; }
+
+.iconochive-list::before { content: "=E2=87=B6"; }
+
+.iconochive-list-bulleted::before { content: "=E2=8C=97"; }
+
+.iconochive-latest::before { content: "=E2=88=88"; }
+
+.iconochive-left::before { content: "=CB=82"; }
+
+.iconochive-right::before { content: "=CB=83"; }
+
+.iconochive-left-solid::before { content: "=E2=97=82"; }
+
+.iconochive-right-solid::before { content: "=E2=96=B8"; }
+
+.iconochive-up-solid::before { content: "=E2=96=B4"; }
+
+.iconochive-down-solid::before { content: "=E2=96=BE"; }
+
+.iconochive-dot::before { content: "=E2=8F=A4"; }
+
+.iconochive-dots::before { content: "=E2=96=A6"; }
+
+.iconochive-columns::before { content: "=E2=96=AF"; }
+
+.iconochive-sort::before { content: "=E2=87=95"; }
+
+.iconochive-atoz::before { content: "=F0=9F=94=A4"; }
+
+.iconochive-ztoa::before { content: "=F0=9F=94=A5"; }
+
+.iconochive-upload::before { content: "=F0=9F=93=A4"; }
+
+.iconochive-download::before { content: "=F0=9F=93=A5"; }
+
+.iconochive-favorite::before { content: "=E2=98=85"; }
+
+.iconochive-heart::before { content: "=E2=99=A5"; }
+
+.iconochive-play::before { content: "=E2=96=B6"; }
+
+.iconochive-play-framed::before { content: "=F0=9F=8E=AC"; }
+
+.iconochive-fullscreen::before { content: "=E2=9B=B6"; }
+
+.iconochive-mute::before { content: "=F0=9F=94=87"; }
+
+.iconochive-unmute::before { content: "=F0=9F=94=8A"; }
+
+.iconochive-share::before { content: "=F0=9F=8E=81"; }
+
+.iconochive-edit::before { content: "=E2=9C=8E"; }
+
+.iconochive-reedit::before { content: "=E2=9C=90"; }
+
+.iconochive-gear::before { content: "=E2=9A=99"; }
+
+.iconochive-remove-circle::before { content: "=E2=9D=8E"; }
+
+.iconochive-plus-circle::before { content: "=F0=9F=97=96"; }
+
+.iconochive-minus-circle::before { content: "=F0=9F=97=95"; }
+
+.iconochive-x::before { content: "=F0=9F=97=99"; }
+
+.iconochive-fork::before { content: "=E2=8B=94"; }
+
+.iconochive-trash::before { content: "=F0=9F=97=91"; }
+
+.iconochive-warning::before { content: "=E2=9A=A0"; }
+
+.iconochive-flash::before { content: "=F0=9F=97=B2"; }
+
+.iconochive-world::before { content: "=F0=9F=97=BA"; }
+
+.iconochive-lock::before { content: "=F0=9F=94=92"; }
+
+.iconochive-unlock::before { content: "=F0=9F=94=93"; }
+
+.iconochive-twitter::before { content: "=F0=9F=90=A6"; }
+
+.iconochive-facebook::before { content: "f"; }
+
+.iconochive-googleplus::before { content: "g"; }
+
+.iconochive-reddit::before { content: "=F0=9F=91=BD"; }
+
+.iconochive-tumblr::before { content: "T"; }
+
+.iconochive-pinterest::before { content: "=F0=9D=93=9F"; }
+
+.iconochive-popcorn::before { content: "=F0=9F=92=A5"; }
+
+.iconochive-email::before { content: "=F0=9F=93=A7"; }
+
+.iconochive-embed::before { content: "=F0=9F=94=97"; }
+
+.iconochive-gamepad::before { content: "=F0=9F=95=B9"; }
+
+.iconochive-Zoom_In::before { content: "+"; }
+
+.iconochive-Zoom_Out::before { content: "-"; }
+
+.iconochive-RSS::before { content: "=F0=9F=93=A8"; }
+
+.iconochive-Light_Bulb::before { content: "=F0=9F=92=A1"; }
+
+.iconochive-Add::before { content: "=E2=8A=95"; }
+
+.iconochive-Tab_Activity::before { content: "=E2=8C=98"; }
+
+.iconochive-Forward::before { content: "=E2=8F=A9"; }
+
+.iconochive-Backward::before { content: "=E2=8F=AA"; }
+
+.iconochive-No_Audio::before { content: "=F0=9F=94=88"; }
+
+.iconochive-Pause::before { content: "=E2=8F=B8"; }
+
+.iconochive-No_Favorite::before { content: "=E2=98=86"; }
+
+.iconochive-Unike::before { content: "=E2=99=A1"; }
+
+.iconochive-Song::before { content: "=E2=99=AB"; }
+
+.iconochive-No_Flag::before { content: "=E2=9A=90"; }
+
+.iconochive-Flag::before { content: "=E2=9A=91"; }
+
+.iconochive-Done::before { content: "=E2=9C=93"; }
+
+.iconochive-Check::before { content: "=E2=9C=94"; }
+
+.iconochive-Refresh::before { content: "=E2=9F=B3"; }
+
+.iconochive-Headphones::before { content: "=F0=9F=8E=A7"; }
+
+.iconochive-Chart::before { content: "=F0=9F=93=88"; }
+
+.iconochive-Bookmark::before { content: "=F0=9F=93=91"; }
+
+.iconochive-Documents::before { content: "=F0=9F=93=9A"; }
+
+.iconochive-Newspaper::before { content: "=F0=9F=93=B0"; }
+
+.iconochive-Podcast::before { content: "=F0=9F=93=B6"; }
+
+.iconochive-Radio::before { content: "=F0=9F=93=BB"; }
+
+.iconochive-Cassette::before { content: "=F0=9F=93=BC"; }
+
+.iconochive-Shuffle::before { content: "=F0=9F=94=80"; }
+
+.iconochive-Loop::before { content: "=F0=9F=94=81"; }
+
+.iconochive-Low_Audio::before { content: "=F0=9F=94=89"; }
+
+.iconochive-First::before { content: "=F0=9F=8E=96"; }
+
+.iconochive-Invisible::before { content: "=F0=9F=95=B6"; }
+
+.iconochive-Computer::before { content: "=F0=9F=96=B3"; }
+------MultipartBoundary--UiTcF3WeVzNO8xX1UeJ0ZRyBoLtWqFJjffCOuaJ0li----
+Content-Type: text/css
+Content-Transfer-Encoding: quoted-printable
+Content-Location: file:///home/avi/Downloads/AIPS%20HELP%20file%20(version%2031DEC26)%20for%20ANTAB_files/banner-styles.css
+
+@charset "utf-8";
+
+:root { --wm-toolbar-height: 65px; }
+
+#wm-ipp-base { height: 65px; padding: 0px; margin: 0px; border-width: mediu=
+m; border-style: none; border-color: currentcolor; border-image: none; back=
+ground: none transparent; }
+
+#wm-ipp { z-index: 2147483647; }
+
+#wm-ipp, #wm-ipp * { font-family: "Lucida Grande", Helvetica, Arial, sans-s=
+erif; font-size: 12px; line-height: 1.2; letter-spacing: 0px; width: auto; =
+height: auto; max-width: none; max-height: none; min-height: 0px; outline: =
+none; float: none; text-align: left; border-width: medium; border-style: no=
+ne; border-color: currentcolor; border-image: none; color: rgb(0, 0, 0); te=
+xt-indent: 0px; position: initial; background: none; min-width: 0px !import=
+ant; }
+
+#wm-ipp div, #wm-ipp canvas { display: block; }
+
+#wm-ipp div, #wm-ipp tr, #wm-ipp td, #wm-ipp a, #wm-ipp form { padding: 0px=
+; margin: 0px; border-width: medium; border-style: none; border-color: curr=
+entcolor; border-image: none; border-radius: 0px; background-color: transpa=
+rent; background-image: none; height: auto; }
+
+#wm-ipp table { border-width: medium; border-style: none; border-color: cur=
+rentcolor; border-image: none; border-collapse: collapse; margin: 0px; padd=
+ing: 0px; width: auto; font-size: inherit; }
+
+#wm-ipp form input { height: auto; display: inline; margin: 0px; color: rgb=
+(0, 0, 0); background: none rgb(255, 255, 255); border: 1px solid rgb(102, =
+102, 102); padding: 1px !important; }
+
+#wm-ipp form input[type=3D"submit"] { padding: 0px 8px !important; margin: =
+1px 0px 1px 5px !important; width: auto !important; border: 1px solid rgb(0=
+, 0, 0) !important; background: rgb(255, 255, 255) !important; color: rgb(0=
+, 0, 0) !important; }
+
+#wm-ipp form input[type=3D"submit"]:hover { background: rgb(238, 238, 238) =
+!important; cursor: pointer !important; }
+
+#wm-ipp form input[type=3D"submit"]:active { transform: translateY(1px); }
+
+#wm-ipp a { display: inline; }
+
+#wm-ipp a:hover { text-decoration: underline; }
+
+#wm-ipp a.wm-btn:hover { text-decoration: none; color: rgb(255, 255, 0) !im=
+portant; }
+
+#wm-ipp a.wm-btn:hover span { color: rgb(255, 255, 0) !important; }
+
+#wm-ipp #wm-ipp-inside { margin: 0px 6px; border-width: medium 5px 5px; bor=
+der-style: none solid solid; border-color: currentcolor rgb(0, 0, 0) rgb(0,=
+ 0, 0); border-image: none; background-color: rgba(255, 255, 255, 0.9); box=
+-shadow: rgb(51, 51, 51) 1px 1px 4px; border-radius: 0px 0px 8px 8px; }
+
+#wm-ipp #wm-logo { padding: 0px 10px; vertical-align: middle; min-width: 10=
+0px; flex: 0 0 100px; }
+
+#wm-ipp .c { padding-left: 4px; }
+
+#wm-ipp .c .u { margin-top: 4px !important; }
+
+#wm-ipp .n { vertical-align: bottom; padding: 0px 0px 0px 5px !important; }
+
+#wm-ipp .n a { text-decoration: none; color: rgb(51, 51, 255); font-weight:=
+ bold; }
+
+#wm-ipp .n .b { overflow: visible; white-space: nowrap; color: rgb(153, 153=
+, 170); vertical-align: middle; padding: 0px 6px 0px 0px !important; text-a=
+lign: right !important; }
+
+#wm-ipp .n .y .b { padding: 0px 6px 2px 0px !important; }
+
+#wm-ipp .n .c { background: rgb(0, 0, 0); color: rgb(255, 255, 0); font-wei=
+ght: bold; text-align: center; padding: 0px !important; }
+
+#wm-ipp .n .d span.ta { display: inline-block; width: 0px; height: 0px; bor=
+der-color: transparent rgb(153, 153, 170); border-style: solid; }
+
+#wm-ipp .n .d .b span.ta { border-width: 8px 14px 8px 0px; }
+
+#wm-ipp .n .d .f span.ta { border-width: 8px 0px 8px 14px; }
+
+#wm-ipp .n .d a span.ta { border-color: transparent rgb(51, 51, 255); }
+
+#wm-ipp .n .d a span.ta:hover { border-color: transparent rgb(119, 119, 255=
+); }
+
+#wm-ipp.hi .n td.c { color: rgb(236, 0, 140); }
+
+#wm-ipp .n td.f { overflow: visible; white-space: nowrap; color: rgb(153, 1=
+53, 170); vertical-align: middle; padding: 0px 0px 0px 6px !important; text=
+-align: left !important; }
+
+#wm-ipp .n tr.m td { text-transform: uppercase; white-space: nowrap; paddin=
+g: 2px 0px; }
+
+#wm-ipp .c .s { vertical-align: bottom; padding: 0px 5px 0px 0px !important=
+; }
+
+#wm-ipp #wm-nav-captures { white-space: nowrap; }
+
+#wm-ipp .c .s a.t { color: rgb(51, 51, 255); font-weight: bold; line-height=
+: 1.8; }
+
+#wm-ipp .c .s div.r { color: rgb(102, 102, 102); font-size: 9px; white-spac=
+e: nowrap; }
+
+#wm-ipp .c .k { padding-bottom: 1px; }
+
+#wm-ipp .c .s { padding: 0px 5px 2px 0px !important; }
+
+#wm-ipp td#displayMonthEl { padding: 2px 0px !important; }
+
+#wm-ipp td#displayYearEl { padding: 0px 0px 2px !important; }
+
+div#wm-ipp-sparkline { position: relative; white-space: nowrap; background-=
+color: rgb(255, 255, 255); cursor: pointer; line-height: 0.9; }
+
+#sparklineImgId, #wm-sparkline-canvas { position: relative; z-index: 9012; =
+max-width: none; }
+
+#wm-ipp-sparkline div.yt { position: absolute; top: 0px; z-index: 9010 !imp=
+ortant; background-color: rgb(255, 255, 0) !important; }
+
+#wm-ipp-sparkline div.mt { position: absolute; top: 0px; z-index: 9013 !imp=
+ortant; background-color: rgb(236, 0, 140) !important; }
+
+#wm-ipp .r { margin-left: 4px; }
+
+#wm-ipp .r a { color: rgb(51, 51, 255); border-width: medium; border-style:=
+ none; border-color: currentcolor; border-image: none; position: relative; =
+background-color: transparent; text-decoration: none; background-repeat: no=
+-repeat !important; background-position: 100% 100% !important; }
+
+#wm-ipp #wm-capinfo { border-radius: 0px 0px 4px 4px; }
+
+#wm-ipp #wm-capinfo .c-logo { display: block; float: left; margin-right: 3p=
+x; width: 90px; min-height: 90px; max-height: 290px; border-radius: 45px; o=
+verflow: hidden; background-position: 50% center; background-size: auto 90p=
+x; box-shadow: rgb(208, 208, 208) 0px 0px 2px 2px inset; }
+
+#wm-ipp #wm-capinfo .c-logo span { display: inline-block; }
+
+#wm-ipp #wm-capinfo .c-logo img { height: 90px; position: relative; left: -=
+50%; }
+
+#wm-ipp #wm-capinfo .wm-title { font-size: 130%; }
+
+#wm-ipp #wm-capinfo a.wm-selector { display: inline-block; color: rgb(170, =
+170, 170); padding: 2px 8px; text-decoration: none !important; }
+
+#wm-ipp #wm-capinfo a.wm-selector.selected { background-color: rgb(102, 102=
+, 102); }
+
+#wm-ipp #wm-capinfo a.wm-selector:hover { color: rgb(255, 255, 255); }
+
+#wm-ipp #wm-capinfo.notice-only #wm-capinfo-collected-by, #wm-ipp #wm-capin=
+fo.notice-only #wm-capinfo-timestamps { display: none; }
+
+#wm-ipp #wm-capinfo #wm-capinfo-notice .wm-capinfo-content { background-col=
+or: rgb(255, 255, 0); padding: 5px; font-size: 14px; text-align: center; }
+
+#wm-ipp #wm-capinfo #wm-capinfo-notice .wm-capinfo-content * { font-size: 1=
+4px; text-align: center; }
+
+#wm-ipp #wm-expand { right: 1px; bottom: -1px; color: rgb(255, 255, 255); b=
+ackground-color: rgb(102, 102, 102) !important; padding: 0px 5px 0px 3px !i=
+mportant; border-radius: 3px 3px 0px 0px !important; }
+
+#wm-ipp #wm-expand span { color: rgb(255, 255, 255); }
+
+#wm-ipp #wm-expand #wm-expand-icon { display: inline-block; transition: tra=
+nsform 0.5s; transform-origin: 50% 45%; }
+
+#wm-ipp #wm-expand.wm-open #wm-expand-icon { transform: rotate(180deg); }
+
+#wm-ipp #wmtb { text-align: right; }
+
+#wm-ipp #wmtb #wmtbURL { width: calc(100% - 45px); }
+
+#wm-ipp #wm-graph-anchor { border-right: 1px solid rgb(204, 204, 204); }
+
+html.wb-highlight { box-shadow: rgb(165, 14, 58) 0px 0px 0px 3px inset !imp=
+ortant; }
+
+.wb-highlight { outline: rgb(165, 14, 58) solid 3px !important; }
+
+#wm-ipp-print { display: none !important; }
+
+@media print {
+  #wm-ipp-base { display: none !important; }
+  #wm-ipp-print { white-space: nowrap; overflow: hidden; text-overflow: ell=
+ipsis; display: block !important; }
+}
+
+@media (max-width: 414px) {
+  #wm-ipp .xxs { display: none !important; }
+}
+
+@media (min-width: 1055px) {
+  #wm-ipp #wm-graph-anchor { display: block !important; }
+}
+
+@media (max-width: 1054px) {
+  #wm-ipp #wm-graph-anchor { display: none !important; }
+}
+
+@media (max-width: 1163px) {
+  #wm-logo { display: none !important; }
+}
+
+#wm-btns { white-space: nowrap; margin-top: -2px; }
+
+#wm-btns #wm-save-snapshot-open { margin-right: 7px; top: -6px; }
+
+#wm-btns #wm-sign-in { box-sizing: content-box; display: none; margin-right=
+: 7px; top: -8px; border: 2px solid rgb(0, 0, 0); border-radius: 14px; padd=
+ing-right: 2px; padding-bottom: 2px; width: 11px; height: 11px; }
+
+#wm-btns #wm-sign-in > .iconochive-person { font-size: 12.5px; }
+
+#wm-save-snapshot-open > .iconochive-web { color: rgb(0, 0, 0); font-size: =
+160%; }
+
+#wm-ipp #wm-share { display: flex; align-items: flex-end; justify-content: =
+space-between; }
+
+#wm-share > #wm-screenshot { display: inline-block; margin-right: 3px; visi=
+bility: hidden; }
+
+#wm-screenshot > .iconochive-image { color: rgb(0, 0, 0); font-size: 160%; =
+}
+
+#wm-share > #wm-video { display: inline-block; margin-right: 3px; visibilit=
+y: hidden; }
+
+#wm-video > .iconochive-movies { color: rgb(0, 0, 0); display: inline-block=
+; font-size: 150%; margin-bottom: 2px; }
+
+#wm-btns #wm-save-snapshot-in-progress { display: none; font-size: 160%; op=
+acity: 0.5; position: relative; margin-right: 7px; top: -5px; }
+
+#wm-btns #wm-save-snapshot-success { display: none; color: green; position:=
+ relative; top: -7px; }
+
+#wm-btns #wm-save-snapshot-fail { display: none; color: red; position: rela=
+tive; top: -7px; }
+
+.wm-icon-screen-shot { display: inline-block; background: url("../images/we=
+b-screenshot.svg") 0% 0% / contain no-repeat !important; width: 22px !impor=
+tant; height: 19px !important; }
+
+#donato { height: 0px; margin: 0px; padding: 0px; border-bottom: 1px solid =
+rgb(153, 153, 153) !important; }
+
+body.wm-modal { height: auto !important; overflow: hidden !important; }
+
+#donato #donato-base { width: 100%; height: 100%; margin: 0px; padding: 0px=
+; position: absolute; z-index: 2147483639; }
+
+body.wm-modal #donato #donato-base { position: fixed; inset: 0px; z-index: =
+2147483640; }
+
+.wb-autocomplete-suggestions { font-family: "Lucida Grande", Helvetica, Ari=
+al, sans-serif; font-size: 12px; text-align: left; cursor: default; border-=
+width: 0px 1px 1px; border-style: none solid solid; border-color: currentco=
+lor rgb(204, 204, 204) rgb(204, 204, 204); border-image: none; background: =
+rgb(255, 255, 255); box-shadow: rgba(0, 0, 0, 0.1) -1px 1px 3px; position: =
+absolute; display: none; z-index: 2147483647; max-height: 254px; overflow: =
+hidden auto; box-sizing: border-box; }
+
+.wb-autocomplete-suggestion { position: relative; padding: 0px 0.6em; line-=
+height: 23px; white-space: nowrap; overflow: hidden; text-overflow: ellipsi=
+s; font-size: 1.02em; color: rgb(51, 51, 51); }
+
+.wb-autocomplete-suggestion b { font-weight: bold; }
+
+.wb-autocomplete-suggestion.selected { background: rgb(240, 240, 240); }
+------MultipartBoundary--UiTcF3WeVzNO8xX1UeJ0ZRyBoLtWqFJjffCOuaJ0li----
+Content-Type: text/css
+Content-Transfer-Encoding: quoted-printable
+Content-Location: cid:css-c3b3f00b-c49c-4782-9bc5-57cf14801183@mhtml.blink
+
+@charset "utf-8";
+
+@media screen {
+  html { transition: -webkit-filter 300ms linear; }
+}
+------MultipartBoundary--UiTcF3WeVzNO8xX1UeJ0ZRyBoLtWqFJjffCOuaJ0li------
