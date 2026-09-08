@@ -167,23 +167,37 @@ def pipe_config(
     summary: Annotated[bool, typer.Option("--summary", help="print a report summary of the parameters")] = False,
     ):
     params = PipeConfig(None).defaults()
+    param_sources = dict.fromkeys(params, "default")
     global_configfile = str(Path(avica_pkg_dir) / "avica.inp")
-    params.update(PipeConfig(global_configfile).to_dict())
-    if summary and inpfile is None and outfile and Path(outfile).exists():
-        inpfile = outfile
+    global_params = PipeConfig(global_configfile).to_dict()
+    params.update(global_params)
+    param_sources.update(dict.fromkeys(global_params, "global"))
+
+    # Summaries use the same file precedence as pipe run. Writing a config
+    # remains scoped to its selected input, without importing user defaults.
+    if summary:
+        user_configfile = Path(avica_data_dir) / "avica.inp"
+        if user_configfile.exists():
+            user_params = PipeConfig(user_configfile).to_dict()
+            params.update(user_params)
+            param_sources.update(dict.fromkeys(user_params, "user"))
+
+    if not inpfile and not no_inpfile:
+        local_configfile = outfile if summary else (
+            "avica.inp" if not (global_default or default) else None
+        )
+        if local_configfile and Path(local_configfile).exists():
+            inpfile = local_configfile
     if inpfile:
         try:
-            params = PipeConfig(inpfile).to_dict()
+            input_params = PipeConfig(inpfile).to_dict()
         except Exception as e:
             raise typer.BadParameter(f"Failed to read config file '{inpfile}': {e}") from e
-
-    else:
-        if (Path("avica.inp").exists() and not no_inpfile) and not (global_default or default):
-            inpfile = "avica.inp"
-            try:
-                params = PipeConfig(inpfile).to_dict()
-            except Exception as e:
-                raise typer.BadParameter(f"Failed to read config file '{inpfile}'\n use --no-inpfile to disable reading from avica.inp:\n {e}") from e
+        if summary:
+            params.update(input_params)
+        else:
+            params = input_params
+        param_sources.update(dict.fromkeys(input_params, "inpfile"))
 
     if data:
         for item in data:
@@ -191,12 +205,19 @@ def pipe_config(
                 raise typer.BadParameter(f"Invalid key=value format: '{item}' (missing '=')")
             key, value = item.split("=", 1)
             params[key] = value
+            param_sources[key] = "cli"
+
+    source_colours = {
+        "default": "yellow", "global": "yellow", "user": "cyan",
+        "inpfile": "green", "cli": "magenta",
+    }
 
     def parameter_source(status) -> tuple[str, str, Any]:
         if status.in_input_config:
-            if getattr(status, "input_name", status.name) != status.name:
-                return "inpfile/step", "green", status.value
-            return "inpfile/core", "green", status.value
+            input_name = getattr(status, "input_name", status.name)
+            origin = param_sources.get(input_name, "inpfile")
+            scope = "step" if input_name != status.name else "core"
+            return f"{origin}/{scope}", source_colours[origin], status.value
         if status.in_context:
             return "context", "cyan", status.value
         if status.has_default:
@@ -245,23 +266,16 @@ def pipe_config(
 
         first_row = True
         core_defaults = PipeConfig(None).defaults(all=True)
-        core_global = PipeConfig(global_configfile).to_dict() if global_configfile else {}
-        core_input = PipeConfig(inpfile).to_dict() if inpfile else {}
 
         for param, value in main_pipeline.pipe_params.items():
             if param in reported_params:
                 continue
 
-            core_default = param in core_defaults
-            core_inpfile = param in core_input and core_default
-
-            if core_inpfile:
-                source = "inpfile/core"
-                style = "green"
-            elif param in core_global:
-                source = "global/core"
-                style = "yellow"
-            elif core_default:
+            if param in param_sources:
+                origin = param_sources[param]
+                source = f"{origin}/core"
+                style = source_colours[origin]
+            elif param in core_defaults:
                 source = "default/core"
                 style = "yellow"
             else:

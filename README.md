@@ -239,13 +239,13 @@ picard_input_template_update   =   "path/to/folder/with/fixed/inp/files"
 
 #### Parameter summary
 
-Use `--summary` to print a report of every pipeline parameter, its resolved value, and where that value came from (`inpfile`, `default`, `context`, or a per-step override):
+Use `--summary` to print a report of every pipeline parameter, its resolved value, and where that value came from (`global`, `user`, `inpfile`, `cli`, built-in `default`, or runtime `context`). The `/core` and `/step` suffixes distinguish general parameters from step-specific overrides:
 
 ```bash
 avica pipe config --summary --inpfile <path/to/avica.inp>
 ```
 
-If `--inpfile` is omitted and `avica.inp` exists in the current directory, it's read automatically. Combine `--summary` with `key=value` overrides on the command line to preview how they would change the resolved configuration before writing it out.
+The summary overlays the installed global `avica.inp`, then `~/.avica/avica.inp`, then the local `avica.inp` (or an explicit `--inpfile`), with command-line `key=value` overrides applied last. Later layers override matching keys and preserve other settings. `--no-inpfile` skips automatic local-file discovery; an explicit `--inpfile` is still used. Summaries do not write configuration files.
 
 #### Cleaning up intermediate data
 
