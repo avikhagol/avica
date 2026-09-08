@@ -41,8 +41,10 @@ Use [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-inst
 
 [`install.sh`](install.sh) installs AVICA plus the rPICARD/CASA pipeline and
 plotting dependencies from the Docker setup on **x86-64 Ubuntu 22.04+/Debian 12+**
-or compatible derivatives. Run it as your normal user; it uses `sudo` for apt
-packages and installs Python tools in isolated environments using
+or compatible derivatives. By default, it only checks system packages, lists
+missing ones, and continues without running apt or requesting sudo. Missing
+dependencies may cause errors when running AVICA, CASA, or plotting tools. It
+installs Python tools in isolated environments using
 [uv](https://docs.astral.sh/uv/guides/tools/).
 
 Once `install.sh` is published on this repository's `main` branch:
@@ -53,6 +55,26 @@ bash install.sh
 source "$HOME/.local/share/avica-stack/env.sh"
 avica --help
 ```
+
+To install system packages as well, explicitly run:
+
+```bash
+sudo bash install.sh
+```
+
+This runs apt as root, then continues the AVICA/pipeline installation as the
+user who invoked sudo, using that user's home directory. If apt fails, it still
+continues with dependency checks and warnings. `--skip-apt` keeps the check-only
+behavior even under sudo. Direct installation as the root user is not supported.
+
+Package checks use the dpkg database; dependencies supplied outside apt may
+already be usable even when their package names are listed as missing. The
+installer prints a command an administrator can use to install the missing
+packages. It must still stop if a command needed to perform the installation
+itself is unavailable (for example, curl when uv needs to be downloaded).
+If rsync is missing, it skips CASA reference data with a warning. AVICA startup
+or configuration errors are reported as warnings so the remaining setup can
+continue; rerun after resolving them to finish configuration.
 
 You can also run a local checkout with `bash install.sh`. The full installation
 clones rPICARD, downloads the CASA version specified in that clone's README,
@@ -74,7 +96,8 @@ bash install.sh --help
 bash install.sh --avica-only                     # No CASA/rPICARD/plotting downloads
 bash install.sh --casa-dir /path/to/matching/casa # Reuse the CASA version rPICARD needs
 bash install.sh --prefix "$HOME/avica-stack"      # Choose the pipeline directory
-bash install.sh --skip-apt --no-shell             # Admin prepared packages; no bashrc edit
+bash install.sh --no-shell                       # Check packages; no bashrc edit
+sudo bash install.sh --skip-apt                  # Check packages even under sudo
 ```
 
 `--skip-casa-data` omits reference data synchronization when it is already

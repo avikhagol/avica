@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install AVICA and the rPICARD/CASA stack from dockerfiles/default/Dockerfile.
-# Run as your normal user; only apt commands use sudo.
+# Normal runs only check system packages. Use sudo to install apt packages first.
 set -Eeuo pipefail
 
 usage() {
@@ -9,13 +9,17 @@ Usage: bash install.sh [options]
 
 Install AVICA, rPICARD, its matching CASA build, jiveplot, and CASA data.
 Requires x86-64 Ubuntu 22.04+/Debian 12+ (or a compatible derivative),
-sudo access for apt, an internet connection, and several GB of free disk space.
+an internet connection, and several GB of free disk space.
+
+By default, only check system packages and warn about missing dependencies.
+To install system packages too, run: sudo bash install.sh [options]
+The sudo run then installs AVICA and the pipeline as the invoking user.
 
 Options:
   --prefix DIR       Pipeline directory (default: ~/.local/share/avica-stack)
   --casa-dir DIR     Reuse an existing matching CASA directory containing bin/casa
   --avica-only       Install only AVICA and its dependencies
-  --skip-apt         System dependencies have already been installed by an admin
+  --skip-apt         Only check system packages, even when running with sudo
   --skip-casa-data   Skip CASA reference data synchronization
   --no-shell        Do not add the environment file to ~/.bashrc
   -h, --help         Show this help without changing anything
@@ -31,6 +35,7 @@ HELP
 }
 
 log() { printf '\n==> %s\n' "$*"; }
+warn() { printf '\nWarning: %s\n' "$*" >&2; }
 die() { printf '\nError: %s\n' "$*" >&2; exit 1; }
 
 download() {
@@ -41,6 +46,8 @@ download() {
 main() {
     local prefix="${HOME:?HOME must be set}/.local/share/avica-stack"
     local casa_dir='' avica_only=0 skip_apt=0 skip_data=0 no_shell=0
+    local -a original_args=("$@")
+    local warnings=0 script_path=''
     local arg
     while (( $# )); do
         case "$1" in
@@ -60,13 +67,21 @@ main() {
 
     [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] ||
         die 'This installer requires x86-64 Linux. Use Docker on other platforms.'
-    (( EUID != 0 )) || die 'Run as your normal user, without sudo; apt will request sudo when needed.'
+    if (( EUID == 0 )); then
+        [[ -n ${SUDO_USER:-} && $SUDO_USER != root ]] ||
+            die 'Use sudo bash install.sh from a regular user account so AVICA is installed for that user.'
+        local invoking_uid
+        invoking_uid=$(id -u -- "$SUDO_USER") || die 'Cannot identify the invoking user.'
+        [[ $invoking_uid != 0 ]] || die 'The invoking user must not be root.'
+        [[ -f ${BASH_SOURCE[0]:-} ]] || die 'For sudo installation, download install.sh to a file first.'
+        script_path=$(realpath "${BASH_SOURCE[0]}")
+    fi
     [[ -r /etc/os-release ]] || die 'Cannot identify this Linux distribution.'
     # shellcheck disable=SC1091
     . /etc/os-release
     case " ${ID:-} ${ID_LIKE:-} " in
         *ubuntu*|*debian*|*linuxmint*) ;;
-        *) die 'This installer uses apt and requires Ubuntu/Debian or a compatible derivative.' ;;
+        *) die 'This installer requires Ubuntu/Debian or a compatible derivative.' ;;
     esac
     # Upstream rPICARD builds unquoted shell commands using these paths.
     [[ $prefix =~ ^/[a-zA-Z0-9_./+-]+$ && $prefix != / ]] ||
@@ -78,32 +93,74 @@ main() {
         [[ $casa_dir =~ ^/[a-zA-Z0-9_./+-]+$ ]] || die 'The resolved --casa-dir path is unsupported.'
     fi
 
-    if (( ! skip_apt )); then
-        command -v sudo >/dev/null || die 'sudo is required; ask an admin to install dependencies and use --skip-apt.'
-        local -a packages=(ca-certificates curl git build-essential cmake pkg-config
-            python3 python3-tk)
-        if (( ! avica_only )); then
-            packages+=(xz-utils rsync perl openssh-client locales
-                python3-matplotlib python3-six
-                libfreetype6 libsm6 libxi6 libxrender1 libxrandr2 libxfixes3
-                libxcursor1 libxinerama1 libfontconfig1 libxslt1.1
-                libgl1 libglu1-mesa libx11-6 libxcb-xinerama0 libxkbcommon-x11-0
-                libgfortran5 libnsl2 xauth xvfb dbus-x11)
-        fi
-        log 'Installing system dependencies (sudo may ask for your password)'
-        sudo -v
-        sudo apt-get update </dev/null
-        sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${packages[@]}" </dev/null
-    fi
-    local cmd
-    for cmd in curl git python3; do
-        command -v "$cmd" >/dev/null || die "Missing command: $cmd. Install system dependencies first."
-    done
+    local -a packages=(ca-certificates curl git build-essential cmake pkg-config
+        python3 python3-tk)
     if (( ! avica_only )); then
-        for cmd in tar xz rsync perl; do
-            command -v "$cmd" >/dev/null || die "Missing command: $cmd. Install system dependencies first."
-        done
+        packages+=(xz-utils rsync perl openssh-client locales
+            python3-matplotlib python3-six
+            libfreetype6 libsm6 libxi6 libxrender1 libxrandr2 libxfixes3
+            libxcursor1 libxinerama1 libfontconfig1 libxslt1.1
+            libgl1 libglu1-mesa libx11-6 libxcb-xinerama0 libxkbcommon-x11-0
+            libgfortran5 libnsl2 xauth xvfb dbus-x11)
     fi
+    if (( EUID == 0 )); then
+        if (( ! skip_apt )); then
+            log 'Installing system dependencies as root'
+            if ! apt-get update </dev/null; then
+                warn 'apt-get update failed; trying the available package lists.'
+            fi
+            if ! env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${packages[@]}" </dev/null; then
+                warn 'System package installation failed. Continuing as the invoking user and checking missing dependencies.'
+            fi
+        fi
+        log "Continuing the user installation as $SUDO_USER"
+        # sudo supplies the user's home; never install Python tools into root's home.
+        exec sudo -H -u "$SUDO_USER" -- env \
+            AVICA_VERSION="${AVICA_VERSION:-}" PICARD_REF="${PICARD_REF:-master}" CASA_URL="${CASA_URL:-}" \
+            bash "$script_path" --skip-apt "${original_args[@]}"
+    fi
+
+    log 'Checking system dependencies (no apt commands will be run)'
+    local package
+    local -a missing_packages=()
+    if command -v dpkg-query >/dev/null; then
+        for package in "${packages[@]}"; do
+            if [[ $(dpkg-query -W -f='${Status}' "$package" 2>/dev/null) != 'install ok installed' ]]; then
+                missing_packages+=("$package")
+            fi
+        done
+        if (( ${#missing_packages[@]} )); then
+            warnings=1
+            warn 'These system packages are not reported as installed:'
+            printf '  %s\n' "${missing_packages[@]}" >&2
+            warn 'Continuing without apt. Missing dependencies may cause errors when executing AVICA, CASA, or plotting tools.'
+            printf '\nAsk an administrator to install the missing packages:\n  sudo apt-get install --no-install-recommends' >&2
+            printf ' %q' "${missing_packages[@]}" >&2
+            printf '\n' >&2
+        else
+            log 'All listed system packages are installed'
+        fi
+    else
+        warnings=1
+        warn 'dpkg-query is unavailable; cannot verify system packages. Continuing, but AVICA/CASA may encounter missing dependencies.'
+    fi
+
+    export PATH="$HOME/.local/bin:$PATH"
+    local cmd
+    local -a installer_commands=()
+    command -v uv >/dev/null || installer_commands+=(curl)
+    if (( ! avica_only )); then
+        installer_commands+=(git python3)
+        [[ -n $casa_dir ]] || installer_commands+=(curl tar xz)
+        if (( ! skip_data )) && ! command -v rsync >/dev/null; then
+            warnings=1
+            skip_data=1
+            warn 'rsync is unavailable; skipping CASA reference data. Install rsync and synchronize the data before processing observations.'
+        fi
+    fi
+    for cmd in "${installer_commands[@]}"; do
+        command -v "$cmd" >/dev/null || die "Missing installer command: $cmd. It is needed to perform this installation; ask an administrator to provide it. No apt commands were run."
+    done
 
     mkdir -p "$prefix" "$HOME/.local/bin"
     prefix=$(realpath "$prefix")
@@ -113,7 +170,6 @@ main() {
     # This directory is created by this run; keep downloaded CASA archives separately.
     trap 'rm -rf -- "$scratch"' EXIT
     trap 'printf "\nInstallation failed at line %s. Fix the error above and rerun.\n" "$LINENO" >&2' ERR
-    export PATH="$HOME/.local/bin:$PATH"
     if ! command -v uv >/dev/null; then
         log 'Installing uv'
         download https://astral.sh/uv/install.sh -o "$scratch/uv-install.sh"
@@ -126,7 +182,11 @@ main() {
     uv tool install --python 3.10 --managed-python "$avica_spec" </dev/null
     tool_bin=$(uv tool dir --bin)
     export PATH="$tool_bin:$PATH"
-    "$tool_bin/avica" --help >/dev/null
+    if ! "$tool_bin/avica" --help > "$scratch/avica-check.log" 2>&1; then
+        warnings=1
+        warn 'AVICA was installed but its startup check failed. It may need missing system dependencies before it can run:'
+        cat "$scratch/avica-check.log" >&2
+    fi
     # Preserve a previous full environment if a later step fails on a rerun.
     if [[ ! -f $prefix/env.sh ]]; then
         # shellcheck disable=SC2016
@@ -201,8 +261,11 @@ main() {
             cp --backup=numbered -p "$HOME/.avica/avica.inp" "$HOME/.avica/avica.inp.before-install"
             config_args+=(--inpfile "$HOME/.avica/avica.inp")
         fi
-        "$tool_bin/avica" "${config_args[@]}" "casadir=$casa_dir/" \
-            "picard_input_template=$picard_dir/input_template/" </dev/null
+        if ! "$tool_bin/avica" "${config_args[@]}" "casadir=$casa_dir/" \
+            "picard_input_template=$picard_dir/input_template/" </dev/null; then
+            warnings=1
+            warn 'Could not save AVICA pipeline settings. Resolve its runtime errors and rerun this installer to finish configuration.'
+        fi
         {
             # Expand PATH/PYTHONPATH when sourcing the generated file.
             # shellcheck disable=SC2016
@@ -219,7 +282,10 @@ main() {
             printf '\n# AVICA environment\n%s\n' "$source_line" >> "$HOME/.bashrc"
         fi
     fi
-    log 'Installation complete. Enable the commands in your current Bash session:'
+    if (( warnings )); then
+        warn 'Installation finished with dependency or runtime warnings. AVICA or pipeline features may fail until the issues above are resolved.'
+    fi
+    log 'Installation finished. Enable the commands in your current Bash session:'
     printf '  source %q\n  avica --help\n' "$prefix/env.sh"
     if (( ! avica_only )); then
         printf '\nCASA: %s\nrPICARD: %s\n' "$casa_dir" "$picard_dir"
