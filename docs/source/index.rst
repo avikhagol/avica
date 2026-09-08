@@ -26,6 +26,7 @@ visibilities.
    pipeline
    api
    examples
+   misc
 
 Installation
 ------------
