@@ -7,12 +7,13 @@ antenna temperatures, and baseline-dependent amplitude corrections.  AIPS
 writes these data to GC, TY, and BL tables; ``APCAL`` can then create an SN
 table, which is normally applied with ``CLCAL``.
 
-This page summarizes the
-:download:`AIPS ANTAB help for 31DEC26
-<../_static/html/AIPS_HELP_file_version31DEC26_for_ANTAB.html>`.
-For official documentation, see the `AIPS ANTAB help page <https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?ANTAB>`_.
-
 .. warning::
+    This page summarizes the
+    :download:`AIPS ANTAB help for 31DEC26
+    <../_static/html/AIPS_HELP_file_version31DEC26_for_ANTAB.html>`.
+    For official documentation, see the `AIPS ANTAB help page <https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?ANTAB>`_.
+
+.. note::
 
    Do not blindly use VLBA ``*cal.vlba`` files dated between 2014-01-31 and
    2015-10-19 for RDBE/MARK5C observations.  Those files describe the legacy
@@ -244,43 +245,3 @@ For example::
 be measured across a wider bandwidth, map them to all applicable IFs with
 ``INDEX`` and ``INDEX2``.  Negative values and ``999.9`` are treated as
 undefined.  Invalid timestamps are errors.
-
-Running AIPS ANTAB
-------------------
-
-The input UV data must be an AIPS multi-source file with an NX table.  Run
-ANTAB once for each subarray and, where applicable, before ``USUBA`` so that
-the correct subarray is attached to each TY and GC record.
-
-The principal AIPS adverbs are:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 22 78
-
-   * - Adverb
-     - Purpose
-   * - ``INNAME``, ``INCLASS``, ``INSEQ``, ``INDISK``
-     - Select the input UV data set.
-   * - ``CALIN``
-     - Select the calibration text file, for example ``FITS:ANTAB.CAL``.
-   * - ``SUBARRAY``
-     - Select the subarray; zero means subarray 1.
-   * - ``TYVER``, ``GCVER``, ``BLVER``
-     - Select the output table versions; zero means the highest version.
-   * - ``SPARM``
-     - List station names in the calibration file that ANTAB should ignore.
-   * - ``PRTLEV``
-     - A positive value echoes input lines to aid format-error diagnosis.
-   * - ``OFFSET``
-     - Extend both sides of each scan by this many minutes when matching
-       off-scan measurements.  Leave it zero for VLBA and VLA data.
-
-If a calibration file includes an antenna absent from the data, ANTAB can
-report ``UNKNOWN PARAMETER`` while reading the KEYIN file.  First run with an
-empty ``SPARM`` to identify the offending records, then add only the station
-names that should intentionally be skipped.
-
-When ``FITLD`` splits an observation into data sets with incompatible modes,
-such as different IF or polarization counts, split the calibration file by
-mode as well and process each file separately with ``VLOG`` before ANTAB.
