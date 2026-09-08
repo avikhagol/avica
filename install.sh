@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install AVICA and the rPICARD/CASA stack from dockerfiles/default/Dockerfile.
-# Normal runs only check system packages. Use sudo to install apt packages first.
+# System package installation is experimental and requires explicit opt-in.
 set -Eeuo pipefail
 
 usage() {
@@ -8,18 +8,20 @@ usage() {
 Usage: bash install.sh [options]
 
 Install AVICA, rPICARD, its matching CASA build, jiveplot, and CASA data.
-Requires x86-64 Ubuntu 22.04+/Debian 12+ (or a compatible derivative),
-an internet connection, and several GB of free disk space.
+Requires x86-64 Linux, an internet connection, and several GB of free disk space.
 
 By default, only check system packages and warn about missing dependencies.
-To install system packages too, run: sudo bash install.sh [options]
-The sudo run then installs AVICA and the pipeline as the invoking user.
+Running with sudo alone does NOT enable system package installation.
+Experimental apt support (Ubuntu/Debian only) is enabled explicitly with:
+  sudo bash install.sh --experimental-apt [options]
+Sudo runs install AVICA and the pipeline as the invoking user.
 
 Options:
   --prefix DIR       Pipeline directory (default: ~/.local/share/avica-stack)
   --casa-dir DIR     Reuse an existing matching CASA directory containing bin/casa
   --avica-only       Install only AVICA and its dependencies
-  --skip-apt         Only check system packages, even when running with sudo
+  --experimental-apt Try apt installation (experimental; requires sudo and Debian/Ubuntu)
+  --skip-apt         Disable apt, overriding --experimental-apt (default behavior)
   --skip-casa-data   Skip CASA reference data synchronization
   --no-shell        Do not add the environment file to ~/.bashrc
   -h, --help         Show this help without changing anything
@@ -45,7 +47,7 @@ download() {
 
 main() {
     local prefix="${HOME:?HOME must be set}/.local/share/avica-stack"
-    local casa_dir='' avica_only=0 skip_apt=0 skip_data=0 no_shell=0
+    local casa_dir='' avica_only=0 skip_apt=0 experimental_apt=0 skip_data=0 no_shell=0
     local -a original_args=("$@")
     local warnings=0 script_path=''
     local arg
@@ -57,6 +59,7 @@ main() {
                 if [[ $arg == --prefix ]]; then prefix=$2; else casa_dir=$2; fi
                 shift 2 ;;
             --avica-only) avica_only=1; shift ;;
+            --experimental-apt) experimental_apt=1; shift ;;
             --skip-apt) skip_apt=1; shift ;;
             --skip-casa-data) skip_data=1; shift ;;
             --no-shell) no_shell=1; shift ;;
@@ -76,13 +79,16 @@ main() {
         [[ -f ${BASH_SOURCE[0]:-} ]] || die 'For sudo installation, download install.sh to a file first.'
         script_path=$(realpath "${BASH_SOURCE[0]}")
     fi
-    [[ -r /etc/os-release ]] || die 'Cannot identify this Linux distribution.'
-    # shellcheck disable=SC1091
-    . /etc/os-release
-    case " ${ID:-} ${ID_LIKE:-} " in
-        *ubuntu*|*debian*|*linuxmint*) ;;
-        *) die 'This installer requires Ubuntu/Debian or a compatible derivative.' ;;
-    esac
+    local debian_family=0 distro_name='unidentified Linux'
+    local ID='' ID_LIKE='' PRETTY_NAME=''
+    if [[ -r /etc/os-release ]]; then
+        # shellcheck disable=SC1091
+        . /etc/os-release
+        distro_name=${PRETTY_NAME:-${ID:-Linux}}
+        case " $ID $ID_LIKE " in
+            *' ubuntu '*|*' debian '*|*' linuxmint '*) debian_family=1 ;;
+        esac
+    fi
     # Upstream rPICARD builds unquoted shell commands using these paths.
     [[ $prefix =~ ^/[a-zA-Z0-9_./+-]+$ && $prefix != / ]] ||
         die '--prefix must be an absolute path without spaces or shell metacharacters.'
@@ -104,13 +110,18 @@ main() {
             libgfortran5 libnsl2 xauth xvfb dbus-x11)
     fi
     if (( EUID == 0 )); then
-        if (( ! skip_apt )); then
-            log 'Installing system dependencies as root'
-            if ! apt-get update </dev/null; then
-                warn 'apt-get update failed; trying the available package lists.'
-            fi
-            if ! env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${packages[@]}" </dev/null; then
-                warn 'System package installation failed. Continuing as the invoking user and checking missing dependencies.'
+        if (( experimental_apt && ! skip_apt )); then
+            if (( debian_family )) && command -v apt-get >/dev/null; then
+                warn 'Experimental apt installation enabled. The package list may not cover every distribution/version.'
+                log 'Installing system dependencies as root'
+                if ! apt-get update </dev/null; then
+                    warn 'apt-get update failed; trying the available package lists.'
+                fi
+                if ! env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${packages[@]}" </dev/null; then
+                    warn 'System package installation failed. Continuing as the invoking user and checking missing dependencies.'
+                fi
+            else
+                warn "Experimental apt installation is unavailable on $distro_name. Continuing without installing system packages."
             fi
         fi
         log "Continuing the user installation as $SUDO_USER"
@@ -119,11 +130,16 @@ main() {
             AVICA_VERSION="${AVICA_VERSION:-}" PICARD_REF="${PICARD_REF:-master}" CASA_URL="${CASA_URL:-}" \
             bash "$script_path" --skip-apt "${original_args[@]}"
     fi
+    if (( experimental_apt && ! skip_apt )); then
+        warnings=1
+        warn 'Experimental apt installation requires sudo; skipping it. To opt in, use sudo bash install.sh --experimental-apt.'
+    fi
 
+    export PATH="$HOME/.local/bin:$PATH"
     log 'Checking system dependencies (no apt commands will be run)'
-    local package
+    local package cmd
     local -a missing_packages=()
-    if command -v dpkg-query >/dev/null; then
+    if (( debian_family )) && command -v dpkg-query >/dev/null; then
         for package in "${packages[@]}"; do
             if [[ $(dpkg-query -W -f='${Status}' "$package" 2>/dev/null) != 'install ok installed' ]]; then
                 missing_packages+=("$package")
@@ -142,11 +158,43 @@ main() {
         fi
     else
         warnings=1
-        warn 'dpkg-query is unavailable; cannot verify system packages. Continuing, but AVICA/CASA may encounter missing dependencies.'
+        warn "Package-name checks are unavailable on $distro_name. Checking commands and shared libraries instead; runtime compatibility is not guaranteed."
+        local -a check_commands=(curl git cc c++ make cmake pkg-config python3)
+        local -a libraries=(libstdc++.so.6 libgcc_s.so.1)
+        if (( ! avica_only )); then
+            check_commands+=(tar xz rsync perl ssh locale xauth Xvfb dbus-launch)
+            libraries+=(libfreetype.so.6 libSM.so.6 libXi.so.6 libXrender.so.1
+                libXrandr.so.2 libXfixes.so.3 libXcursor.so.1 libXinerama.so.1
+                libfontconfig.so.1 libxslt.so.1 libGL.so.1 libGLU.so.1 libX11.so.6
+                libxcb-xinerama.so.0 libxkbcommon-x11.so.0 libgfortran.so.5 libnsl.so.2)
+        fi
+        local -a missing_commands=() missing_libraries=()
+        for cmd in "${check_commands[@]}"; do
+            command -v "$cmd" >/dev/null || missing_commands+=("$cmd")
+        done
+        if (( ${#missing_commands[@]} )); then
+            warn 'Dependency commands not found in PATH:'
+            printf '  %s\n' "${missing_commands[@]}" >&2
+        fi
+        local linker_cache='' linker_cmd='' library
+        linker_cmd=$(command -v ldconfig || true)
+        [[ -n $linker_cmd || ! -x /sbin/ldconfig ]] || linker_cmd=/sbin/ldconfig
+        if [[ -n $linker_cmd ]] && linker_cache=$("$linker_cmd" -p 2>/dev/null); then
+            for library in "${libraries[@]}"; do
+                if ! awk -v lib="$library" '$1 == lib {found=1} END {exit !found}' <<< "$linker_cache"; then
+                    missing_libraries+=("$library")
+                fi
+            done
+            if (( ${#missing_libraries[@]} )); then
+                warn 'Shared libraries not found in the system linker cache (they may be supplied by environment modules or custom library paths):'
+                printf '  %s\n' "${missing_libraries[@]}" >&2
+            fi
+        else
+            warn 'Cannot inspect the system linker cache; shared-library dependencies could not be checked.'
+        fi
+        warn 'Continuing without installing system packages. Ask an administrator to provide missing dependencies for your distribution; AVICA/CASA or plotting may fail until they are available.'
     fi
 
-    export PATH="$HOME/.local/bin:$PATH"
-    local cmd
     local -a installer_commands=()
     command -v uv >/dev/null || installer_commands+=(curl)
     if (( ! avica_only )); then

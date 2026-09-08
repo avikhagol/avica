@@ -40,8 +40,8 @@ Use [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-inst
 ### Full installation script
 
 [`install.sh`](install.sh) installs AVICA plus the rPICARD/CASA pipeline and
-plotting dependencies from the Docker setup on **x86-64 Ubuntu 22.04+/Debian 12+**
-or compatible derivatives. By default, it only checks system packages, lists
+plotting dependencies from the Docker setup on **x86-64 Linux**.
+By default, it only checks system dependencies, lists
 missing ones, and continues without running apt or requesting sudo. Missing
 dependencies may cause errors when running AVICA, CASA, or plotting tools. It
 installs Python tools in isolated environments using
@@ -56,21 +56,27 @@ source "$HOME/.local/share/avica-stack/env.sh"
 avica --help
 ```
 
-To install system packages as well, explicitly run:
+Automatic system package installation is **experimental**, limited to
+Ubuntu/Debian and compatible derivatives with apt. To opt in explicitly:
 
 ```bash
-sudo bash install.sh
+sudo bash install.sh --experimental-apt
 ```
 
-This runs apt as root, then continues the AVICA/pipeline installation as the
-user who invoked sudo, using that user's home directory. If apt fails, it still
-continues with dependency checks and warnings. `--skip-apt` keeps the check-only
-behavior even under sudo. Direct installation as the root user is not supported.
+Running `sudo bash install.sh` alone does **not** enable apt. The experimental
+flag runs apt as root only on a recognized Debian/Ubuntu system, then continues
+the AVICA/pipeline installation as the user who invoked sudo, using that user's
+home directory. If apt is unavailable or fails, it continues with warnings.
+`--skip-apt` overrides `--experimental-apt`. Direct installation as the root user
+is not supported.
 
-Package checks use the dpkg database; dependencies supplied outside apt may
-already be usable even when their package names are listed as missing. The
-installer prints a command an administrator can use to install the missing
-packages. It must still stop if a command needed to perform the installation
+On Debian/Ubuntu, package checks use the dpkg database and print a command an
+administrator can use to install missing packages. On other distributions (or
+when dpkg is unavailable), the installer checks commands in PATH and shared
+libraries in the system linker cache, and continues with warnings. Dependencies
+provided by environment modules or custom library paths may already be usable.
+These checks do not guarantee runtime compatibility on every Linux distribution.
+The installer must still stop if a command needed to perform the installation
 itself is unavailable (for example, curl when uv needs to be downloaded).
 If rsync is missing, it skips CASA reference data with a warning. AVICA startup
 or configuration errors are reported as warnings so the remaining setup can
@@ -97,7 +103,7 @@ bash install.sh --avica-only                     # No CASA/rPICARD/plotting down
 bash install.sh --casa-dir /path/to/matching/casa # Reuse the CASA version rPICARD needs
 bash install.sh --prefix "$HOME/avica-stack"      # Choose the pipeline directory
 bash install.sh --no-shell                       # Check packages; no bashrc edit
-sudo bash install.sh --skip-apt                  # Check packages even under sudo
+sudo bash install.sh --experimental-apt          # Experimental: try apt on Debian/Ubuntu
 ```
 
 `--skip-casa-data` omits reference data synchronization when it is already
