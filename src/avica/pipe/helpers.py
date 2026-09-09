@@ -393,7 +393,7 @@ def fill_input_byvalues(wd_ifolder, iwd_b, vis, target,flux_thres, n_calib,  cal
 
         refants_d['array_type']             =   get_antenna_name(vis)
 
-        if get_reffreq(vis)/1e9>=hi_freq_ref and has_table(vis, "WEATHER") and (has_table(vis, "SYSCAL") or has_table(vis, "SYSTEM_TEMPERATURE")):
+        if get_reffreq(vis) / 1e9 >= hi_freq_ref and all(has_table(vis, "WEATHER")) and (any(has_table(vis, "SYSCAL")) or any(has_table(vis, "SYSTEM_TEMPERATURE"))):
             if "VLBA" in refants_d['array_type']:
                 refants_d['array_type']         =   refants_d['array_type'] + 'hi'
         if sci_solints and "auto" in sci_solints:
