@@ -107,3 +107,62 @@ Calibration
 
   - The final split MS data is used for the calibration.
   - The calibration is performed using the rPicard framework.
+
+Reading Pipeline Results
+------------------------
+
+After ``avica pipe run`` completes (or is interrupted), a result CSV is written
+to ``reductions/<target>_result.csv``.  The ``avica pipe result`` command
+renders that file in several layouts.
+
+.. code-block:: bash
+
+   # Default: progress ladder — one row per step, with status, counts,
+   # duration, and condensed failure notes
+   avica pipe result --target J1234+5678
+
+   # Suppress the full failure detail panels below the table
+   avica pipe result --target J1234+5678 --no-detail
+
+   # Compact one-liner for scripts and CI
+   avica pipe result --target J1234+5678 --oneline
+
+   # Full run history: every retry of every step
+   avica pipe result --target J1234+5678 --history
+
+   # Exit non-zero when any step has not fully succeeded
+   avica pipe result --target J1234+5678 --check
+
+   # Pass the CSV path directly, skipping config lookup
+   avica pipe result --csvfile reductions/J1234+5678_result.csv
+
+Step Status
+~~~~~~~~~~~
+
+Each step is classified into one of four statuses:
+
+.. list-table::
+   :widths: 15 85
+   :header-rows: 1
+
+   * - Status
+     - Meaning
+   * - ``ok``
+     - All items processed successfully (``success_count > 0``, ``failed_count == 0``)
+   * - ``partial``
+     - Some items succeeded and some failed — pipeline considers this step incomplete
+   * - ``failed``
+     - No items succeeded (``failed_count > 0``, ``success_count == 0``)
+   * - ``pending``
+     - Step has not been attempted yet
+
+The result CSV is **append-only**: re-running a step appends a new row rather
+than overwriting.  The default ladder view collapses to the most recent attempt
+per step; ``--history`` shows all attempts.  The resume command printed in the
+footer,
+
+.. code-block:: bash
+
+   avica pipe run --resume-from <step>
+
+starts from the first step that has not yet achieved ``ok`` status.

@@ -1,10 +1,19 @@
 # Changelog
 
+## [0.3.1.11]
+
+### Added
+- `avica pipe result` renders a pipeline run from its result CSV: a progress ladder by default, plus `--history` (every attempt of every step), `--oneline` (a single status line for scripts and CI), `--no-detail` (suppress failure panels), `--check` (exit non-zero unless every step succeeded), and `--csvfile` (read a CSV path directly, skipping config lookup).
+### Fixed
+- Reference frequency was compared against the VLBA-to-VLBAhi threshold without converting to GHz, so antennas were misclassified when deciding the `array_type`.
+- A FITS-IDI validation check returned a single result instead of a list for one sub-table, breaking callers that expected a list of `ValidationResult`.
+
 ## [0.3.1.10]
 
 ### Added
 - `avica pipe config --summary` also shows the source of global parameter other thaninpfile, default or core.
 
+[0.3.1.11] : https://github.com/avikhagol/avica/compare/v0.3.1.10...v0.3.1.11
 [0.3.1.10] : https://github.com/avikhagol/avica/compare/v0.3.1.9...v0.3.1.10
 [0.3.1.9] : https://github.com/avikhagol/avica/compare/v0.3.1.8...v0.3.1.9
 [0.3.1.8] : https://github.com/avikhagol/avica/compare/v0.3.1.7...v0.3.1.8

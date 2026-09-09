@@ -82,6 +82,44 @@ def _infer_resume_step(csvfile, ordered_steps):
     return ordered_steps[next_idx] if next_idx < len(ordered_steps) else None
 
 
+def _resolve_pipe_params(target="", configfile="avica.inp",
+                         default_configfile="avica.inp", fitsfilenames=""):
+    """
+    Layer configuration the way `pipe run` does, so that a target's result CSV
+    is looked for in the same place it was written to: built-in defaults, then
+    the installed global avica.inp, then ~/.avica/avica.inp, then the local
+    config file.  `target` is applied last, since it names the CSV.
+    """
+    global_configfile = str(Path(avica_pkg_dir) / "avica.inp")
+    user_configfile = str(Path(avica_data_dir) / Path(default_configfile).name)
+
+    _params = PipeConfig(global_configfile).to_dict()
+    if Path(user_configfile).exists():
+        _params.update(PipeConfig(user_configfile).to_dict())
+
+    pipe_params = {
+        "folder_for_fits": ".",
+        "target_dir": "reduction/",
+        "primary_value": target,
+        "target": target,
+        "fitsfilenames": fitsfilenames.split(",") if fitsfilenames else [],
+    }
+    pipe_params.update(_params)
+
+    if configfile and Path(configfile).exists():
+        try:
+            pipe_params.update(PipeConfig(configfile).to_dict())
+        except Exception as e:
+            raise typer.BadParameter(
+                f"Failed to read config file '{configfile}': {e}") from e
+
+    if target:
+        pipe_params["target"] = target
+        pipe_params["primary_value"] = target
+
+    return pipe_params
+
+
 avica_cli = typer.Typer(name="avica",help=ASCII_ART,
     add_completion=False, rich_markup_mode="rich")
 
@@ -135,7 +173,7 @@ avica_cli.add_typer(fitsidicheck_app, name="fitsidi_check")
 def fitsidicheck(fitsfilenames: Annotated[Optional[List[str]], typer.Argument()] = None,
                  fix:bool=False, desc:bool=False):
     """
-    "validate and fix, known FITS-IDI problems"
+    "validate and fix, known FITS-IDI issues"
     """
     from avica.fitsidiutil.validation import fitsidi_check
     if fitsfilenames is not None:
@@ -167,23 +205,37 @@ def pipe_config(
     summary: Annotated[bool, typer.Option("--summary", help="print a report summary of the parameters")] = False,
     ):
     params = PipeConfig(None).defaults()
+    param_sources = dict.fromkeys(params, "default")
     global_configfile = str(Path(avica_pkg_dir) / "avica.inp")
-    params.update(PipeConfig(global_configfile).to_dict())
-    if summary and inpfile is None and outfile and Path(outfile).exists():
-        inpfile = outfile
+    global_params = PipeConfig(global_configfile).to_dict()
+    params.update(global_params)
+    param_sources.update(dict.fromkeys(global_params, "global"))
+
+    # Summaries use the same file precedence as pipe run. Writing a config
+    # remains scoped to its selected input, without importing user defaults.
+    if summary:
+        user_configfile = Path(avica_data_dir) / "avica.inp"
+        if user_configfile.exists():
+            user_params = PipeConfig(user_configfile).to_dict()
+            params.update(user_params)
+            param_sources.update(dict.fromkeys(user_params, "user"))
+
+    if not inpfile and not no_inpfile:
+        local_configfile = outfile if summary else (
+            "avica.inp" if not (global_default or default) else None
+        )
+        if local_configfile and Path(local_configfile).exists():
+            inpfile = local_configfile
     if inpfile:
         try:
-            params = PipeConfig(inpfile).to_dict()
+            input_params = PipeConfig(inpfile).to_dict()
         except Exception as e:
             raise typer.BadParameter(f"Failed to read config file '{inpfile}': {e}") from e
-
-    else:
-        if (Path("avica.inp").exists() and not no_inpfile) and not (global_default or default):
-            inpfile = "avica.inp"
-            try:
-                params = PipeConfig(inpfile).to_dict()
-            except Exception as e:
-                raise typer.BadParameter(f"Failed to read config file '{inpfile}'\n use --no-inpfile to disable reading from avica.inp:\n {e}") from e
+        if summary:
+            params.update(input_params)
+        else:
+            params = input_params
+        param_sources.update(dict.fromkeys(input_params, "inpfile"))
 
     if data:
         for item in data:
@@ -191,12 +243,19 @@ def pipe_config(
                 raise typer.BadParameter(f"Invalid key=value format: '{item}' (missing '=')")
             key, value = item.split("=", 1)
             params[key] = value
+            param_sources[key] = "cli"
+
+    source_colours = {
+        "default": "yellow", "global": "yellow", "user": "cyan",
+        "inpfile": "green", "cli": "magenta",
+    }
 
     def parameter_source(status) -> tuple[str, str, Any]:
         if status.in_input_config:
-            if getattr(status, "input_name", status.name) != status.name:
-                return "inpfile/step", "green", status.value
-            return "inpfile/core", "green", status.value
+            input_name = getattr(status, "input_name", status.name)
+            origin = param_sources.get(input_name, "inpfile")
+            scope = "step" if input_name != status.name else "core"
+            return f"{origin}/{scope}", source_colours[origin], status.value
         if status.in_context:
             return "context", "cyan", status.value
         if status.has_default:
@@ -245,23 +304,16 @@ def pipe_config(
 
         first_row = True
         core_defaults = PipeConfig(None).defaults(all=True)
-        core_global = PipeConfig(global_configfile).to_dict() if global_configfile else {}
-        core_input = PipeConfig(inpfile).to_dict() if inpfile else {}
 
         for param, value in main_pipeline.pipe_params.items():
             if param in reported_params:
                 continue
 
-            core_default = param in core_defaults
-            core_inpfile = param in core_input and core_default
-
-            if core_inpfile:
-                source = "inpfile/core"
-                style = "green"
-            elif param in core_global:
-                source = "global/core"
-                style = "yellow"
-            elif core_default:
+            if param in param_sources:
+                origin = param_sources[param]
+                source = f"{origin}/core"
+                style = source_colours[origin]
+            elif param in core_defaults:
                 source = "default/core"
                 style = "yellow"
             else:
@@ -294,7 +346,7 @@ def pipe_config(
 @pipeline_app.command("run")
 def run_pipeline(
     fitsfilenames: Annotated[str,typer.Option("--f", "--fitsfilenames", help="fitsfile names comma separated")] = '',
-    stps: Annotated[Optional[List[str]],typer.Argument(help="steps for execution")] = CSV_POPULATED_STEPS,
+    steps: Annotated[Optional[List[str]],typer.Argument(help="steps for execution")] = CSV_POPULATED_STEPS,
     target: Annotated[str,typer.Option("--t", "--target", help="Selected field / sourc name")] = '',
     configfile: Optional[str] = typer.Option("avica.inp", help="config file containing key=value"),
     default_configfile: Optional[str] = typer.Option("avica.inp", help="default config file name containing key=value"),
@@ -355,10 +407,10 @@ def run_pipeline(
     # print(DEFAULT_PARAMS['allfitsfile'])
     main_pipeline = AvicaPipeline(pipe_params=pipe_params)
 
-    main_pipeline.filter_steps(*stps)
+    main_pipeline.filter_steps(*steps)
     if resume_from:
         try:
-            stps = main_pipeline.steps_from(resume_from)
+            steps = main_pipeline.steps_from(resume_from)
         except ValueError as exc:
             raise typer.BadParameter(str(exc), param_hint="--resume-from") from exc
     elif resume:
@@ -371,17 +423,76 @@ def run_pipeline(
             typer.echo(f"All pipeline steps already completed according to {result_csvfile}.")
             return
         if resume_from:
-            stps = main_pipeline.steps_from(resume_from)
+            steps = main_pipeline.steps_from(resume_from)
             typer.echo(f"Resuming from step: {resume_from}")
 
     if resume_from is not None and resume_from.lower() == 'rpicard':
         main_pipeline.pipe_params['delete_previous_data'] = False
 
-    main_pipeline.filter_steps(*stps)
+    main_pipeline.filter_steps(*steps)
     result = main_pipeline.execute()
 
 
     print(result)
+
+
+@pipeline_app.command("result")
+def pipe_result(
+    target: Annotated[str, typer.Option("--t", "--target", help="Selected field / source name")] = '',
+    csvfile: Annotated[Optional[str], typer.Option("--csvfile", help="Path to a result CSV. Overrides the --target lookup.")] = None,
+    configfile: Optional[str] = typer.Option("avica.inp", help="config file containing key=value"),
+    default_configfile: Optional[str] = typer.Option("avica.inp", help="default config file name containing key=value"),
+    history: Annotated[bool, typer.Option("--history", help="Show every recorded attempt of every step, instead of the latest.")] = False,
+    oneline: Annotated[bool, typer.Option("--oneline", help="Print a single compact status line.")] = False,
+    no_detail: Annotated[bool, typer.Option("--no-detail", help="Do not append failure detail panels.")] = False,
+    check: Annotated[bool, typer.Option("--check", help="Exit non-zero unless every pipeline step completed successfully.")] = False,
+    ):
+    """
+    _______________________
+
+    Report a pipeline run from its result CSV.
+
+    The default view lists every pipeline step in order with its status,
+    counts, duration, and the command needed to continue the run. Steps that
+    have not run yet are shown as pending. Failure text is appended below the
+    table for any step that did not fully succeed.
+
+    -   --history    every attempt of every step (the CSV is append-only)
+    -   --oneline    one status line, for scripts and CI
+    -   --check      exit 1 unless the whole pipeline succeeded
+
+    ________________________
+
+    """
+    from avica.pipe.report import read_result_csv, render_result, resume_step
+
+    if csvfile:
+        result_csvfile = Path(csvfile)
+    else:
+        pipe_params = _resolve_pipe_params(
+            target=target, configfile=configfile,
+            default_configfile=default_configfile,
+        )
+        result_csvfile = _result_csv_path(pipe_params)
+
+    if not Path(result_csvfile).exists():
+        typer.echo(f"No result CSV found at {result_csvfile}.", err=True)
+        typer.echo("Run the pipeline first, or pass --csvfile.", err=True)
+        raise typer.Exit(code=1)
+
+    rows = read_result_csv(result_csvfile)
+    label = target or Path(result_csvfile).name.replace("_result.csv", "")
+
+    render_result(
+        rows,
+        target=label,
+        history=history,
+        oneline=oneline,
+        detail=not no_detail,
+    )
+
+    if check and resume_step(rows) is not None:
+        raise typer.Exit(code=1)
 
 
 if __name__=='__main__':

@@ -14,6 +14,7 @@ Full documentation: https://avica.readthedocs.io/en/latest/
 ## Contents
 
 - [Installation](#installation)
+  - [Full installation script](#full-installation-script)
   - [Recommended installation](#recommended-installation)
   - [Manual installation](#manual-installation)
 - [Usage](#usage)
@@ -35,6 +36,53 @@ Requirements:
 
 The `avica` package is publicly available on [PyPI](https://pypi.org/project/avica/).
 Use [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) or [pipx](https://pipx.pypa.io/stable/how-to/install-pipx/) for an isolated command-line installation.
+
+### Full installation script
+
+Run [`install.sh`](install.sh) as your normal user:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/avikhagol/avica/main/install.sh -o install.sh
+bash install.sh
+source "$HOME/.local/share/avica-stack/env.sh"
+```
+
+The script installs AVICA using uv. If `picard` is already on PATH, it reuses that
+installation and skips all CASA/rPICARD downloads and plotting/data setup.
+Otherwise, it installs rPICARD, jiveplot (with `python-pgplot==1.6.1`), and CASA
+reference data. It does not use apt, scan system dependencies, or restrict the
+Linux distribution.
+
+For a new rPICARD installation, set `CASA_PATH` to an existing CASA installation
+directory (containing `bin/casa` and `bin/mpicasa`) or an archive URL:
+
+```bash
+CASA_PATH=/path/to/casa bash install.sh
+```
+
+If unset, the script prompts for the location. Press Enter to download:
+
+```text
+ftp://ftp.mpifr-bonn.mpg.de/outgoing/mjanssen/casa-6.7.5-18-py3.12.el8.tar.xz
+```
+
+Without an interactive terminal, the same default is used. `CASA_DIR` and
+`CASA_URL` are also accepted, after `CASA_PATH` in that order.
+Set `AVICA_INSTALL_DIR` to change the default `~/.local/share/avica-stack`
+directory, or `PICARD_REF` to select the branch/tag of a new rPICARD clone.
+Choose a CASA version that matches the selected rPICARD version.
+
+When setting up rPICARD, the downloaded or supplied CASA directory is also saved
+in AVICA's global configuration using `avica pipe config --global casadir=...`.
+
+The script adds an environment file to `~/.bashrc`. It configures AVICA's CASA
+and input-template paths when it can identify them, preserving other settings
+and backing up an existing `~/.avica/avica.inp`. For an existing `picard` command,
+it reads the adjacent rPICARD `your_casapath.txt` when available; otherwise,
+existing AVICA settings are left unchanged.
+
+Run `bash install.sh --help` for the environment options. The previous apt and
+dependency-check options have been removed.
 
 ### Recommended installation
 
@@ -107,6 +155,31 @@ Common options:
 | `--t`, `--target` | Selected field or source name. |
 | `--configfile` | Configuration file containing `key=value` entries. Defaults to `avica.inp`. |
 | `--help` | Show the full command help. |
+
+
+#### Pipeline results
+
+After each step completes, AVICA appends a row to `reductions/<target>_result.csv`. Use `avica pipe result` to render that file:
+
+```bash
+avica pipe result --target <source-name>
+```
+
+This prints a progress ladder — one row per step — with status, success/fail counts, duration, and a condensed note for any failures. Full failure traces appear in panels below the table.
+
+Common options:
+
+| Option | Description |
+| --- | --- |
+| `--t`, `--target` | Target name; used to locate the result CSV. |
+| `--oneline` | Single status line — good for scripts and CI. |
+| `--history` | Show every retry of every step, not just the latest. |
+| `--no-detail` | Suppress the full failure panels below the table. |
+| `--check` | Exit non-zero when any step has not fully succeeded. |
+| `--csvfile` | Pass the CSV path directly, skipping config lookup. |
+| `--help` | Show the full command help. |
+
+The default view collapses to the most recent attempt per step; `--history` shows all attempts. The footer prints the command to resume from the next incomplete step.
 
 ### Manipulating FITS-IDI
 
@@ -191,13 +264,13 @@ picard_input_template_update   =   "path/to/folder/with/fixed/inp/files"
 
 #### Parameter summary
 
-Use `--summary` to print a report of every pipeline parameter, its resolved value, and where that value came from (`inpfile`, `default`, `context`, or a per-step override):
+Use `--summary` to print a report of every pipeline parameter, its resolved value, and where that value came from (`global`, `user`, `inpfile`, `cli`, built-in `default`, or runtime `context`). The `/core` and `/step` suffixes distinguish general parameters from step-specific overrides:
 
 ```bash
 avica pipe config --summary --inpfile <path/to/avica.inp>
 ```
 
-If `--inpfile` is omitted and `avica.inp` exists in the current directory, it's read automatically. Combine `--summary` with `key=value` overrides on the command line to preview how they would change the resolved configuration before writing it out.
+The summary overlays the installed global `avica.inp`, then `~/.avica/avica.inp`, then the local `avica.inp` (or an explicit `--inpfile`), with command-line `key=value` overrides applied last. Later layers override matching keys and preserve other settings. `--no-inpfile` skips automatic local-file discovery; an explicit `--inpfile` is still used. Summaries do not write configuration files.
 
 #### Cleaning up intermediate data
 
