@@ -39,7 +39,15 @@ Use [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-inst
 
 ### Full installation script
 
-Run [`install.sh`](install.sh) as your normal user:
+Run [`install.sh`](install.sh) as your normal user. The quickest way is to fetch
+and run it in one step:
+
+```bash
+curl -LsSf https://avikhagol.github.io/avica/install.sh | bash
+source "$HOME/.local/share/avica-stack/env.sh"
+```
+
+Alternatively, download it first so you can read it before running anything:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/avikhagol/avica/main/install.sh -o install.sh
@@ -58,6 +66,13 @@ directory (containing `bin/casa` and `bin/mpicasa`) or an archive URL:
 
 ```bash
 CASA_PATH=/path/to/casa bash install.sh
+```
+
+Using the one-liner, place the variable after the pipe so it reaches `bash`,
+not `curl`:
+
+```bash
+curl -LsSf https://avikhagol.github.io/avica/install.sh | CASA_PATH=/path/to/casa bash
 ```
 
 If unset, the script prompts for the location. Press Enter to download:
@@ -81,7 +96,8 @@ and backing up an existing `~/.avica/avica.inp`. For an existing `picard` comman
 it reads the adjacent rPICARD `your_casapath.txt` when available; otherwise,
 existing AVICA settings are left unchanged.
 
-Run `bash install.sh --help` for the environment options. The previous apt and
+Run `bash install.sh --help` (or `curl -LsSf https://avikhagol.github.io/avica/install.sh | bash -s -- --help`
+for the one-liner) for the environment options. The previous apt and
 dependency-check options have been removed.
 
 ### Recommended installation

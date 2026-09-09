@@ -37,13 +37,50 @@ Requirements:
 * Python >= 3.9
 
 The ``avica`` package is available on `PyPI`_. Use `uv`_ or `pipx`_ for an
-isolated command-line installation.
+isolated command-line installation, or run the full installation script below
+to also set up CASA and rPICARD.
+
+Full installation script, run as your normal user. The quickest way is to
+fetch and run it in one step:
+
+.. code-block:: bash
+
+   curl -LsSf https://avikhagol.github.io/avica/install.sh | bash
+   source "$HOME/.local/share/avica-stack/env.sh"
+
+Alternatively, download it first so you can read it before running anything:
+
+.. code-block:: bash
+
+   curl -fsSL https://raw.githubusercontent.com/avikhagol/avica/main/install.sh -o install.sh
+   bash install.sh
+   source "$HOME/.local/share/avica-stack/env.sh"
+
+The script installs AVICA using ``uv``. If ``picard`` is already on ``PATH``,
+it reuses that installation and skips all CASA/rPICARD downloads and
+plotting/data setup. Otherwise, it installs rPICARD, jiveplot, and CASA
+reference data.
+
+For a new rPICARD installation, set ``CASA_PATH`` to an existing CASA
+installation directory (containing ``bin/casa`` and ``bin/mpicasa``) or an
+archive URL. With the one-liner, place the variable after the pipe so it
+reaches ``bash``, not ``curl``:
+
+.. code-block:: bash
+
+   curl -LsSf https://avikhagol.github.io/avica/install.sh | CASA_PATH=/path/to/casa bash
+
+If unset, the script prompts for a CASA location, or downloads a default
+archive when run without a terminal. See ``bash install.sh --help`` (or
+``curl -LsSf https://avikhagol.github.io/avica/install.sh | bash -s -- --help``
+for the one-liner) for the full list of environment variables, including
+``AVICA_INSTALL_DIR`` and ``PICARD_REF``.
 
 Using ``uv``:
 
 .. code-block:: bash
 
-   uv tool install avica --python 3.11
+   uv tool install avica --python 3.10
 
 Using ``pipx``:
 
