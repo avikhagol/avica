@@ -82,6 +82,44 @@ def _infer_resume_step(csvfile, ordered_steps):
     return ordered_steps[next_idx] if next_idx < len(ordered_steps) else None
 
 
+def _resolve_pipe_params(target="", configfile="avica.inp",
+                         default_configfile="avica.inp", fitsfilenames=""):
+    """
+    Layer configuration the way `pipe run` does, so that a target's result CSV
+    is looked for in the same place it was written to: built-in defaults, then
+    the installed global avica.inp, then ~/.avica/avica.inp, then the local
+    config file.  `target` is applied last, since it names the CSV.
+    """
+    global_configfile = str(Path(avica_pkg_dir) / "avica.inp")
+    user_configfile = str(Path(avica_data_dir) / Path(default_configfile).name)
+
+    _params = PipeConfig(global_configfile).to_dict()
+    if Path(user_configfile).exists():
+        _params.update(PipeConfig(user_configfile).to_dict())
+
+    pipe_params = {
+        "folder_for_fits": ".",
+        "target_dir": "reduction/",
+        "primary_value": target,
+        "target": target,
+        "fitsfilenames": fitsfilenames.split(",") if fitsfilenames else [],
+    }
+    pipe_params.update(_params)
+
+    if configfile and Path(configfile).exists():
+        try:
+            pipe_params.update(PipeConfig(configfile).to_dict())
+        except Exception as e:
+            raise typer.BadParameter(
+                f"Failed to read config file '{configfile}': {e}") from e
+
+    if target:
+        pipe_params["target"] = target
+        pipe_params["primary_value"] = target
+
+    return pipe_params
+
+
 avica_cli = typer.Typer(name="avica",help=ASCII_ART,
     add_completion=False, rich_markup_mode="rich")
 
@@ -396,6 +434,65 @@ def run_pipeline(
 
 
     print(result)
+
+
+@pipeline_app.command("result")
+def pipe_result(
+    target: Annotated[str, typer.Option("--t", "--target", help="Selected field / source name")] = '',
+    csvfile: Annotated[Optional[str], typer.Option("--csvfile", help="Path to a result CSV. Overrides the --target lookup.")] = None,
+    configfile: Optional[str] = typer.Option("avica.inp", help="config file containing key=value"),
+    default_configfile: Optional[str] = typer.Option("avica.inp", help="default config file name containing key=value"),
+    history: Annotated[bool, typer.Option("--history", help="Show every recorded attempt of every step, instead of the latest.")] = False,
+    oneline: Annotated[bool, typer.Option("--oneline", help="Print a single compact status line.")] = False,
+    no_detail: Annotated[bool, typer.Option("--no-detail", help="Do not append failure detail panels.")] = False,
+    check: Annotated[bool, typer.Option("--check", help="Exit non-zero unless every pipeline step completed successfully.")] = False,
+    ):
+    """
+    _______________________
+
+    Report a pipeline run from its result CSV.
+
+    The default view lists every pipeline step in order with its status,
+    counts, duration, and the command needed to continue the run. Steps that
+    have not run yet are shown as pending. Failure text is appended below the
+    table for any step that did not fully succeed.
+
+    -   --history    every attempt of every step (the CSV is append-only)
+    -   --oneline    one status line, for scripts and CI
+    -   --check      exit 1 unless the whole pipeline succeeded
+
+    ________________________
+
+    """
+    from avica.pipe.report import read_result_csv, render_result, resume_step
+
+    if csvfile:
+        result_csvfile = Path(csvfile)
+    else:
+        pipe_params = _resolve_pipe_params(
+            target=target, configfile=configfile,
+            default_configfile=default_configfile,
+        )
+        result_csvfile = _result_csv_path(pipe_params)
+
+    if not Path(result_csvfile).exists():
+        typer.echo(f"No result CSV found at {result_csvfile}.", err=True)
+        typer.echo("Run the pipeline first, or pass --csvfile.", err=True)
+        raise typer.Exit(code=1)
+
+    rows = read_result_csv(result_csvfile)
+    label = target or Path(result_csvfile).name.replace("_result.csv", "")
+
+    render_result(
+        rows,
+        target=label,
+        history=history,
+        oneline=oneline,
+        detail=not no_detail,
+    )
+
+    if check and resume_step(rows) is not None:
+        raise typer.Exit(code=1)
 
 
 if __name__=='__main__':
