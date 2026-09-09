@@ -135,7 +135,7 @@ avica_cli.add_typer(fitsidicheck_app, name="fitsidi_check")
 def fitsidicheck(fitsfilenames: Annotated[Optional[List[str]], typer.Argument()] = None,
                  fix:bool=False, desc:bool=False):
     """
-    "validate and fix, known FITS-IDI problems"
+    "validate and fix, known FITS-IDI issues"
     """
     from avica.fitsidiutil.validation import fitsidi_check
     if fitsfilenames is not None:
@@ -308,7 +308,7 @@ def pipe_config(
 @pipeline_app.command("run")
 def run_pipeline(
     fitsfilenames: Annotated[str,typer.Option("--f", "--fitsfilenames", help="fitsfile names comma separated")] = '',
-    stps: Annotated[Optional[List[str]],typer.Argument(help="steps for execution")] = CSV_POPULATED_STEPS,
+    steps: Annotated[Optional[List[str]],typer.Argument(help="steps for execution")] = CSV_POPULATED_STEPS,
     target: Annotated[str,typer.Option("--t", "--target", help="Selected field / sourc name")] = '',
     configfile: Optional[str] = typer.Option("avica.inp", help="config file containing key=value"),
     default_configfile: Optional[str] = typer.Option("avica.inp", help="default config file name containing key=value"),
