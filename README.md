@@ -14,9 +14,9 @@ Full documentation: https://avica.readthedocs.io/en/latest/
 ## Contents
 
 - [Installation](#installation)
-  - [Full installation script](#full-installation-script)
   - [Recommended installation](#recommended-installation)
   - [Manual installation](#manual-installation)
+  - [Full installation script](#full-installation-script)
 - [Usage](#usage)
   - [Pipeline](#pipeline)
   - [Manipulating FITS-IDI](#manipulating-fits-idi)
@@ -37,6 +37,40 @@ Requirements:
 The `avica` package is publicly available on [PyPI](https://pypi.org/project/avica/).
 Use [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) or [pipx](https://pipx.pypa.io/stable/how-to/install-pipx/) for an isolated command-line installation.
 
+
+### Recommended installation
+
+Using `uv`:
+
+```bash
+uv tool install avica --python 3.10
+```
+
+Using `pipx`:
+
+```bash
+pipx install avica
+```
+
+Using `pip`:
+
+```bash
+pip install avica
+```
+
+If you install with `pip`, use a virtual environment unless you already manage Python packages another way.
+
+### Manual installation
+
+Clone the repository and install it locally:
+
+```bash
+git clone https://github.com/avikhagol/avica.git
+cd avica/
+pip install .
+```
+
+
 ### Full installation script
 
 Run [`install.sh`](install.sh) as your normal user. The quickest way is to fetch
@@ -47,19 +81,9 @@ curl -LsSf https://avikhagol.github.io/avica/install.sh | bash
 source "$HOME/.local/share/avica-stack/env.sh"
 ```
 
-Alternatively, download it first so you can read it before running anything:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/avikhagol/avica/main/install.sh -o install.sh
-bash install.sh
-source "$HOME/.local/share/avica-stack/env.sh"
-```
-
 The script installs AVICA using uv. If `picard` is already on PATH, it reuses that
 installation and skips all CASA/rPICARD downloads and plotting/data setup.
-Otherwise, it installs rPICARD, jiveplot (with `python-pgplot==1.6.1`), and CASA
-reference data. It does not use apt, scan system dependencies, or restrict the
-Linux distribution.
+Otherwise, it installs rPICARD, jiveplot (with `python-pgplot==1.6.1`), and monolithic CASA.
 
 For a new rPICARD installation, set `CASA_PATH` to an existing CASA installation
 directory (containing `bin/casa` and `bin/mpicasa`) or an archive URL:
@@ -99,39 +123,6 @@ existing AVICA settings are left unchanged.
 Run `bash install.sh --help` (or `curl -LsSf https://avikhagol.github.io/avica/install.sh | bash -s -- --help`
 for the one-liner) for the environment options. The previous apt and
 dependency-check options have been removed.
-
-### Recommended installation
-
-Using `uv`:
-
-```bash
-uv tool install avica --python 3.10
-```
-
-Using `pipx`:
-
-```bash
-pipx install avica
-```
-
-Using `pip`:
-
-```bash
-pip install avica
-```
-
-If you install with `pip`, use a virtual environment unless you already manage Python packages another way.
-
-### Manual installation
-
-Clone the repository and install it locally:
-
-```bash
-git clone https://github.com/avikhagol/avica.git
-cd avica/
-pip install .
-```
-
 
 ## Usage
 
