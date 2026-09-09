@@ -156,6 +156,31 @@ Common options:
 | `--configfile` | Configuration file containing `key=value` entries. Defaults to `avica.inp`. |
 | `--help` | Show the full command help. |
 
+
+#### Pipeline results
+
+After each step completes, AVICA appends a row to `reductions/<target>_result.csv`. Use `avica pipe result` to render that file:
+
+```bash
+avica pipe result --target <source-name>
+```
+
+This prints a progress ladder — one row per step — with status, success/fail counts, duration, and a condensed note for any failures. Full failure traces appear in panels below the table.
+
+Common options:
+
+| Option | Description |
+| --- | --- |
+| `--t`, `--target` | Target name; used to locate the result CSV. |
+| `--oneline` | Single status line — good for scripts and CI. |
+| `--history` | Show every retry of every step, not just the latest. |
+| `--no-detail` | Suppress the full failure panels below the table. |
+| `--check` | Exit non-zero when any step has not fully succeeded. |
+| `--csvfile` | Pass the CSV path directly, skipping config lookup. |
+| `--help` | Show the full command help. |
+
+The default view collapses to the most recent attempt per step; `--history` shows all attempts. The footer prints the command to resume from the next incomplete step.
+
 ### Manipulating FITS-IDI
 
 Check FITS-IDI files for known issues:

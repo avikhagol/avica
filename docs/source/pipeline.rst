@@ -127,10 +127,10 @@ renders that file in several layouts.
    # Compact one-liner for scripts and CI
    avica pipe result --target J1234+5678 --oneline
 
-   # Full run history: every retry of every step, not just the latest
+   # Full run history: every retry of every step
    avica pipe result --target J1234+5678 --history
 
-   # Exit non-zero when any step has not fully succeeded (CI gating)
+   # Exit non-zero when any step has not fully succeeded
    avica pipe result --target J1234+5678 --check
 
    # Pass the CSV path directly, skipping config lookup
