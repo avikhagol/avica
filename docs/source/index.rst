@@ -79,6 +79,10 @@ fetch and run it in one step:
    curl -LsSf https://avikhagol.github.io/avica/install.sh | bash
    source "$HOME/.local/share/avica-stack/env.sh"
 
+.. note::
+
+   requires `rsync`, `git`
+
 The script installs AVICA using ``uv``. If ``picard`` is already on ``PATH``,
 it reuses that installation and skips all CASA/rPICARD downloads and
 plotting/data setup. Otherwise, it installs rPICARD, jiveplot, and monolithic CASA.
