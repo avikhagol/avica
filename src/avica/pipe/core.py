@@ -1718,12 +1718,18 @@ class IterativeSubprocess:
 
 class PersistentMpiCasaRunner:
     def __init__(self, casadir: str, mpi_cores: int = 10, verbose:bool=False):
-        """single MPI process to recieve payload"""
+        """Persistent CASA worker; one core selects serial execution."""
+        if mpi_cores < 1:
+            raise ValueError("mpi_cores must be a positive integer")
         self.verbose = verbose
         cmd_list = [
-            f"{casadir}/bin/mpicasa", "-n", str(mpi_cores),
-            "--oversubscribe", f"{casadir}/bin/casa", "--nologger", "--nogui", "--agg",
+            f"{casadir}/bin/casa", "--nologger", "--nogui", "--agg",
             "-c", f"{MPICASA_WORKER}"]
+        if mpi_cores == 1:
+            cmd_list.append("--serial")
+        else:
+            cmd_list = [f"{casadir}/bin/mpicasa", "-n", str(mpi_cores),
+                        "--oversubscribe"] + cmd_list
         self.runner = IterativeSubprocess(cmd_list=cmd_list, clean_env=True, verbose=verbose)
 
     def run_task(self, task_name: str, args: dict, args_type:Dict[str, Any], block=False, target_server:Optional[int]=None):
@@ -1832,7 +1838,10 @@ class PicardTask:
     n:          int = 10
 
     def to_args(self) -> List[str]:
-        return ["-n", str(self.n), "--input", self.input]
+        if self.n < 1:
+            raise ValueError("mpi_cores_rpicard must be a positive integer")
+        # rPICARD's launcher uses -n 2 to select plain CASA.
+        return ["-n", str(2 if self.n == 1 else self.n), "--input", self.input]
 
 
 

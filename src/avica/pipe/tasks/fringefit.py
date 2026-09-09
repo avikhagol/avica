@@ -100,130 +100,139 @@ def task_fringefit_payload(
 
     tbl_names = []
     dic_result = {}
+    if not any(len(v["scans"]) for v in dic_ant_with_scans.values()):
+        return {"tbl_names": []}
     if verbose:
         print("..doing FFT")
     mpi_runner = PersistentMpiCasaRunner(
         casadir=casadir, mpi_cores=mpi_cores
     )
-    job_ids = []
-    for refantid, v in dic_ant_with_scans.items():
-        scans = v["scans"]
-        refant = v["name"]
+    try:
+        job_ids = []
+        for refantid, v in dic_ant_with_scans.items():
+            scans = v["scans"]
+            refant = v["name"]
 
-        refantid = int(refantid)
-        iter_by_scans = list(
-            zip_longest(
-                *[iter(scans)] * iter_scan_count, fillvalue=None
-            )
-        )
-
-        for sel_scan in iter_by_scans:
-            ff_scans = [str(s) for s in sel_scan if s is not None]
-            ff_scans_joined = ",".join(ff_scans)
-            ff_caltable = f"{str(Path(caltable_folder).absolute() / Path(caltable_folder).name)}_{refant}_{''.join(ff_scans)}.t"
-
-            print(
-                f"processing.. refant:{refant} scans:{ff_scans_joined}"
-            )
-
-            cmd_ff = casatask_fringefit(
-                vis,
-                fid="",
-                scannos=ff_scans_joined,
-                refant=refant,
-                ff_caltable=ff_caltable,
-                gt=gt,
-                interp=interp,
-                spws=spws,
-                multiband=multiband,
-            )
-            step = cmd_ff.to_step(
-                casadir=casadir,
-                errf=errf,
-                logfile=logfile,
-                mpi_cores=mpi_cores,
-            )
-
-            ff_caltable = f"{str(Path(caltable_folder).absolute() / Path(caltable_folder).name)}_{refant}_{''.join(ff_scans)}.t"
-
-            # push to mpi and catch errors
-            res = mpi_runner.run_task(
-                task_name=step.cmd.task_casa,
-                args=step.cmd.args,
-                args_type=step.cmd.args_type,
-                block=False,
-            )
-            dic_result_key = f"{refant}___{'_'.join(ff_scans)}"
-            job_ids.append(
-                (
-                    step.cmd.args["refant"],
-                    ff_scans_joined,
-                    ff_caltable,
-                    dic_result_key,
-                    res,
+            refantid = int(refantid)
+            iter_by_scans = list(
+                zip_longest(
+                    *[iter(scans)] * iter_scan_count, fillvalue=None
                 )
             )
-            dic_result[dic_result_key] = {
-                "scannos": ff_scans_joined,
-                "mpi_ids": res["ret"],
-                "status": res["status"],
-                "ff_caltable": ff_caltable,
-                "err_msg": "",
-            }
 
-    # checking response
-    err_msg = ""
-    for anname, ff_scans_joined, ff_caltable, dic_result_key, res in job_ids:
-        if "status" in res and res["status"] == "success":
-            final_response = mpi_runner.get_response(
-                res["ret"], block=True
-            )
-            if Path(ff_caltable).exists():
+            for sel_scan in iter_by_scans:
+                ff_scans = [str(s) for s in sel_scan if s is not None]
+                ff_scans_joined = ",".join(ff_scans)
+                ff_caltable = f"{str(Path(caltable_folder).absolute() / Path(caltable_folder).name)}_{refant}_{''.join(ff_scans)}.t"
+
                 print(
-                    f"{c['g']}processed{c['x']}",
-                    "for scans",
-                    ff_scans_joined,
-                    "with refant",
-                    anname,
+                    f"processing.. refant:{refant} scans:{ff_scans_joined}"
                 )
-                tbl_names.append(ff_caltable)
+
+                cmd_ff = casatask_fringefit(
+                    vis,
+                    fid="",
+                    scannos=ff_scans_joined,
+                    refant=refant,
+                    ff_caltable=ff_caltable,
+                    gt=gt,
+                    interp=interp,
+                    spws=spws,
+                    multiband=multiband,
+                )
+                step = cmd_ff.to_step(
+                    casadir=casadir,
+                    errf=errf,
+                    logfile=logfile,
+                    mpi_cores=mpi_cores,
+                )
+
+                ff_caltable = f"{str(Path(caltable_folder).absolute() / Path(caltable_folder).name)}_{refant}_{''.join(ff_scans)}.t"
+
+                # push to mpi and catch errors
+                res = mpi_runner.run_task(
+                    task_name=step.cmd.task_casa,
+                    args=step.cmd.args,
+                    args_type=step.cmd.args_type,
+                    block=False,
+                )
+                dic_result_key = f"{refant}___{'_'.join(ff_scans)}"
+                job_ids.append(
+                    (
+                        step.cmd.args["refant"],
+                        ff_scans_joined,
+                        ff_caltable,
+                        dic_result_key,
+                        res,
+                    )
+                )
+                dic_result[dic_result_key] = {
+                    "scannos": ff_scans_joined,
+                    "mpi_ids": res["ret"],
+                    "status": res["status"],
+                    "ff_caltable": ff_caltable,
+                    "err_msg": "",
+                }
+
+        # checking response
+        for anname, ff_scans_joined, ff_caltable, dic_result_key, res in job_ids:
+            err_msg = ""
+            if "status" in res and res["status"] == "success":
+                final_response = mpi_runner.get_response(
+                    res["ret"], block=True
+                )
+                task_success = (final_response.get("status") == "success"
+                                and bool(final_response.get("ret"))
+                                and all(ret.get("successful", False) for ret in final_response["ret"]))
+                if task_success and Path(ff_caltable).exists():
+                    print(
+                        f"{c['g']}processed{c['x']}",
+                        "for scans",
+                        ff_scans_joined,
+                        "with refant",
+                        anname,
+                    )
+                    tbl_names.append(ff_caltable)
+                else:
+                    err_msg = ("Successful fringefit execution but table not found" if task_success
+                               else f"CASA fringefit failed: {final_response}")
+                    print(
+                        f"{c['r']}processing failed{c['x']}",
+                        "for scans",
+                        ff_scans_joined,
+                        "with refant",
+                        anname,
+                        f"\nreason : {err_msg}\n",
+                    )
             else:
-                err_msg = "Successful fringefit execution but table not found"
+                err_msg = (
+                    res["error"]
+                    if "error" in res
+                    else "Failed to push command."
+                )
+                trcback_msg = (
+                    res["traceback"] if "traceback" in res else f"{res}"
+                )
+
                 print(
                     f"{c['r']}processing failed{c['x']}",
                     "for scans",
                     ff_scans_joined,
                     "with refant",
                     anname,
-                    f"\nreason : {err_msg}\n",
+                    f"\nreason : {err_msg}\n{trcback_msg}",
                 )
-        else:
-            err_msg = (
-                res["error"]
-                if "error" in res
-                else "Failed to push command."
+            dic_result[dic_result_key]["err_msg"] = (
+                err_msg
             )
-            trcback_msg = (
-                res["traceback"] if "traceback" in res else f"{res}"
-            )
+            dic_result[dic_result_key]["status"] = "error" if err_msg else "success"
 
-            print(
-                f"{c['r']}processing failed{c['x']}",
-                "for scans",
-                ff_scans_joined,
-                "with refant",
-                anname,
-                f"\nreason : {err_msg}\n{trcback_msg}",
-            )
-        dic_result[dic_result_key]["err_msg"] = (
-            err_msg
-        )
-
-    dic_result["tbl_names"] = tbl_names
-    if verbose:
-        print("..collected tables\n")
-        print("..closing MPI")
-    mpi_runner.close()
+        dic_result["tbl_names"] = tbl_names
+        if verbose:
+            print("..collected tables\n")
+            print("..closing CASA worker")
+    finally:
+        mpi_runner.close()
     if verbose:
         print("done\n")
     return dic_result

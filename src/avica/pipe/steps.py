@@ -471,9 +471,10 @@ class FitsIdiToMS(PipelineStepBase):
 
         mpi_runner = None
         try:
-            with step_stage("MPI execution", vis=vis):
+            with step_stage("Serial CASA execution" if mpi_cores_importfitsidi == 1 else "MPI execution", vis=vis):
                 res         =   []
-                mpi_runner = PersistentMpiCasaRunner(casadir=casadir, mpi_cores=mpi_cores_importfitsidi)
+                if tasks_list or (apply_flag_from_idi and apply_flag_to_existing_vis and existing_flag_targets):
+                    mpi_runner = PersistentMpiCasaRunner(casadir=casadir, mpi_cores=mpi_cores_importfitsidi)
                 for casastep in tasks_list:
                     print(f"processing vis={casastep.cmd.args['vis']}")
                     mpi_res = mpi_runner.run_task(
@@ -487,10 +488,15 @@ class FitsIdiToMS(PipelineStepBase):
             # ---------------- finalize outputs and metadata
 
             for i, casastep in enumerate(tasks_list):
-                final_response      =   mpi_runner.get_response(res[i]["ret"], block=True)
+                submitted = res[i]
+                final_response = (mpi_runner.get_response(submitted["ret"], block=True)
+                                  if submitted.get("status") == "success" else submitted)
+                task_success = (final_response.get("status") == "success"
+                                and bool(final_response.get("ret"))
+                                and all(ret.get("successful", False) for ret in final_response["ret"]))
                 output_vis          =   Path(casastep.cmd.args['vis'])
                 output_vis_for_lock_cleanup.append(output_vis)
-                if output_vis.exists():
+                if task_success and output_vis.exists():
                     print(f"processed vis={casastep.cmd.args['vis']}")
                     flag_success = True
                     if apply_flag_from_idi:
@@ -522,6 +528,8 @@ class FitsIdiToMS(PipelineStepBase):
                     self.result.failed_count     +=  1
                     # last_log = latest_file(Path(output_vis).parent, '*err.out*')
                     self.result.desc.append(f"failed! vis:{output_vis.name} check logs: {errcasalogfile}")
+                    if not task_success:
+                        self.result.desc.append(f"CASA task failed: {final_response}")
                     if not all([Path(ff).exists() for ff in casastep.cmd.args['fitsidifile']]):
                         self.result.desc.append(f"input fitsidifile not found! {casastep.cmd.args['fitsidifile']}")
                     self.result.success.append(False)

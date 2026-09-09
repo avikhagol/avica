@@ -13,6 +13,8 @@ casadir                  =  "path/to/monolithic-casa/casa-6.x.x-xx-py3.xx.xxx/"
 target_dir                =   "reductions"
 picard_input_template     =   "path/to/rpicard"
 accor_solint              =   4
+# Set any of these counts to 1 for serial CASA execution.
+# rPICARD also retains its upstream serial convention for the value 2.
 mpi_cores_rpicard         =   10
 mpi_cores_snrating        =   5
 mpi_cores_importfitsidi   =   5
