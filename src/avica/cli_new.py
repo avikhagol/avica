@@ -369,10 +369,10 @@ def run_pipeline(
     # print(DEFAULT_PARAMS['allfitsfile'])
     main_pipeline = AvicaPipeline(pipe_params=pipe_params)
 
-    main_pipeline.filter_steps(*stps)
+    main_pipeline.filter_steps(*steps)
     if resume_from:
         try:
-            stps = main_pipeline.steps_from(resume_from)
+            steps = main_pipeline.steps_from(resume_from)
         except ValueError as exc:
             raise typer.BadParameter(str(exc), param_hint="--resume-from") from exc
     elif resume:
@@ -385,13 +385,13 @@ def run_pipeline(
             typer.echo(f"All pipeline steps already completed according to {result_csvfile}.")
             return
         if resume_from:
-            stps = main_pipeline.steps_from(resume_from)
+            steps = main_pipeline.steps_from(resume_from)
             typer.echo(f"Resuming from step: {resume_from}")
 
     if resume_from is not None and resume_from.lower() == 'rpicard':
         main_pipeline.pipe_params['delete_previous_data'] = False
 
-    main_pipeline.filter_steps(*stps)
+    main_pipeline.filter_steps(*steps)
     result = main_pipeline.execute()
 
 
