@@ -144,9 +144,11 @@ Minimal configuration:
    picard_input_template     =   "path/to/rpicard"
    picard_input_template_update  =   ""    # optional: folder with fixed rpicard inp files to supersede defaults
    accor_solint              =   4
-   mpi_cores_rpicard         =   10
-   mpi_cores_snrating        =   5
-   mpi_cores_importfitsidi   =   5
+   fits_to_ms.mpi_cores      =   5
+   avica_avg.mpi_cores       =   5
+   avica_snr.mpi_cores       =   5
+   avica_split_ms.mpi_cores  =   10
+   rpicard.mpi_cores         =   10
    hi_freq_ref               =   11
    snr_threshold_phref       =   7
    flux_threshold_phref      =   0.15

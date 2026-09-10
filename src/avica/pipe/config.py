@@ -488,13 +488,13 @@ DEFAULT_PARAMS: dict = {
     "primary_value"             :   None,
     "filename_col"              :   "FILENAMES",
     "targetname_col"            :   "TARGET_NAME",
-    "mpi_cores_rpicard"         :   10,
+    "rpicard.mpi_cores"         :   10,
     "hi_freq_ref"               :   20,         # in GHz
     "use_casadir_pythonpath"    :   False,
-    "mpi_cores_snrating"        :   5,
-    "mpi_cores_importfitsidi"   :   5,
-    "mpi_cores_avgms"           :   5,
-    "mpi_cores_splitms"         :   10,
+    "avica_snr.mpi_cores"       :   5,
+    "fits_to_ms.mpi_cores"      :   5,
+    "avica_avg.mpi_cores"       :   5,
+    "avica_split_ms.mpi_cores"  :   10,
     "snr_threshold_phref"       :   7,
     "flux_threshold_phref"      :   0.15,
     "min_channel_flagging"      :   32,
@@ -526,7 +526,8 @@ class PipeConfig:
         default_params = {}
         if not all:
             for k,v in DEFAULT_PARAMS.items():
-                if any(k.startswith(accepted_key) for accepted_key in ['casadir', 'mpi_',"size_", "snr_", "flux_", "target_"]):
+                if (any(k.startswith(accepted_key) for accepted_key in ['casadir', "size_", "snr_", "flux_", "target_"])
+                        or k == "mpi_cores" or k.endswith(".mpi_cores")):
                     default_params[k] = v
         else:
             default_params = DEFAULT_PARAMS

@@ -354,7 +354,7 @@ class FitsIdiToMS(PipelineStepBase):
         self.result.desc.append(f"applied {nflags} {flag_source} flag rows to {Path(vis).name}")
         return True
 
-    def run(self, lf, casadir, wd_ifolder, apply_flag_from_idi=True, mpi_cores_importfitsidi=5, flag_source="ms",
+    def run(self, lf, casadir, wd_ifolder, apply_flag_from_idi=True, mpi_cores=5, flag_source="ms",
         removables=[], rm_only=False, rm_pre=False, delete_removables=False,
         apply_flag_to_existing_vis=False,):
 
@@ -472,10 +472,10 @@ class FitsIdiToMS(PipelineStepBase):
 
         mpi_runner = None
         try:
-            with step_stage("Serial CASA execution" if mpi_cores_importfitsidi == 1 else "MPI execution", vis=vis):
+            with step_stage("Serial CASA execution" if mpi_cores == 1 else "MPI execution", vis=vis):
                 res         =   []
                 if tasks_list or (apply_flag_from_idi and apply_flag_to_existing_vis and existing_flag_targets):
-                    mpi_runner = PersistentMpiCasaRunner(casadir=casadir, mpi_cores=mpi_cores_importfitsidi)
+                    mpi_runner = PersistentMpiCasaRunner(casadir=casadir, mpi_cores=mpi_cores)
                 for casastep in tasks_list:
                     print(f"processing vis={casastep.cmd.args['vis']}")
                     mpi_res = mpi_runner.run_task(
@@ -749,7 +749,7 @@ class AverageMS(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, casadir, targets, target, mpi_cores_avgms=5,
+    def run(self, lf, wd_ifolder, casadir, targets, target, mpi_cores=5,
         removables=[], rm_only=False, rm_pre=False, delete_removables=False, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms.meta import BandInfoMS
@@ -896,7 +896,7 @@ class AverageMS(PipelineStepBase):
                                             chanbin=chanbin, spw=",".join(spws), chanaverage=chanavg,
                                             timeaverage=timeavg, timebin=timebin)
 
-                                        step             =   task.to_step(logfile=casalogfile, casadir=casadir, errf=errcasalogfile, mpi_cores=mpi_cores_avgms)
+                                        step             =   task.to_step(logfile=casalogfile, casadir=casadir, errf=errcasalogfile, mpi_cores=mpi_cores)
                                         tasks_list.append((step,outvis, bandobs, errcasalogfile, obs_b, iwd_b, dict(band_chwidth), spws))
 
                     except Exception:
@@ -908,7 +908,7 @@ class AverageMS(PipelineStepBase):
             # ------------------------- Execution
             task_results = task_mstransform_payload(
                 {band: step for step, _outvis, band, *_rest in tasks_list},
-                casadir=casadir, mpi_cores=mpi_cores_avgms,
+                casadir=casadir, mpi_cores=mpi_cores,
             )
             comment_val, success_val, failed_band = "", "", ""
 
@@ -1112,7 +1112,7 @@ class SnRating(PipelineStepBase):
     # ----------------------------------------------------------
 
     def run(self, lf, wd_ifolder, init_params, casadir, target, n_refant=5, n_calib=6, removables=[], rm_only=False, rm_pre=False, delete_removables=False,
-                    multiband_snrating=True, mpi_cores_snrating=5, n_scan_snrting=7, verbose=True):
+                    multiband_snrating=True, mpi_cores=5, n_scan_snrting=7, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms import get_best_spws
         from avica.pipe.tasks.fringefit import exec_FFT_fringefit
@@ -1199,7 +1199,7 @@ class SnRating(PipelineStepBase):
                             with step_stage(msg):
                                 try:
                                     dic_field, refants, pp_out      =   exec_FFT_fringefit(fr, casadir=casadir,logfile=casalogfile,errfile=errcasalogfile,
-                                                                                                mpi_cores=mpi_cores_snrating,multiband=multiband_snrating)
+                                                                                                mpi_cores=mpi_cores,multiband=multiband_snrating)
 
                                     msg                             =   f"finished fringefit for {Path(vis_b).name}"
                                     log.info(msg)
@@ -1384,7 +1384,7 @@ class FinalSplitMs(PipelineStepBase):
     # ----------------------------------------------------------
 
     def run(self, lf, wd_ifolder, casadir, target, removables=[], rm_only=False,
-            rm_pre=False, delete_removables=False, verbose=True, mpi_cores_splitms=10):
+            rm_pre=False, delete_removables=False, verbose=True, mpi_cores=10):
         from avica.ms import get_best_spws, check_and_fix_spw_partitioning
         from avica.ms.compat import CasaMSMetadata
 
@@ -1453,13 +1453,13 @@ class FinalSplitMs(PipelineStepBase):
                         scan=",".join(map(str, scans)), field=",".join(map(str, allsources)),
                         spw=",".join(selected_spws),
                     ).to_step(logfile=logfile, errf=errfile, casadir=casadir,
-                              mpi_cores=mpi_cores_splitms)
+                              mpi_cores=mpi_cores)
                     contexts[band] = (outvis, selected_spws, obs_b, iwd_b, iwd_b_t, allsources)
                 except Exception:
                     failures[band] = traceback.format_exc()
 
             task_results = task_mstransform_payload(
-                jobs, casadir=casadir, mpi_cores=mpi_cores_splitms)
+                jobs, casadir=casadir, mpi_cores=mpi_cores)
             for band in bands:
                 success = False
                 detail = failures.get(band, "")
@@ -1547,7 +1547,8 @@ class Calibration(PipelineStepBase):
     # ----------------------------------------------------------
 
     def run(self, lf, wd_ifolder, casadir, target, verbose=True, removables=[],
-        rm_only=False, picard_input_template_update='', delete_previous_data=True, rm_pre=False, delete_removables=False):
+        rm_only=False, picard_input_template_update='', delete_previous_data=True, rm_pre=False,
+        delete_removables=False, mpi_cores=10):
         from avica.ms.tables import repair_mixed_single_pol_syscal_tsys
         from avica.pipe.core import update_ifolderdata_from_new_ifolder
 
@@ -1609,7 +1610,7 @@ class Calibration(PipelineStepBase):
                             print(msg)
                             self.result.desc.append(msg)
 
-                    payload         =   PicardPayload(PicardTask(input=iwd_b_t, n=PipelineContext.params['mpi_cores_rpicard']))
+                    payload         =   PicardPayload(PicardTask(input=iwd_b_t, n=mpi_cores))
                     payload.run()
 
                     calibrated_files = glob.glob(f"{wd_t}/*_calibrated.uvf")

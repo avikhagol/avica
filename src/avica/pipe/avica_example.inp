@@ -13,11 +13,13 @@ casadir                  =  "path/to/monolithic-casa/casa-6.x.x-xx-py3.xx.xxx/"
 target_dir                =   "reductions"
 picard_input_template     =   "path/to/rpicard"
 accor_solint              =   4
-# Set any of these counts to 1 for serial CASA execution.
-# rPICARD also retains its upstream serial convention for the value 2.
-mpi_cores_rpicard         =   10
-mpi_cores_snrating        =   5
-mpi_cores_importfitsidi   =   5
+# Configure MPI independently for each pipeline step. Set a CASA step to 1
+# for serial execution. rPICARD also retains its upstream convention for 2.
+fits_to_ms.mpi_cores      =   5
+avica_avg.mpi_cores       =   5
+avica_snr.mpi_cores       =   5
+avica_split_ms.mpi_cores  =   10
+rpicard.mpi_cores         =   10
 hi_freq_ref               =   11
 snr_threshold_phref       =   7
 flux_threshold_phref      =   0.15

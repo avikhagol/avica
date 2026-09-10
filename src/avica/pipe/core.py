@@ -1841,7 +1841,7 @@ class PicardTask:
 
     def to_args(self) -> List[str]:
         if self.n < 1:
-            raise ValueError("mpi_cores_rpicard must be a positive integer")
+            raise ValueError("mpi_cores must be a positive integer")
         # rPICARD's launcher uses -n 2 to select plain CASA.
         return ["-n", str(2 if self.n == 1 else self.n), "--input", self.input]
 
