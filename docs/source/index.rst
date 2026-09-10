@@ -69,7 +69,7 @@ Using ``pip``:
 
 
 Using bash script
-=================
+~~~~~~~~~~~~~~~~~
 
 Full installation script, run as your normal user. The quickest way is to
 fetch and run it in one step:
@@ -104,7 +104,7 @@ for the one-liner) for the full list of environment variables, including
 
 
 Setup
------
+------------
 
 The pipeline calibration steps rely on `rPicard`_. Follow the rPicard setup
 instructions first. After rPicard is configured, AVICA only needs a minimal
