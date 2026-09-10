@@ -1470,10 +1470,25 @@ class FinalSplitMs(PipelineStepBase):
                         try:
                             outvis, selected_spws, obs_b, iwd_b, iwd_b_t, allsources = contexts[band]
                             check_and_fix_spw_partitioning(str(outvis), selected_spws)
-                            arr_finetune = wd_meta.get_inp(band=band, target=target, inpfile="array_finetune.inp")
-                            arr = wd_meta.get_inp(band=band, target=target, inpfile="array.inp")
-                            arr_finetune['rldly_stations'] = ",".join(arr['refant'][:3])
+                            # Populate the target input directory before reading it. A newly
+                            # created target directory has no refant value, which previously
+                            # produced the invalid rPicard input ``rldly_stations =``.
                             fillinp_fromiwd(iwd_b, iwd_b_t)
+                            arr_finetune = wd_meta.get_inp(
+                                band=band, target=target, inpfile="array_finetune.inp")
+                            arr = wd_meta.get_inp(
+                                band=band, target=target, inpfile="array.inp")
+                            refants = arr.get('refant', [])
+                            if isinstance(refants, str):
+                                refants = [refant.strip().strip("'\"")
+                                           for refant in refants.split(',')
+                                           if refant.strip().strip("'\"")]
+                            else:
+                                refants = list(refants)
+                            if not refants:
+                                raise ValueError(
+                                    f"No reference antennas found in {iwd_b_t}/array.inp")
+                            arr_finetune['rldly_stations'] = ",".join(refants[:3])
                             create_config(arr_finetune, f'{iwd_b_t}/array_finetune.inp')
                             output_obs = dict(obs_b, ms_name=outvis.name)
                             create_config(output_obs, f'{iwd_b_t}/observation.inp')
