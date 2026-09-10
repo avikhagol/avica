@@ -1,5 +1,3 @@
-from turtle import st
-
 from .core import AvicaPipelineCore, DEFAULT_PARAMS
 from .steps import PreProcessFitsIdi, FitsIdiToMS, Phaseshift, AvicaMetaMS, AverageMS, SnRating, FinalSplitMs, Calibration, FillInputMs
 
