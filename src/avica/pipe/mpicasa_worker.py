@@ -37,11 +37,12 @@ class SerialCommandClient:
 
 def main():
     from casatasks import importfitsidi, fringefit, mstransform, flagdata, flagmanager
+    tasks = dict(importfitsidi=importfitsidi, fringefit=fringefit,
+                 mstransform=mstransform, flagdata=flagdata,
+                 flagmanager=flagmanager)
     serial = "--serial" in sys.argv
     if serial:
-        client = SerialCommandClient(dict(importfitsidi=importfitsidi, fringefit=fringefit,
-                                          mstransform=mstransform, flagdata=flagdata,
-                                          flagmanager=flagmanager))
+        client = SerialCommandClient(tasks)
     else:
         from casampi.MPICommandClient import MPICommandClient
         client = MPICommandClient()
@@ -62,6 +63,7 @@ def main():
             target_server=payload.get("target_server", 0)
             parameters=payload.get("parameters", args)
             logfile = payload.get("logfile", "")
+            run_on_master = payload.get("run_on_master", False)
 
             if task_name == "get_command_response":
                 command_ids = parameters["command_ids"]
@@ -77,6 +79,21 @@ def main():
                 ret = client.start_services()
             elif task_name == "stop_services":
                 ret = client.stop_services()
+            elif run_on_master:
+                if logfile:
+                    from casatasks import casalog
+                    casalog.setlogfile(logfile)
+                try:
+                    # This loop runs on rank 0. Internally parallel CASA tasks
+                    # such as mstransform(createmms=True) must start here so
+                    # they can distribute their own work to the MPI servers.
+                    with redirect_stdout(sys.stderr):
+                        task_result = tasks[task_name](**parameters)
+                    ret = [{"id": 0, "successful": True, "ret": task_result,
+                            "traceback": None}]
+                except Exception:
+                    ret = [{"id": 0, "successful": False, "ret": None,
+                            "traceback": traceback.format_exc()}]
             elif serial:
                 if logfile:
                     from casatasks import casalog

@@ -22,18 +22,15 @@ def task_mstransform_payload(jobs, casadir, mpi_cores=5):
             output = str(step.cmd.args["outputvis"])
             result = {"outputvis": output, "mpi_ids": [], "status": "error", "err_msg": ""}
             try:
-                submitted = runner.run_task(
+                response = runner.run_task(
                     task_name=step.cmd.task_casa,
                     args={name: str(value) if isinstance(value, Path) else value
                           for name, value in step.cmd.args.items()},
                     args_type=step.cmd.args_type,
-                    block=False,
+                    block=True,
                     logfile=step.cmd.logfile,
+                    run_on_master=bool(step.cmd.args.get("createmms", False)),
                 )
-                if submitted.get("status") != "success" or not submitted.get("ret"):
-                    raise RuntimeError(f"Failed to submit mstransform: {submitted}")
-                result["mpi_ids"] = submitted["ret"]
-                response = runner.get_response(submitted["ret"], block=True)
                 replies = response.get("ret")
                 if (response.get("status") != "success" or not replies
                         or not all(ret.get("successful", False) for ret in replies)):

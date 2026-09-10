@@ -1738,7 +1738,9 @@ class PersistentMpiCasaRunner:
                         "--oversubscribe"] + cmd_list
         self.runner = IterativeSubprocess(cmd_list=cmd_list, clean_env=True, verbose=verbose)
 
-    def run_task(self, task_name: str, args: dict, args_type:Dict[str, Any], block=False, target_server:Optional[int]=None, logfile: str = ""):
+    def run_task(self, task_name: str, args: dict, args_type:Dict[str, Any], block=False,
+                 target_server:Optional[int]=None, logfile: str = "",
+                 run_on_master: bool = False):
         payload = {
             "task_casa": task_name,
             "args": args,
@@ -1746,6 +1748,7 @@ class PersistentMpiCasaRunner:
             "block": block,
             "target_server": target_server,
             "logfile": logfile,
+            "run_on_master": run_on_master,
         }
         return self.runner.send_and_receive(payload)
 

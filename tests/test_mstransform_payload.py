@@ -29,8 +29,7 @@ def payload(runner):
 
 def successful_runner():
     factory = Mock()
-    factory.return_value.run_task.return_value = {"status": "success", "ret": [1]}
-    factory.return_value.get_response.return_value = {
+    factory.return_value.run_task.return_value = {
         "status": "success", "ret": [{"successful": True}]}
     factory.return_value.runner.get_stderr.return_value = "worker diagnostics\n"
     return factory
@@ -59,15 +58,17 @@ class PayloadTests(unittest.TestCase):
             self.assertEqual(calls[0].kwargs["args"]["chanbin"], 4)
             self.assertEqual(calls[1].kwargs["args"]["chanbin"], [2, 4])
             self.assertEqual(calls[0].kwargs["logfile"], jobs["C"].cmd.logfile)
+            self.assertTrue(calls[0].kwargs["run_on_master"])
+            self.assertTrue(calls[0].kwargs["block"])
             self.assertIn("worker diagnostics", (root / "C.err").read_text())
             self.assertEqual(
-                [c[0] for c in factory.return_value.method_calls][:4],
-                ["run_task", "get_response", "run_task", "get_response"])
+                [c[0] for c in factory.return_value.method_calls][:2],
+                ["run_task", "run_task"])
         factory.return_value.close.assert_called_once()
 
     def test_execution_failure_rejects_partial_output_and_continues(self):
         factory = successful_runner()
-        factory.return_value.get_response.side_effect = [
+        factory.return_value.run_task.side_effect = [
             {"status": "success", "ret": [{"successful": False, "traceback": "bad MS"}]},
             {"status": "success", "ret": [{"successful": True}]},
         ]
@@ -85,15 +86,13 @@ class PayloadTests(unittest.TestCase):
                 if failure == "submission":
                     factory.return_value.run_task.return_value = {"status": "error", "error": "rejected"}
                 elif failure == "empty":
-                    factory.return_value.get_response.return_value = {"status": "success", "ret": []}
+                    factory.return_value.run_task.return_value = {"status": "success", "ret": []}
                 elif failure == "exception":
-                    factory.return_value.get_response.side_effect = RuntimeError("worker died")
+                    factory.return_value.run_task.side_effect = RuntimeError("worker died")
                 result = payload(factory)({"C": step(Path(folder) / "absent.ms")}, "/casa")["C"]
                 self.assertEqual(result["status"], "error")
                 self.assertTrue(result["err_msg"])
                 factory.return_value.close.assert_called_once()
-                if failure == "submission":
-                    factory.return_value.get_response.assert_not_called()
 
     def test_startup_failure_is_recorded_for_each_job(self):
         factory = Mock(side_effect=RuntimeError("CASA unavailable"))

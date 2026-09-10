@@ -101,10 +101,10 @@ class SerialCasaTests(unittest.TestCase):
         tasks.casalog.setlogfile.assert_called_once_with("task.log")
         tasks.mstransform.assert_called_once_with(chanbin=4)
 
-    def test_mpi_mstransform_logging_and_quoted_arguments(self):
+    def test_mpi_mstransform_runs_on_master_with_quoted_arguments(self):
         tasks = ModuleType("casatasks")
         for name in ("importfitsidi", "flagdata", "flagmanager", "fringefit", "mstransform", "casalog"):
-            setattr(tasks, name, Mock())
+            setattr(tasks, name, Mock(return_value=None))
         mpi_module = ModuleType("casampi.MPICommandClient")
         client = Mock()
         mpi_module.MPICommandClient = Mock(return_value=client)
@@ -113,12 +113,8 @@ class SerialCasaTests(unittest.TestCase):
                      "chanbin": [2, 4], "createmms": True}
         logfile = "quoted'log.txt"
 
-        def execute(command, block, target_server):
-            exec(command, {"mstransform": tasks.mstransform})
-            return [1]
-
-        client.push_command_request.side_effect = execute
-        requests = [{"task_casa": "mstransform", "args": arguments, "logfile": logfile},
+        requests = [{"task_casa": "mstransform", "args": arguments,
+                     "logfile": logfile, "run_on_master": True},
                     {"task_casa": "stop_services"}]
         output = io.StringIO()
         with patch.dict(sys.modules, {"casatasks": tasks, "casampi.MPICommandClient": mpi_module}), \
@@ -128,8 +124,10 @@ class SerialCasaTests(unittest.TestCase):
             worker.main()
         responses = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertEqual(responses[1]["status"], "success")
+        self.assertTrue(responses[1]["ret"][0]["successful"])
         tasks.mstransform.assert_called_once_with(**arguments)
         tasks.casalog.setlogfile.assert_called_once_with(logfile)
+        client.push_command_request.assert_not_called()
 
     def test_serial_failure_and_blocking_response(self):
         client = worker.SerialCommandClient({"fringefit": Mock(side_effect=RuntimeError("bad data"))})
