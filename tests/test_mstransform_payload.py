@@ -185,9 +185,9 @@ class FinalSplitTests(unittest.TestCase):
             with patch.dict(sys.modules, modules):
                 if failure == "exception":
                     with self.assertRaisesRegex(RuntimeError, "transport failed"):
-                        cls().run(Mock(), source_input, "/casa", "target", mpi_cores_splitms=1)
+                        cls().run(Mock(), source_input, "/casa", "target", mpi_cores=1)
                 else:
-                    result = cls().run(Mock(), source_input, "/casa", "target", mpi_cores_splitms=1)
+                    result = cls().run(Mock(), source_input, "/casa", "target", mpi_cores=1)
                     expected = failure is None
                     self.assertEqual(result.success, [expected])
                     self.assertEqual(result.success_count, int(expected))
@@ -267,7 +267,7 @@ class AverageTests(unittest.TestCase):
             lf = Mock()
             lf.get_value.return_value = ""
             with patch.dict(sys.modules, modules):
-                result = cls().run(lf, "input", "/casa", ["one", "two"], "one", mpi_cores_avgms=1)
+                result = cls().run(lf, "input", "/casa", ["one", "two"], "one", mpi_cores=1)
             expected = mode in ("success", "reuse")
             self.assertEqual(result.success_count, int(expected))
             self.assertEqual(result.failed_count, int(not expected and mode != "empty"))
