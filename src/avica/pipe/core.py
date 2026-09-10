@@ -1,6 +1,6 @@
 from turtle import st
 
-from avica.pipe.config import MPI_CASA_PERL_SCRIPT, PHASESHIFT_PERL_SCRIPT, MPICASA_WORKER, VLBA_GAINS_KEY
+from avica.pipe.config import PHASESHIFT_PERL_SCRIPT, MPICASA_WORKER, VLBA_GAINS_KEY
 import subprocess
 import sys
 from pathlib import Path
@@ -1656,7 +1656,13 @@ class IterativeSubprocess:
         self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
         self._stderr_thread.start()
 
-        self._wait_for_ready()  # block here until worker signals ready
+        try:
+            self._wait_for_ready()  # block here until worker signals ready
+        except Exception:
+            self.process.terminate()
+            self.process.wait()
+            self._stderr_thread.join(timeout=5)
+            raise
 
     def _wait_for_ready(self, timeout=120):
         """Read stdout lines until we see the ready signal, discarding startup noise."""
@@ -1718,21 +1724,31 @@ class IterativeSubprocess:
 
 class PersistentMpiCasaRunner:
     def __init__(self, casadir: str, mpi_cores: int = 10, verbose:bool=False):
-        """single MPI process to recieve payload"""
+        """Persistent CASA worker; one core selects serial execution."""
+        if mpi_cores < 1:
+            raise ValueError("mpi_cores must be a positive integer")
         self.verbose = verbose
         cmd_list = [
-            f"{casadir}/bin/mpicasa", "-n", str(mpi_cores),
-            "--oversubscribe", f"{casadir}/bin/casa", "--nologger", "--nogui", "--agg",
+            f"{casadir}/bin/casa", "--nologger", "--nogui", "--agg",
             "-c", f"{MPICASA_WORKER}"]
+        if mpi_cores == 1:
+            cmd_list.append("--serial")
+        else:
+            cmd_list = [f"{casadir}/bin/mpicasa", "-n", str(mpi_cores),
+                        "--oversubscribe"] + cmd_list
         self.runner = IterativeSubprocess(cmd_list=cmd_list, clean_env=True, verbose=verbose)
 
-    def run_task(self, task_name: str, args: dict, args_type:Dict[str, Any], block=False, target_server:Optional[int]=None):
+    def run_task(self, task_name: str, args: dict, args_type:Dict[str, Any], block=False,
+                 target_server:Optional[int]=None, logfile: str = "",
+                 run_on_master: bool = False):
         payload = {
             "task_casa": task_name,
             "args": args,
             "args_type":args_type,
             "block": block,
-            "target_server": target_server
+            "target_server": target_server,
+            "logfile": logfile,
+            "run_on_master": run_on_master,
         }
         return self.runner.send_and_receive(payload)
 
@@ -1818,21 +1834,16 @@ class SubprocessPayload:
     def run(self)->dict:
         return run_subprocess(cmd_list=self.cmd_list, inp_data=self.inp_data, mode=self.mode, clean_env=self.clean_env)
 
-class MpiCasaPayload(SubprocessPayload):
-    cmd_list    =   ["perl", MPI_CASA_PERL_SCRIPT]
-    mode        =   "stdin"
-
-    def __init__(self, tasks_list: List[CasaStep], host: str = "localhost", port: int = SERVER_PORT):
-        inp_data    =   CasaConfigGen(tasks_list=tasks_list).to_dict()
-        super().__init__(inp_data=inp_data, host=host, port=port)
-
 @dataclass
 class PicardTask:
     input:      str
     n:          int = 10
 
     def to_args(self) -> List[str]:
-        return ["-n", str(self.n), "--input", self.input]
+        if self.n < 1:
+            raise ValueError("mpi_cores must be a positive integer")
+        # rPICARD's launcher uses -n 2 to select plain CASA.
+        return ["-n", str(2 if self.n == 1 else self.n), "--input", self.input]
 
 
 

@@ -24,7 +24,8 @@ from .helpers import convert_flag_table, convert_ms_flag_cmd_table
 
 from .core import PipelineStepBase, StepResult, ColName, PipelineContext, WorkDirMeta, RemoveRemovables
 from .core import step_stage, InitVariables, RunValidation,  UpdateResults, UpdateSheet, CasaSetup
-from .core import ImportFITSIdi, MsTransform, MpiCasaPayload, PicardPayload, GenerateAndAppendAntab, PicardTask, PersistentMpiCasaRunner
+from .core import ImportFITSIdi, MsTransform, PicardPayload, GenerateAndAppendAntab, PicardTask, PersistentMpiCasaRunner
+from .tasks.mstransform import task_mstransform_payload
 from .core import FlagData, FlagManager
 from .config import PHASESHIFT_PERL_SCRIPT
 
@@ -353,7 +354,7 @@ class FitsIdiToMS(PipelineStepBase):
         self.result.desc.append(f"applied {nflags} {flag_source} flag rows to {Path(vis).name}")
         return True
 
-    def run(self, lf, casadir, wd_ifolder, apply_flag_from_idi=True, mpi_cores_importfitsidi=5, flag_source="ms",
+    def run(self, lf, casadir, wd_ifolder, apply_flag_from_idi=True, mpi_cores=5, flag_source="ms",
         removables=[], rm_only=False, rm_pre=False, delete_removables=False,
         apply_flag_to_existing_vis=False,):
 
@@ -471,9 +472,10 @@ class FitsIdiToMS(PipelineStepBase):
 
         mpi_runner = None
         try:
-            with step_stage("MPI execution", vis=vis):
+            with step_stage("Serial CASA execution" if mpi_cores == 1 else "MPI execution", vis=vis):
                 res         =   []
-                mpi_runner = PersistentMpiCasaRunner(casadir=casadir, mpi_cores=mpi_cores_importfitsidi)
+                if tasks_list or (apply_flag_from_idi and apply_flag_to_existing_vis and existing_flag_targets):
+                    mpi_runner = PersistentMpiCasaRunner(casadir=casadir, mpi_cores=mpi_cores)
                 for casastep in tasks_list:
                     print(f"processing vis={casastep.cmd.args['vis']}")
                     mpi_res = mpi_runner.run_task(
@@ -487,10 +489,15 @@ class FitsIdiToMS(PipelineStepBase):
             # ---------------- finalize outputs and metadata
 
             for i, casastep in enumerate(tasks_list):
-                final_response      =   mpi_runner.get_response(res[i]["ret"], block=True)
+                submitted = res[i]
+                final_response = (mpi_runner.get_response(submitted["ret"], block=True)
+                                  if submitted.get("status") == "success" else submitted)
+                task_success = (final_response.get("status") == "success"
+                                and bool(final_response.get("ret"))
+                                and all(ret.get("successful", False) for ret in final_response["ret"]))
                 output_vis          =   Path(casastep.cmd.args['vis'])
                 output_vis_for_lock_cleanup.append(output_vis)
-                if output_vis.exists():
+                if task_success and output_vis.exists():
                     print(f"processed vis={casastep.cmd.args['vis']}")
                     flag_success = True
                     if apply_flag_from_idi:
@@ -522,6 +529,8 @@ class FitsIdiToMS(PipelineStepBase):
                     self.result.failed_count     +=  1
                     # last_log = latest_file(Path(output_vis).parent, '*err.out*')
                     self.result.desc.append(f"failed! vis:{output_vis.name} check logs: {errcasalogfile}")
+                    if not task_success:
+                        self.result.desc.append(f"CASA task failed: {final_response}")
                     if not all([Path(ff).exists() for ff in casastep.cmd.args['fitsidifile']]):
                         self.result.desc.append(f"input fitsidifile not found! {casastep.cmd.args['fitsidifile']}")
                     self.result.success.append(False)
@@ -740,7 +749,7 @@ class AverageMS(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, casadir, targets, target, mpi_cores_avgms=5,
+    def run(self, lf, wd_ifolder, casadir, targets, target, mpi_cores=5,
         removables=[], rm_only=False, rm_pre=False, delete_removables=False, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms.meta import BandInfoMS
@@ -750,6 +759,11 @@ class AverageMS(PipelineStepBase):
 
         global_bands_dict               =   {}
         self.result.detail              =   {}
+        self.result.success = []
+        self.result.desc = []
+        self.result.success_count = self.result.failed_count = 0
+        reused_bands = []
+        all_band_chwidth = {}
         band_counts                     =   {}
         bands_known                     =   []
 
@@ -854,7 +868,8 @@ class AverageMS(PipelineStepBase):
                                 if outvis==vis:
                                     raise NameError("both outvis and vis are the same file")
 
-                                band_chwidth[band]              =   chwidth
+                                band_chwidth[bandobs] = chwidth
+                                all_band_chwidth[bandobs] = chwidth
 
                                     # ---------------------------------------------------   Execution
                                 if Path(outvis).exists():
@@ -862,7 +877,9 @@ class AverageMS(PipelineStepBase):
                                         nfixed_tsys = repair_mixed_single_pol_syscal_tsys(outvis)
                                         if nfixed_tsys:
                                             self.result.desc.append(f"repaired {nfixed_tsys} mixed single-pol SYSCAL TSYS rows in {Path(outvis).name}")
-                                        self.result.detail[band]     =   "vis-exists"
+                                        self.result.detail[bandobs] = "vis-exists"
+                                        reused_bands.append(bandobs)
+                                        self.result.success.append(True)
                                     else:
                                         del_fl(wd_b, fl=Path(outvis).name, rm=True)
 
@@ -879,39 +896,46 @@ class AverageMS(PipelineStepBase):
                                             chanbin=chanbin, spw=",".join(spws), chanaverage=chanavg,
                                             timeaverage=timeavg, timebin=timebin)
 
-                                        step             =   task.to_step(logfile=casalogfile, casadir=casadir, errf=errcasalogfile, mpi_cores=mpi_cores_avgms)
-                                        tasks_list.append((step,outvis, band, errcasalogfile, obs_b, iwd_b, band_chwidth, spws))
+                                        step             =   task.to_step(logfile=casalogfile, casadir=casadir, errf=errcasalogfile, mpi_cores=mpi_cores)
+                                        tasks_list.append((step,outvis, bandobs, errcasalogfile, obs_b, iwd_b, dict(band_chwidth), spws))
 
                     except Exception:
-                        traceback.print_exc()
-            success_band            =   []
+                        error = traceback.format_exc()
+                        log.error(error)
+                        self.result.desc.append(error)
+            success_band            =   list(reused_bands)
 
             # ------------------------- Execution
-            steps_only      =   [step for (step, *_rest) in tasks_list]
-            tasks_payload   =   MpiCasaPayload(tasks_list=steps_only)
-            tasks_payload.run()
+            task_results = task_mstransform_payload(
+                {band: step for step, _outvis, band, *_rest in tasks_list},
+                casadir=casadir, mpi_cores=mpi_cores,
+            )
             comment_val, success_val, failed_band = "", "", ""
 
             for (step, outvis, band, errcasalogfile, obs_b, iwd_b, band_chwidth, selected_spws) in tasks_list:
-                if not Path(outvis).exists():
-                    self.result.detail[band]     =   f"check {errcasalogfile}"
+                if task_results[band]["status"] != "success":
+                    self.result.detail[band] = f"check {errcasalogfile}: {task_results[band]['err_msg']}"
                     self.result.success.append(False)
                 else:
-                    check_and_fix_spw_partitioning(outvis, selected_spws)
-                    nfixed_tsys = repair_mixed_single_pol_syscal_tsys(outvis)
-                    if nfixed_tsys:
-                        self.result.desc.append(f"repaired {nfixed_tsys} mixed single-pol SYSCAL TSYS rows in {Path(outvis).name}")
-                    self.result.detail[band]     =   str(Path(outvis).name)
-                    print(f"processed {outvis}")
-                    self.result.success.append(True)
-                    fillinp_fromiwd(wd_ifolder, iwd_b)
-                    create_config(obs_b, f'{iwd_b}/observation.inp')
-                    success_band.append(band)
+                    try:
+                        check_and_fix_spw_partitioning(outvis, selected_spws)
+                        nfixed_tsys = repair_mixed_single_pol_syscal_tsys(outvis)
+                        if nfixed_tsys:
+                            self.result.desc.append(f"repaired {nfixed_tsys} mixed single-pol SYSCAL TSYS rows in {Path(outvis).name}")
+                        fillinp_fromiwd(wd_ifolder, iwd_b)
+                        create_config(obs_b, f'{iwd_b}/observation.inp')
+                        self.result.detail[band] = str(Path(outvis).name)
+                        success_band.append(band)
+                        self.result.success.append(True)
+                    except Exception:
+                        self.result.detail[band] = traceback.format_exc()
+                        self.result.success.append(False)
 
-                comment_val     +=   " ".join([f"{b}:{w} kHz" for b,w in band_chwidth.items() if b in success_band])
-                success_val     +=   " ".join([f"{b}:{td_b}" for b,td_b in self.result.detail.items()])
-                failed_band     +=   " ".join([f"{b}: failed" for b,w in band_chwidth.items() if b not in success_band])
-            succeed         =   len(success_band)/len(bands_known)                                                       # this should update for each freqid
+            self.result.success = [band in success_band for band in bands_known]
+            comment_val = " ".join(f"{b}:{w} kHz" for b, w in all_band_chwidth.items() if b in success_band)
+            success_val = " ".join(f"{b}:{value}" for b, value in self.result.detail.items())
+            failed_band = " ".join(f"{b}: failed" for b in bands_known if b not in success_band)
+            succeed = len(success_band) / len(bands_known) if bands_known else 0
 
 
             self.result.success_count       =   len(success_band)
@@ -931,7 +955,7 @@ class AverageMS(PipelineStepBase):
 
         global_bands_dict['bands_known'] = bands_known
         save_metafile(wd_meta.metafile_msmeta_sources, {'bands_dict': global_bands_dict})
-        self.result.desc = bands_known
+        self.result.desc.extend(bands_known)
         self.result.end_stamp   =   datetime.now()
 
         if delete_removables:
@@ -1088,7 +1112,7 @@ class SnRating(PipelineStepBase):
     # ----------------------------------------------------------
 
     def run(self, lf, wd_ifolder, init_params, casadir, target, n_refant=5, n_calib=6, removables=[], rm_only=False, rm_pre=False, delete_removables=False,
-                    multiband_snrating=True, mpi_cores_snrating=5, n_scan_snrting=7, verbose=True):
+                    multiband_snrating=True, mpi_cores=5, n_scan_snrting=7, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms import get_best_spws
         from avica.pipe.tasks.fringefit import exec_FFT_fringefit
@@ -1175,7 +1199,7 @@ class SnRating(PipelineStepBase):
                             with step_stage(msg):
                                 try:
                                     dic_field, refants, pp_out      =   exec_FFT_fringefit(fr, casadir=casadir,logfile=casalogfile,errfile=errcasalogfile,
-                                                                                                mpi_cores=mpi_cores_snrating,multiband=multiband_snrating)
+                                                                                                mpi_cores=mpi_cores,multiband=multiband_snrating)
 
                                     msg                             =   f"finished fringefit for {Path(vis_b).name}"
                                     log.info(msg)
@@ -1359,153 +1383,147 @@ class FinalSplitMs(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, casadir, target, removables=[], rm_only=False, rm_pre=False, delete_removables=False, verbose=True):
-        self.result.start_stamp   = datetime.now()
+    def run(self, lf, wd_ifolder, casadir, target, removables=[], rm_only=False,
+            rm_pre=False, delete_removables=False, verbose=True, mpi_cores=10):
         from avica.ms import get_best_spws, check_and_fix_spw_partitioning
         from avica.ms.compat import CasaMSMetadata
-        cmsmd = CasaMSMetadata()
-        log                             =   logging.getLogger("avica.pipeline")
-        wd_meta                         =   WorkDirMeta(wd_ifolder=wd_ifolder)
-        wd                              =   wd_meta.wd
+
+        self.result.start_stamp = datetime.now()
+        self.result.detail = {}
+        self.result.desc = []
+        self.result.success = []
+        self.result.success_count = self.result.failed_count = 0
+        wd_meta = WorkDirMeta(wd_ifolder=wd_ifolder)
+        root_wd = wd_meta.wd
         if delete_removables:
             removables = _normalize_removables(removables)
             if rm_pre or rm_only:
-                removed_count = RemoveRemovables(wd, removables).rm()
+                removed_count = RemoveRemovables(root_wd, removables).rm()
                 if rm_only:
                     return _rm_only_result(self.result, removed_count)
 
-        metafolder                      =   Path(wd_meta.metafolder)
-        desc                             =   {}
-        wds_ifolder_for_payload         =   []
-
-        bands_dict                      =   read_metafile(wd_meta.metafile_msmeta_sources)['bands_dict']
-        bands                           =   list(bands_dict['bands_known'])
-        nband                           =   0
-
-        msg                             =   f"iterating through the workdir for each bands: {','.join(bands)}"
-        log.info(msg)
-        with step_stage(msg):
+        bands = list(read_metafile(wd_meta.metafile_msmeta_sources)['bands_dict']['bands_known'])
+        jobs, contexts, failures = {}, {}, {}
+        renamed_inputs = []
+        try:
             for band in bands:
-                print(f"found {band} band..")
-                wd, iwd_b                       =   wd_meta.to_new_WD(band=band, target="")
-                msmetafile_b                    =   metafolder / f'msmeta_sources_{band}_{target}.avica'
-                if msmetafile_b.exists():
-                    allsd, spwsd                =   read_avica_sources_msmeta(msmetafile_b)
-                    allsources                  =   allsd[band[0]]
-                    spws                        =   spwsd[band[0]]
+                try:
+                    msmetafile = Path(wd_meta.metafolder) / f'msmeta_sources_{band}_{target}.avica'
+                    if not msmetafile.exists():
+                        raise FileNotFoundError(f"no source metadata: {msmetafile}")
+                    _, iwd_b = wd_meta.to_new_WD(band=band, target="")
+                    obs_b = wd_meta.get_inp(band=band, target="")
+                    if not obs_b['ms_name']:
+                        raise FileNotFoundError("no vis")
+                    original = Path(iwd_b).parent / obs_b['ms_name']
+                    if not original.exists():
+                        raise FileNotFoundError(f"no vis: {original}")
+                    vis_b = original
+                    if not original.stem.endswith("_old"):
+                        old_file = original.with_name(f"{original.stem}_old{original.suffix}")
+                        # Never delete a previous input or interrupted-run backup.
+                        if old_file.exists():
+                            raise FileExistsError(f"input backup already exists: {old_file}")
+                        vis_b = original.rename(old_file)
+                        renamed_inputs.append((vis_b, original))
 
-                    params, _, _                    =   read_inputfile(iwd_b, "observation.inp")
-                    ms_name                         =   Path(iwd_b).parent / params['ms_name'] if params['ms_name'] else None   # ms_name is our working ms file
+                    wd_t, iwd_b_t = wd_meta.to_new_WD(band, target=target, create=False)
+                    wd_t = Path(wd_t)
+                    # Validate before the existing target-directory replacement.
+                    if wd_t.resolve() == vis_b.parent.resolve() or wd_t.resolve() in vis_b.resolve().parents:
+                        raise ValueError(f"target directory contains input MS: {wd_t}")
+                    if wd_t.exists():
+                        shutil.rmtree(wd_t)
+                    wd_t, iwd_b_t = wd_meta.to_new_WD(band, target=target, create=True)
+                    outvis = Path(wd_t) / vis_b.name
+                    allsources = alls_fromobs(obs_b)
+                    selected_spws = [str(spw) for spw in get_best_spws(str(vis_b))]
+                    cmsmd = CasaMSMetadata()
+                    try:
+                        cmsmd.open(str(vis_b))
+                        scans = sorted(set(s for fld in allsources for s in cmsmd.scansforfield(fld)))
+                    finally:
+                        cmsmd.done()
+                    logfile = str(Path(wd_t) / get_logfilename(
+                        fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa"))
+                    errfile = str(Path(wd_t) / get_logfilename(
+                        fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa"))
+                    jobs[band] = MsTransform(
+                        vis=str(vis_b), outputvis=str(outvis),
+                        scan=",".join(map(str, scans)), field=",".join(map(str, allsources)),
+                        spw=",".join(selected_spws),
+                    ).to_step(logfile=logfile, errf=errfile, casadir=casadir,
+                              mpi_cores=mpi_cores)
+                    contexts[band] = (outvis, selected_spws, obs_b, iwd_b, iwd_b_t, allsources)
+                except Exception:
+                    failures[band] = traceback.format_exc()
 
-                    if ms_name and ms_name.exists():
-                        spws                            =   [str(spw) for spw in spws]
-                        obs_b                           =   wd_meta.get_inp(band=band, target="")
-                        vis_b                       =   Path(iwd_b).parent / obs_b['ms_name'] if obs_b['ms_name'] else None   # should be VLBI_{band}.ms OR # should be VLBI_{band}_old.ms
-                        orig_vis_b                  =   deepcopy(vis_b)
-
-                        old_file                        =   vis_b.parent / Path(f"{vis_b.stem}_old{vis_b.suffix}")
-                        nband                       +=  1
-                        del_fl(Path(old_file).parent, 0, f'{Path(old_file).stem}*', rm=True)                                    # delete all VLBI_{band}_old.ms*
-
-                        if f'_old{vis_b.suffix}' not in str(vis_b):
-                            vis_b                             =   vis_b.rename(old_file)                 # mv VLBI_{band}.ms ----->  VLBI_{band}_old.ms
-
-                        wd_t, iwd_b_t                       =   wd_meta.to_new_WD(band, target=target, create=False)
-                        if Path(wd_t).exists():
-                            shutil.rmtree(wd_t)
-                        wd_t, iwd_b_t                       =   wd_meta.to_new_WD(band, target=target, create=True)
-                        outvis                              =   wd_t / vis_b.name
-
-                        if outvis==vis_b:
-                            raise TypeError(f"both outvis and vis are the same file {vis_b}")
-
-                        allsources                           =   alls_fromobs(obs_b)
-
-                        del_fl(wd_t, 0, fl=f"{outvis.name}*", rm=True)                                 # deletes all VLBI_{band}_{target}.ms* i.e also flagversions
-                        del_fl(wd_t, 0, fl="*stored*", rm=True)
-                        del_fl(wd_t, 0, fl="*tmp*", rm=True)
-                        listof_uniquespws = get_best_spws(str(vis_b))
-                        listof_uniquespws = [str(bspw) for bspw in listof_uniquespws]
-
-                        # ---------------------------------------------------   Execution
-
-                        msg                 =   "executing casatask payload mstransform"
-                        log.info(msg)
-                        with step_stage(msg):
-                            casalogfile     =   f'{wd_t}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa")}'
-                            errcasalogfile  =   f'{wd_t}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa")}'
-                            cmsmd.open(str(vis_b))
-                            try:
-                                scans = sorted(set(s for fld in allsources for s in cmsmd.scansforfield(fld)))
-                            finally:
-                                cmsmd.done()
-
-                            task            =   MsTransform(vis=str(vis_b), outputvis=str(outvis),
-                                                    scan=",".join(map(str, scans)),
-                                                    field=",".join(map(str, allsources)),
-                                                    spw=",".join(listof_uniquespws))
-
-                            step             =   task.to_step(logfile=casalogfile, casadir=casadir, errf=errcasalogfile, mpi_cores=10)
-                            tasks_list        =   [step]
-                            wds_ifolder_for_payload.append(wd_ifolder)
-
-                            tasks_payload   =   MpiCasaPayload(tasks_list=tasks_list)
-                            tasks_payload.run()
-                            self.result.detail[band]     =   "check mstransform" if not Path(outvis).exists() else str(Path(outvis).name)
-
-                        if Path(outvis).exists():
-                            msg                 =   "creating input and updating values"
-                            log.info(msg)
-                            with step_stage(msg):
-                                check_and_fix_spw_partitioning(str(outvis), listof_uniquespws)
-                                desc[band]                 =   outvis.name
-                                self.result.success_count   +=  1
-
-                                arr_finetune                    =   wd_meta.get_inp(band=band, target=target, inpfile="array_finetune.inp")
-                                arr                             =   wd_meta.get_inp(band=band, target=target, inpfile="array.inp")
-                                arr_finetune['rldly_stations']  =   ",".join(arr['refant'][:3])
-
-                                create_config(arr_finetune, f'{iwd_b_t}/array_finetune.inp')
-                                fillinp_fromiwd(iwd_b, iwd_b_t)
-                                create_config(obs_b, f'{iwd_b_t}/observation.inp')
-                        else:
-                            self.result.success.append(False)
-                            desc[band]                 =   "casa task failed"
-
-                        if vis_b.exists() and "_old" in vis_b.name:
-                            vis_b.rename(orig_vis_b)                        # mv VLBLI_{band}_old.ms --> VLBI_{band}*.ms
-
-                        self.result.detail[band] = str(vis_b)
-
-                        obs_b['ms_name']                =   vis_b.name
-                        create_config(obs_b, f'{iwd_b_t}/observation.inp')
-                        self.result.success.append(True)
-                    else:
-                        self.result.success.append(False)
-                        desc[band]                 =   "no vis"
-
-                    if not self.result.success[-1]:
-                        _        =   lf.put_value(f"{lf.get_value(colname=self.colnames.working_col)} {band}:{desc[band]}".strip(),
-                                                                         self.colnames.working_col, self.result.failed_count)
-                        self.result.failed_count      += 1
-
-                        self.result.success.append(False)
-                    else:
-                        _        =   lf.put_value(f"{lf.get_value(colname=self.colnames.working_col)} {band}:{desc[band]}".strip(),
-                                                                         self.colnames.working_col, self.result.success_count)
-                        desc[band]=f"..splitted {','.join(allsources)} for band : {band} ({target})"
-                        print(desc[band])
-                        self.result.success_count+=1
-                        self.result.desc.append(desc[band])
-
+            task_results = task_mstransform_payload(
+                jobs, casadir=casadir, mpi_cores=mpi_cores)
+            for band in bands:
+                success = False
+                detail = failures.get(band, "")
+                if band in task_results:
+                    result = task_results[band]
+                    detail = result["err_msg"]
+                    if result["status"] == "success":
+                        try:
+                            outvis, selected_spws, obs_b, iwd_b, iwd_b_t, allsources = contexts[band]
+                            check_and_fix_spw_partitioning(str(outvis), selected_spws)
+                            # Populate the target input directory before reading it. A newly
+                            # created target directory has no refant value, which previously
+                            # produced the invalid rPicard input ``rldly_stations =``.
+                            fillinp_fromiwd(iwd_b, iwd_b_t)
+                            arr_finetune = wd_meta.get_inp(
+                                band=band, target=target, inpfile="array_finetune.inp")
+                            arr = wd_meta.get_inp(
+                                band=band, target=target, inpfile="array.inp")
+                            refants = arr.get('refant', [])
+                            if isinstance(refants, str):
+                                refants = [refant.strip().strip("'\"")
+                                           for refant in refants.split(',')
+                                           if refant.strip().strip("'\"")]
+                            else:
+                                refants = list(refants)
+                            if not refants:
+                                raise ValueError(
+                                    f"No reference antennas found in {iwd_b_t}/array.inp")
+                            arr_finetune['rldly_stations'] = ",".join(refants[:3])
+                            create_config(arr_finetune, f'{iwd_b_t}/array_finetune.inp')
+                            output_obs = dict(obs_b, ms_name=outvis.name)
+                            create_config(output_obs, f'{iwd_b_t}/observation.inp')
+                            detail = str(outvis)
+                            success = True
+                            self.result.desc.append(
+                                f"..splitted {','.join(map(str, allsources))} for band: {band} ({target})")
+                        except Exception:
+                            detail = traceback.format_exc()
+                self.result.detail[band] = detail
+                self.result.success.append(success)
+                if success:
+                    self.result.success_count += 1
+                else:
+                    self.result.failed_count += 1
+                previous = lf.get_value(colname=self.colnames.working_col) or ""
+                lf.put_value(f"{previous} {band}:{detail}".strip(),
+                             self.colnames.working_col,
+                             self.result.success_count if success else self.result.failed_count)
+        finally:
+            # The payload closes CASA before any input is renamed back.
+            restore_errors = []
+            for temporary, original in reversed(renamed_inputs):
+                try:
+                    temporary.rename(original)
+                except Exception:
+                    restore_errors.append(traceback.format_exc())
+            if restore_errors:
+                raise RuntimeError("Failed to restore input MS names:\n" + "\n".join(restore_errors))
 
         self.result.end_stamp = datetime.now()
-
-        if delete_removables:
-            if len(removables) > 0 and not rm_pre:
-                RemoveRemovables(wd, removables).rm()
-
+        if delete_removables and removables and not rm_pre:
+            RemoveRemovables(root_wd, removables).rm()
         return self.result
+
 
 class Calibration(PipelineStepBase):
     """
@@ -1529,7 +1547,8 @@ class Calibration(PipelineStepBase):
     # ----------------------------------------------------------
 
     def run(self, lf, wd_ifolder, casadir, target, verbose=True, removables=[],
-        rm_only=False, picard_input_template_update='', delete_previous_data=True, rm_pre=False, delete_removables=False):
+        rm_only=False, picard_input_template_update='', delete_previous_data=True, rm_pre=False,
+        delete_removables=False, mpi_cores=10):
         from avica.ms.tables import repair_mixed_single_pol_syscal_tsys
         from avica.pipe.core import update_ifolderdata_from_new_ifolder
 
@@ -1591,7 +1610,7 @@ class Calibration(PipelineStepBase):
                             print(msg)
                             self.result.desc.append(msg)
 
-                    payload         =   PicardPayload(PicardTask(input=iwd_b_t, n=PipelineContext.params['mpi_cores_rpicard']))
+                    payload         =   PicardPayload(PicardTask(input=iwd_b_t, n=mpi_cores))
                     payload.run()
 
                     calibrated_files = glob.glob(f"{wd_t}/*_calibrated.uvf")
