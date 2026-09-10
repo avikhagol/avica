@@ -9,7 +9,7 @@
 
 [![asciicast](https://asciinema.org/a/1016974.svg)](https://asciinema.org/a/1016974)
 
-Full documentation: https://avica.readthedocs.io/en/latest/
+Complete demo: [avikhagol.github.io/avica-demos](https://avikhagol.github.io/avica-demos)
 
 ## Contents
 
