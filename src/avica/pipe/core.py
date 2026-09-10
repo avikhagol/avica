@@ -1,6 +1,6 @@
 from turtle import st
 
-from avica.pipe.config import MPI_CASA_PERL_SCRIPT, PHASESHIFT_PERL_SCRIPT, MPICASA_WORKER, VLBA_GAINS_KEY
+from avica.pipe.config import PHASESHIFT_PERL_SCRIPT, MPICASA_WORKER, VLBA_GAINS_KEY
 import subprocess
 import sys
 from pathlib import Path
@@ -1656,7 +1656,13 @@ class IterativeSubprocess:
         self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
         self._stderr_thread.start()
 
-        self._wait_for_ready()  # block here until worker signals ready
+        try:
+            self._wait_for_ready()  # block here until worker signals ready
+        except Exception:
+            self.process.terminate()
+            self.process.wait()
+            self._stderr_thread.join(timeout=5)
+            raise
 
     def _wait_for_ready(self, timeout=120):
         """Read stdout lines until we see the ready signal, discarding startup noise."""
@@ -1732,13 +1738,14 @@ class PersistentMpiCasaRunner:
                         "--oversubscribe"] + cmd_list
         self.runner = IterativeSubprocess(cmd_list=cmd_list, clean_env=True, verbose=verbose)
 
-    def run_task(self, task_name: str, args: dict, args_type:Dict[str, Any], block=False, target_server:Optional[int]=None):
+    def run_task(self, task_name: str, args: dict, args_type:Dict[str, Any], block=False, target_server:Optional[int]=None, logfile: str = ""):
         payload = {
             "task_casa": task_name,
             "args": args,
             "args_type":args_type,
             "block": block,
-            "target_server": target_server
+            "target_server": target_server,
+            "logfile": logfile,
         }
         return self.runner.send_and_receive(payload)
 
@@ -1823,14 +1830,6 @@ class SubprocessPayload:
 
     def run(self)->dict:
         return run_subprocess(cmd_list=self.cmd_list, inp_data=self.inp_data, mode=self.mode, clean_env=self.clean_env)
-
-class MpiCasaPayload(SubprocessPayload):
-    cmd_list    =   ["perl", MPI_CASA_PERL_SCRIPT]
-    mode        =   "stdin"
-
-    def __init__(self, tasks_list: List[CasaStep], host: str = "localhost", port: int = SERVER_PORT):
-        inp_data    =   CasaConfigGen(tasks_list=tasks_list).to_dict()
-        super().__init__(inp_data=inp_data, host=host, port=port)
 
 @dataclass
 class PicardTask:

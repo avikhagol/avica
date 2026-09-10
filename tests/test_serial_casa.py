@@ -64,7 +64,7 @@ class SerialCasaTests(unittest.TestCase):
         for name in ("importfitsidi", "flagdata", "flagmanager", "fringefit", "mstransform"):
             setattr(tasks, name, Mock(side_effect=noisy_task))
         requests = []
-        for index, name in enumerate(("importfitsidi", "flagdata", "flagmanager", "fringefit"), 1):
+        for index, name in enumerate(("importfitsidi", "flagdata", "flagmanager", "fringefit", "mstransform"), 1):
             requests.extend([
                 {"task_casa": name, "args": {"vis": "test.ms"}, "block": False},
                 {"task_casa": "get_command_response", "parameters": {"command_ids": [index]}},
@@ -78,11 +78,58 @@ class SerialCasaTests(unittest.TestCase):
             worker.main()
         responses = [json.loads(line) for line in output.getvalue().splitlines()]
         self.assertEqual(responses[0], {"status": "ready"})
-        for index in range(1, 5):
+        for index in range(1, 6):
             self.assertEqual(responses[index * 2 - 1]["ret"], [index])
             self.assertTrue(responses[index * 2]["ret"][0]["successful"])
         tasks.importfitsidi.assert_called_once_with(vis="test.ms")
         tasks.fringefit.assert_called_once_with(vis="test.ms")
+        tasks.mstransform.assert_called_once_with(vis="test.ms")
+
+    def test_serial_mstransform_logging(self):
+        tasks = ModuleType("casatasks")
+        for name in ("importfitsidi", "flagdata", "flagmanager", "fringefit", "mstransform", "casalog"):
+            setattr(tasks, name, Mock(return_value=None))
+        request = {"task_casa": "mstransform", "args": {"chanbin": 4}, "logfile": "task.log"}
+        output = io.StringIO()
+        with patch.dict(sys.modules, {"casatasks": tasks, "casampi": None}), \
+             patch.object(sys, "argv", ["worker.py", "--serial"]), \
+             patch.object(sys, "stdin", io.StringIO(json.dumps(request))), \
+             patch.object(sys, "stdout", output):
+            worker.main()
+        responses = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual(responses[1]["status"], "success")
+        tasks.casalog.setlogfile.assert_called_once_with("task.log")
+        tasks.mstransform.assert_called_once_with(chanbin=4)
+
+    def test_mpi_mstransform_logging_and_quoted_arguments(self):
+        tasks = ModuleType("casatasks")
+        for name in ("importfitsidi", "flagdata", "flagmanager", "fringefit", "mstransform", "casalog"):
+            setattr(tasks, name, Mock())
+        mpi_module = ModuleType("casampi.MPICommandClient")
+        client = Mock()
+        mpi_module.MPICommandClient = Mock(return_value=client)
+        client.stop_services.return_value = None
+        arguments = {"vis": "a'quoted\\path.ms", "outputvis": "output.ms",
+                     "chanbin": [2, 4], "createmms": True}
+        logfile = "quoted'log.txt"
+
+        def execute(command, block, target_server):
+            exec(command, {"mstransform": tasks.mstransform})
+            return [1]
+
+        client.push_command_request.side_effect = execute
+        requests = [{"task_casa": "mstransform", "args": arguments, "logfile": logfile},
+                    {"task_casa": "stop_services"}]
+        output = io.StringIO()
+        with patch.dict(sys.modules, {"casatasks": tasks, "casampi.MPICommandClient": mpi_module}), \
+             patch.object(sys, "argv", ["worker.py"]), \
+             patch.object(sys, "stdin", io.StringIO("\n".join(map(json.dumps, requests)))), \
+             patch.object(sys, "stdout", output):
+            worker.main()
+        responses = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual(responses[1]["status"], "success")
+        tasks.mstransform.assert_called_once_with(**arguments)
+        tasks.casalog.setlogfile.assert_called_once_with(logfile)
 
     def test_serial_failure_and_blocking_response(self):
         client = worker.SerialCommandClient({"fringefit": Mock(side_effect=RuntimeError("bad data"))})

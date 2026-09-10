@@ -16,10 +16,6 @@ try:
 except ImportError:
     from importlib_resources import files, as_file   # 3.8 backport
 
-ref = files("avica.pipe") / "perl" / "run_mpicasa.pl"
-with as_file(ref) as perl_script_path:
-    MPI_CASA_PERL_SCRIPT = str(perl_script_path)
-
 ref = files("avica.pipe") / "mpicasa_worker.py"
 with as_file(ref) as py_script_path:
     MPICASA_WORKER = str(py_script_path)
@@ -497,6 +493,8 @@ DEFAULT_PARAMS: dict = {
     "use_casadir_pythonpath"    :   False,
     "mpi_cores_snrating"        :   5,
     "mpi_cores_importfitsidi"   :   5,
+    "mpi_cores_avgms"           :   5,
+    "mpi_cores_splitms"         :   10,
     "snr_threshold_phref"       :   7,
     "flux_threshold_phref"      :   0.15,
     "min_channel_flagging"      :   32,

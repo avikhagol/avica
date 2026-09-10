@@ -61,6 +61,7 @@ def main():
             block=payload.get("block", False)
             target_server=payload.get("target_server", 0)
             parameters=payload.get("parameters", args)
+            logfile = payload.get("logfile", "")
 
             if task_name == "get_command_response":
                 command_ids = parameters["command_ids"]
@@ -77,21 +78,15 @@ def main():
             elif task_name == "stop_services":
                 ret = client.stop_services()
             elif serial:
+                if logfile:
+                    from casatasks import casalog
+                    casalog.setlogfile(logfile)
                 ret = client.run_task(task_name, parameters, block)
             else:
-                args_type = payload.get("args_type", {})
-                parts = []
-                for k, v in parameters.items():
-                    t = args_type.get(k, "")
-                    if isinstance(v, list):
-                        parts.append(f"{k}={repr(v)}")
-                    elif isinstance(v, bool):
-                        parts.append(f"{k}={v}")
-                    elif isinstance(v, (int, float)):
-                        parts.append(f"{k}={v}")
-                    else:
-                        parts.append(f"{k}='{v}'")
+                parts = [f"{k}={v!r}" for k, v in parameters.items()]
                 cmd_str = task_name + "(" + ", ".join(parts) + ")"
+                if logfile:
+                    cmd_str = f"from casatasks import casalog; casalog.setlogfile({logfile!r}); " + cmd_str
                 ret = client.push_command_request(cmd_str, block, target_server)
 
             print(json.dumps({"status": "success", "task": task_name, "ret": ret}), flush=True)
