@@ -133,9 +133,28 @@ class FinalSplitTests(unittest.TestCase):
                 return directory, inputs
 
             meta.to_new_WD.side_effect = workdir
-            meta.get_inp.side_effect = lambda **kw: (
-                {"refant": ["A", "B", "C"]} if kw.get("inpfile") == "array.inp" else
-                {} if kw.get("inpfile") else {"ms_name": "test.ms"})
+            target_inputs_populated = False
+            input_events = []
+
+            def fill_inputs(source, target):
+                nonlocal target_inputs_populated
+                input_events.append("fill")
+                target_inputs_populated = True
+
+            def get_inp(**kwargs):
+                inpfile = kwargs.get("inpfile")
+                if not inpfile:
+                    return {"ms_name": "test.ms"}
+                input_events.append(f"read:{inpfile}")
+                if inpfile == "array.inp":
+                    # read_inputfile returns comma-separated refants as a string.
+                    return {"refant": "A,B,C,D"} if target_inputs_populated else {"refant": []}
+                if inpfile == "array_finetune.inp":
+                    return ({"rldly_stations": "''", "preserved": True}
+                            if target_inputs_populated else {})
+                return {}
+
+            meta.get_inp.side_effect = get_inp
             metadata = Mock()
             metadata.scansforfield.return_value = [1, 2]
             repairs = Mock()
@@ -147,7 +166,8 @@ class FinalSplitTests(unittest.TestCase):
             configs = Mock()
             cls = pipeline_class("FinalSplitMs", dict(
                 WorkDirMeta=lambda **kw: meta, read_metafile=lambda _: {"bands_dict": {"bands_known": ["C"]}},
-                alls_fromobs=lambda _: ["target"], create_config=configs, fillinp_fromiwd=Mock(),
+                alls_fromobs=lambda _: ["target"], create_config=configs,
+                fillinp_fromiwd=fill_inputs,
                 get_logfilename=lambda **kw: kw["module_name"] + ".log",
                 MsTransform=lambda outputvis, **kw: SimpleNamespace(to_step=lambda **opts: step(
                     outputvis, **kw, logfile=opts["logfile"], errf=opts["errf"])),
@@ -173,6 +193,11 @@ class FinalSplitTests(unittest.TestCase):
                     self.assertEqual(result.success_count, int(expected))
                     self.assertEqual(result.failed_count, int(not expected))
                     if expected:
+                        self.assertEqual(input_events[:3], [
+                            "fill", "read:array_finetune.inp", "read:array.inp"])
+                        array_finetune = configs.call_args_list[0].args[0]
+                        self.assertEqual(array_finetune["rldly_stations"], "A,B,C")
+                        self.assertTrue(array_finetune["preserved"])
                         observation = configs.call_args_list[-1].args[0]
                         self.assertEqual(observation["ms_name"], "test_old.ms")
                         self.assertTrue((target_dir / observation["ms_name"]).exists())
