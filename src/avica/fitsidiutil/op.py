@@ -111,22 +111,36 @@ def get_colname(hdu, cols:List[str])->str:
 
 def get_yyyymmdd(dateobs):
     """
-    Takes FITS DATE-OBS with fromat : yy/mm/dd or dd-mm-yyyy and returns (yyyy,mm,dd)
+    Takes FITS DATE-OBS in DD/MM/YY, DD/MM/YYYY, YYYY/MM/DD,
+    DD-MM-YYYY, or ISO-8601 format and returns (yyyy, mm, dd).
+    Two-digit years retain the legacy pivot: 90-99 map to 1990-1999,
+    and 00-89 map to 2000-2089.
     Args:
         dateobs (str): FITS DATE-OBS/RDATE format
 
     Returns:
         tuple: (yyyy,mm,dd)
     """
+    date_part = dateobs.split('T')[0].split(' ')[0]
     yyyy, mm, dd = 0,0,0
     try:
-        dateobs = [int(d) for d in dateobs.split('-')]
-        yyyy = dateobs[0]
-        mm, dd = dateobs[1], dateobs[2]
+        parts = [int(d) for d in date_part.split('-')]
+        if len(parts) == 3:
+            if parts[0] > 31: # YYYY-MM-DD
+                yyyy, mm, dd = parts[0], parts[1], parts[2]
+            else: # DD-MM-YYYY
+                yyyy, mm, dd = parts[2], parts[1], parts[0]
     except Exception:
-        dateobs = [int(d) for d in dateobs.split('/')]
-        yyyy = dateobs[2]+1900 if 90<=dateobs[2]<=99 else dateobs[2]+2000
-        mm, dd = dateobs[1], dateobs[0]
+        date_fields = date_part.split('/')
+        parts = [int(d) for d in date_fields]
+        if len(parts) == 3:
+            if len(date_fields[0]) == 4: # YYYY/MM/DD
+                yyyy, mm, dd = parts[0], parts[1], parts[2]
+            elif len(date_fields[2]) == 4: # DD/MM/YYYY
+                yyyy, mm, dd = parts[2], parts[1], parts[0]
+            else: # DD/MM/YY
+                yyyy = parts[2]+1900 if 90<=parts[2]<=99 else parts[2]+2000
+                mm, dd = parts[1], parts[0]
     return yyyy,mm,dd
 
 
@@ -161,7 +175,24 @@ def get_dateobs(fitsfile):
     hdul = fo.read()
     fo.close()
 
-    dateobs         =   hdul[0].header['DATE-OBS']
+    dateobs = ''
+    for hdu in hdul:
+        if 'DATE-OBS' in hdu.header:
+            dateobs = hdu.header['DATE-OBS']
+            break
+    if not dateobs:
+        for hdu in hdul:
+            if 'RDATE' in hdu.header:
+                dateobs = hdu.header['RDATE']
+                break
+    if not dateobs:
+        for hdu in hdul:
+            if 'DATE-MAP' in hdu.header:
+                dateobs = hdu.header['DATE-MAP']
+                break
+    if not dateobs:
+        dateobs         =   hdul[0].header.get('DATE-OBS', hdul[0].header.get('RDATE', hdul[0].header.get('DATE-MAP', '')))
+
     yyyy,mm,dd      =   get_yyyymmdd(dateobs)
     return datetime(yyyy, mm, dd)
 

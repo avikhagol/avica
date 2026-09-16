@@ -315,8 +315,14 @@ class FITSIDI:
         else:
             self._reader.save_as(outputfile, None, verbose)
 
-    def listobs(self, sids=None):
-        return self._reader.listobs(sids)
+    def listobs(self, sids=None, *, source_col="SOURCE", inttim_col="INTTIM", freqid_col="FREQID"):
+        """Read scan data, optionally overriding UV_DATA column names.
+
+        freqid_col also selects the frequency ID in the FREQUENCY table.
+        """
+        return self._reader.listobs(
+            sids, source_col=source_col, inttim_col=inttim_col, freqid_col=freqid_col,
+        )
 
 
 class IdiHDUCardList(UserList):

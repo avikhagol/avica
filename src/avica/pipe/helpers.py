@@ -696,20 +696,23 @@ def convert_ms_flag_cmd_table(vis: Path, output: Path) -> int:
     return len(lines)
 
 
-def get_allfitsfiles(folder_for_fits, depth=3):
+def get_allfitsfiles(folder_for_fits, depth=3, extensions = ["*fits", "*FITS", "*.idifits", "*.IDIFITS", "*.idi*", "*.IDI*"]):
     allfiles = []
     # Find all files for operation
     pattern = ""
-    prev_dir = ""
+
     for i in range(depth):
-        matched_files = glob.glob(f"{folder_for_fits}{pattern}*fits")
-        allfiles.extend(matched_files)
+        for ext in extensions:
+            matched_files = glob.glob(f"{folder_for_fits}{pattern}{ext}")
+            allfiles.extend(matched_files)
         pattern += "*/"
         if "." in folder_for_fits:
             break
     if not allfiles:
-        allfiles.extend(glob.glob(f"{folder_for_fits}/*fits"))
-    return allfiles
+        for ext in extensions:
+            allfiles.extend(glob.glob(f"{folder_for_fits}/{ext}"))
+    seen = set()
+    return [x for x in allfiles if not (x in seen or seen.add(x))]
 
 def build_path(filepath):
     opt = filepath
@@ -765,7 +768,17 @@ def get_project(fitsfile):
     if not len(segment):
         from avica.fitsidiutil import read_idi
         hdul = read_idi(fitsfile)
-        segment = hdul[0].header['OBSERVER']
+        for hdu in hdul:
+            if 'OBSERVER' in hdu.header:
+                segment = hdu.header['OBSERVER']
+                break
+        if not segment:
+            for hdu in hdul:
+                if 'OBSCODE' in hdu.header:
+                    segment = hdu.header['OBSCODE']
+                    break
+        if not segment:
+            segment = hdul[0].header.get('OBSERVER', hdul[0].header.get('OBSCODE', ''))
 
 
     return str(segment)
@@ -1133,11 +1146,40 @@ def find_url_tsys(fitsfile, proj=''):
     """
     from avica.fitsidiutil.io import FITSIDI
     hdul    =   FITSIDI(fitsfile).read()
-    head    =   hdul[0].header
-    url     =   'https://www.vlba.nrao.edu/astro/VOBS/astronomy/'
 
-    dateobs =   head['DATE-OBS']
-    proj    =   str(head['OBSERVER']).strip()
+    dateobs = ''
+    for hdu in hdul:
+        if 'DATE-OBS' in hdu.header:
+            dateobs = hdu.header['DATE-OBS']
+            break
+    if not dateobs:
+        for hdu in hdul:
+            if 'RDATE' in hdu.header:
+                dateobs = hdu.header['RDATE']
+                break
+    if not dateobs:
+        for hdu in hdul:
+            if 'DATE-MAP' in hdu.header:
+                dateobs = hdu.header['DATE-MAP']
+                break
+    if not dateobs:
+        dateobs         =   hdul[0].header.get('DATE-OBS', hdul[0].header.get('RDATE', hdul[0].header.get('DATE-MAP', '')))
+
+    proj = ''
+    for hdu in hdul:
+        if 'OBSERVER' in hdu.header:
+            proj = hdu.header['OBSERVER']
+            break
+    if not proj:
+        for hdu in hdul:
+            if 'OBSCODE' in hdu.header:
+                proj = hdu.header['OBSCODE']
+                break
+    if not proj:
+        proj            =   hdul[0].header.get('OBSERVER', hdul[0].header.get('OBSCODE', ''))
+
+    proj    =   str(proj).strip()
+    url     =   'https://www.vlba.nrao.edu/astro/VOBS/astronomy/'
     dateobs =   str(dateobs).strip().split('/')
 
     if not len(dateobs)==3:

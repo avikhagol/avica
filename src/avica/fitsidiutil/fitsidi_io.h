@@ -884,7 +884,11 @@ class ReadIO {
 
         return table_data;
     }
-        std::vector<RowData> listobs_fits(py::object sids_arg = py::none())
+        std::vector<RowData> listobs_fits(
+            py::object sids_arg = py::none(),
+            std::string sourceColName = "SOURCE",
+            std::string inttimColName = "INTTIM",
+            std::string freqidColName = "FREQID")
             {
             std::vector<long int> sids_vec;
             bool filter_by_sids = false;
@@ -911,9 +915,6 @@ class ReadIO {
             int current_freqid = -1;
             double current_inttime = 0.0;
             char timeColName[] = "TIME";
-            char sourceColName[] = "SOURCE";
-            char inttimColName[] = "INTTIM";
-            char freqidColName[] = "FREQID";
 
             char frequencyHduName[] = "FREQUENCY";
             fits_movnam_hdu(fptr, BINARY_TBL, frequencyHduName, 0, &status);
@@ -924,7 +925,7 @@ class ReadIO {
                 return results;
             }
             int colnum_freqid;
-            fits_get_colnum(fptr, CASEINSEN, freqidColName, &colnum_freqid, &status);
+            fits_get_colnum(fptr, CASEINSEN, freqidColName.data(), &colnum_freqid, &status);
             if (status) {
                 std::cerr << "Error after freqidColName  = " << status << std::endl;
                 fits_report_error(stderr, status);
@@ -991,9 +992,9 @@ class ReadIO {
                     int colnum_time, colnum_source, colnum_inttim, colnum_freqid;
 
                     fits_get_colnum(fptr, CASEINSEN, timeColName, &colnum_time, &status);
-                    fits_get_colnum(fptr, CASEINSEN, sourceColName, &colnum_source, &status);
-                    fits_get_colnum(fptr, CASEINSEN, inttimColName, &colnum_inttim, &status);
-                    fits_get_colnum(fptr, CASEINSEN, freqidColName, &colnum_freqid, &status);
+                    fits_get_colnum(fptr, CASEINSEN, sourceColName.data(), &colnum_source, &status);
+                    fits_get_colnum(fptr, CASEINSEN, inttimColName.data(), &colnum_inttim, &status);
+                    fits_get_colnum(fptr, CASEINSEN, freqidColName.data(), &colnum_freqid, &status);
                     if (status) {
                     std::cerr << "Error getting colnum_inttim = " << status << std::endl;
                             fits_report_error(stderr, status);

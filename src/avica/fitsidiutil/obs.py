@@ -3,9 +3,9 @@ import polars as pl
 from avica.fitsidiutil.io import FITSIDI
 import numpy as np
 from itertools import count
-from .op import get_yyyymmdd
+from .op import get_yyyymmdd, get_colname
 
-from typing import List
+from typing import List, Optional
 from dataclasses import dataclass, field
 
 
@@ -23,8 +23,27 @@ pl.Config(
 
 # -------------------------------------------------------------
 
+@dataclass(frozen=True)
+class ListObsColumns:
+    """UV_DATA column names; freqid also applies to the FREQUENCY table.
+
+    These do not change the source-name column in the SOURCE table.
+    """
+
+    source: str = "SOURCE"
+    inttim: str = "INTTIM"
+    freqid: str = "FREQID"
+
+
 class ListObs:
-    def __init__(self, fitsfilepath, sids=None, time_scale_data='tai', scangap=15, scale_dateobs='utc'):
+    """Summarize scans, detecting the UV_DATA source ID column by default.
+
+    Pass colnames to use explicit column names instead of source detection.
+    """
+
+    def __init__(self, fitsfilepath, sids=None, time_scale_data='tai', scangap=15, scale_dateobs='utc', *, colnames=None):
+        self._detect_source_col = colnames is None
+        self.colnames = colnames if colnames is not None else ListObsColumns()
         self.fitsfilepath                               =   fitsfilepath
         self.time_scale_data                            =   time_scale_data
         self.scale_dateobs                              =   scale_dateobs
@@ -54,13 +73,43 @@ class ListObs:
         """
         fo              =   FITSIDI(self.fitsfilepath)
         fo.open()
-        hdul            =   fo.read(max_chunk=100)
-        dateobs         =   hdul[0].header['DATE-OBS']
+        hdul            =   fo.read(max_chunk=1)
+        if self._detect_source_col:
+            try:
+                hdu_uvdata = hdul['UV_DATA']
+                self.colnames = ListObsColumns(
+                    source=get_colname(hdu_uvdata, ['SOURCE', 'SOURCE_ID']),
+                )
+            except Exception:
+                fo.close()
+                raise
+        dateobs = ''
+        for hdu in hdul:
+            if 'DATE-OBS' in hdu.header:
+                dateobs = hdu.header['DATE-OBS']
+                break
+        if not dateobs:
+            for hdu in hdul:
+                if 'RDATE' in hdu.header:
+                    dateobs = hdu.header['RDATE']
+                    break
+        if not dateobs:
+            for hdu in hdul:
+                if 'DATE-MAP' in hdu.header:
+                    dateobs = hdu.header['DATE-MAP']
+                    break
+        if not dateobs:
+            dateobs     =   hdul[0].header.get('DATE-OBS', hdul[0].header.get('RDATE', hdul[0].header.get('DATE-MAP', '')))
         yyyy,mm,dd         =   get_yyyymmdd(dateobs=dateobs)
         dateobs         =   f"{yyyy}-{mm:02}-{dd:02}"
 
         dateobs         =   Time(dateobs, format='isot', scale=self.scale_dateobs)
-        rowd            =   fo.listobs(sids=self.sids)
+        rowd = fo.listobs(
+            sids=self.sids,
+            source_col=self.colnames.source,
+            inttim_col=self.colnames.inttim,
+            freqid_col=self.colnames.freqid,
+        )
         hdu_source             =   fo.hdul['SOURCE']
         sid_colname     =   self._get_colnames(hdu_source, ['ID_NO', 'SOURCE_ID'])[0]
 
@@ -177,12 +226,15 @@ class ObservationSummary:
 
     Args:
         fitsfilepaths (list, required): _description_. Defaults to [].
+        colnames: Explicit reader column names. When omitted, ListObs detects
+            the UV_DATA source ID column separately for each file.
     """
     fitsfilepaths:List
     sids:List = field(default_factory=list)
     scangap=15
     reindex: bool = False
     dic_summary : dict = field(default_factory=dict)
+    colnames: Optional[ListObsColumns] = None
 
 
 
@@ -191,7 +243,10 @@ class ObservationSummary:
         if isinstance(self.fitsfilepaths, str):
             self.fitsfilepaths = [self.fitsfilepaths]
         for fitsfile in self.fitsfilepaths:
-            listobs_data = ListObs(fitsfilepath=fitsfile, sids=self.sids, scangap=self.scangap)
+            listobs_data = ListObs(
+                fitsfilepath=fitsfile, sids=self.sids, scangap=self.scangap,
+                colnames=self.colnames,
+            )
             dic_new = {"scanlist": listobs_data.scanlist,
                         "listobs": listobs_data.dict_listobs,
                         "sources": listobs_data.dic_sources,
