@@ -111,7 +111,10 @@ def get_colname(hdu, cols:List[str])->str:
 
 def get_yyyymmdd(dateobs):
     """
-    Takes FITS DATE-OBS with format: yy/mm/dd, dd-mm-yyyy, or ISO-8601 YYYY-MM-DDThh:mm:ss and returns (yyyy,mm,dd)
+    Takes FITS DATE-OBS in DD/MM/YY, DD/MM/YYYY, YYYY/MM/DD,
+    DD-MM-YYYY, or ISO-8601 format and returns (yyyy, mm, dd).
+    Two-digit years retain the legacy pivot: 90-99 map to 1990-1999,
+    and 00-89 map to 2000-2089.
     Args:
         dateobs (str): FITS DATE-OBS/RDATE format
 
@@ -128,11 +131,12 @@ def get_yyyymmdd(dateobs):
             else: # DD-MM-YYYY
                 yyyy, mm, dd = parts[2], parts[1], parts[0]
     except Exception:
-        parts = [int(d) for d in date_part.split('/')]
+        date_fields = date_part.split('/')
+        parts = [int(d) for d in date_fields]
         if len(parts) == 3:
-            if parts[0] > 31: # YYYY/MM/DD
+            if len(date_fields[0]) == 4: # YYYY/MM/DD
                 yyyy, mm, dd = parts[0], parts[1], parts[2]
-            elif parts[2] > 31: # DD/MM/YYYY
+            elif len(date_fields[2]) == 4: # DD/MM/YYYY
                 yyyy, mm, dd = parts[2], parts[1], parts[0]
             else: # DD/MM/YY
                 yyyy = parts[2]+1900 if 90<=parts[2]<=99 else parts[2]+2000

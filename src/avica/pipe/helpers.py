@@ -696,7 +696,7 @@ def convert_ms_flag_cmd_table(vis: Path, output: Path) -> int:
     return len(lines)
 
 
-def get_allfitsfiles(folder_for_fits, depth=3, extensions = ["*fits", "*FITS", "*idi*", "*IDI*", "*idifits", "*IDIFITS"]):
+def get_allfitsfiles(folder_for_fits, depth=3, extensions = ["*fits", "*FITS", "*.idifits", "*.IDIFITS", "*.idi*", "*.IDI*"]):
     allfiles = []
     # Find all files for operation
     pattern = ""
