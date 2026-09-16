@@ -55,7 +55,23 @@ class ListObs:
         fo              =   FITSIDI(self.fitsfilepath)
         fo.open()
         hdul            =   fo.read(max_chunk=100)
-        dateobs         =   hdul[0].header['DATE-OBS']
+        dateobs = ''
+        for hdu in hdul:
+            if 'DATE-OBS' in hdu.header:
+                dateobs = hdu.header['DATE-OBS']
+                break
+        if not dateobs:
+            for hdu in hdul:
+                if 'RDATE' in hdu.header:
+                    dateobs = hdu.header['RDATE']
+                    break
+        if not dateobs:
+            for hdu in hdul:
+                if 'DATE-MAP' in hdu.header:
+                    dateobs = hdu.header['DATE-MAP']
+                    break
+        if not dateobs:
+            dateobs     =   hdul[0].header.get('DATE-OBS', hdul[0].header.get('RDATE', hdul[0].header.get('DATE-MAP', '')))
         yyyy,mm,dd         =   get_yyyymmdd(dateobs=dateobs)
         dateobs         =   f"{yyyy}-{mm:02}-{dd:02}"
 
