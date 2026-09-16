@@ -87,6 +87,9 @@ PYBIND11_MODULE (_core, m){
         .def("read_table_chunked", &ReadIO::read_table_chunked, "Read HDU directly into NumPy arrays by chunk")
         .def("listobs", &ReadIO::listobs_fits, 
             py::arg("sids") = py::none(), 
+            py::arg("source_col") = "SOURCE",
+            py::arg("inttim_col") = "INTTIM",
+            py::arg("freqid_col") = "FREQID",
                 "Get observation data from the currently open file")
         .def("delete_hdu", &ReadIO::delete_hdu,
             py::arg("hdu_num"),
