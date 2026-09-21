@@ -106,15 +106,14 @@ main() {
         rsync -az --partial rsync://casa-rsync.nrao.edu/casa-data "$HOME/.casa/data/" </dev/null
     fi
 
-    # Preserve existing AVICA settings while linking a known rPICARD/CASA setup.
+    # `pipe config --default` merges into ~/.avica/avica.inp, so existing
+    # settings survive on their own; the snapshot below is the pre-install one,
+    # which a later `pipe config` would otherwise roll past in avica.inp.bak.
     if [[ -n $casa_dir && -d $picard_dir/input_template ]]; then
-        local -a config_args=(pipe config --default)
-        mkdir -p "$HOME/.avica"
         if [[ -f $HOME/.avica/avica.inp ]]; then
             cp --backup=numbered -p "$HOME/.avica/avica.inp" "$HOME/.avica/avica.inp.before-install"
-            config_args+=(--inpfile "$HOME/.avica/avica.inp")
         fi
-        "$tool_bin/avica" "${config_args[@]}" "casadir=$casa_dir/" \
+        "$tool_bin/avica" pipe config --default "casadir=$casa_dir/" \
             "picard_input_template=$picard_dir/input_template/" </dev/null
     fi
 

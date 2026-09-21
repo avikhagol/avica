@@ -20,7 +20,7 @@ except ImportError:
 
 from avica.config import avica_data_dir, avica_pkg_dir
 
-from avica.util import casadir_find, rfc_find, create_config
+from avica.util import casadir_find, rfc_find, create_config, update_config
 from avica.pipe.config import CSV_POPULATED_STEPS, PipeConfig
 
 from avica.pipe.main import AvicaPipeline
@@ -198,43 +198,49 @@ avica_cli.add_typer(pipeline_app, name="pipe")
 def pipe_config(
     outfile: Optional[str] = typer.Option("avica.inp", help="output config file containing key=value"),
     inpfile: Optional[str] = typer.Option(None, help="input config file containing key=value"),
-    no_inpfile: Annotated[bool, typer.Option("--no-inpfile", help="do not use the default avica.inp file")] = False,
-    default: Annotated[bool, typer.Option("--default", help="adds the configfile to the default config directory")] = False,
-    global_default: Annotated[bool, typer.Option("--global", help="adds the configfile to the global config directory")] = False,
+    no_inpfile: Annotated[bool, typer.Option("--no-inpfile", help="do not discover the local avica.inp for --summary")] = False,
+    default: Annotated[bool, typer.Option("--default", help="merge the settings into ~/.avica/avica.inp")] = False,
+    global_default: Annotated[bool, typer.Option("--global", help="merge the settings into the installed global avica.inp")] = False,
     data: Annotated[Optional[List[str]], typer.Argument(help="key=value pairs")] = None,
     summary: Annotated[bool, typer.Option("--summary", help="print a report summary of the parameters")] = False,
     ):
-    params = PipeConfig(None).defaults()
-    param_sources = dict.fromkeys(params, "default")
-    global_configfile = str(Path(avica_pkg_dir) / "avica.inp")
-    global_params = PipeConfig(global_configfile).to_dict()
-    params.update(global_params)
-    param_sources.update(dict.fromkeys(global_params, "global"))
-
-    # Summaries use the same file precedence as pipe run. Writing a config
-    # remains scoped to its selected input, without importing user defaults.
+    # Summaries layer every scope the way `pipe run` resolves them.  A write
+    # touches exactly one layer: the destination is resolved first and updated
+    # in place, so lower layers (built-in defaults, the packaged global file, a
+    # local avica.inp) are never copied into it, and keys already in the file
+    # that nobody asked about survive.
     if summary:
+        params = PipeConfig(None).defaults()
+        param_sources = dict.fromkeys(params, "default")
+        global_configfile = str(Path(avica_pkg_dir) / "avica.inp")
+        global_params = PipeConfig(global_configfile).to_dict()
+        params.update(global_params)
+        param_sources.update(dict.fromkeys(global_params, "global"))
+
         user_configfile = Path(avica_data_dir) / "avica.inp"
         if user_configfile.exists():
             user_params = PipeConfig(user_configfile).to_dict()
             params.update(user_params)
             param_sources.update(dict.fromkeys(user_params, "user"))
 
-    if not inpfile and not no_inpfile:
-        local_configfile = outfile if summary else (
-            "avica.inp" if not (global_default or default) else None
-        )
-        if local_configfile and Path(local_configfile).exists():
-            inpfile = local_configfile
+        if not inpfile and not no_inpfile and Path(outfile).exists():
+            inpfile = outfile
+    else:
+        if default:
+            outfile = str(Path(avica_data_dir) / Path(outfile).name)
+
+        if global_default:
+            outfile = str(Path(avica_pkg_dir) / Path(outfile).name)
+
+        params = {}
+        param_sources = {}
+
     if inpfile:
         try:
             input_params = PipeConfig(inpfile).to_dict()
         except Exception as e:
             raise typer.BadParameter(f"Failed to read config file '{inpfile}': {e}") from e
-        if summary:
-            params.update(input_params)
-        else:
-            params = input_params
+        params.update(input_params)
         param_sources.update(dict.fromkeys(input_params, "inpfile"))
 
     if data:
@@ -331,17 +337,10 @@ def pipe_config(
         console.print(table)
 
     elif not params:
-        raise typer.BadParameter("No configuration to write. Provide either --inpfile or --data arguments.")
+        raise typer.BadParameter("No configuration to write. Provide either --inpfile or key=value arguments.")
 
     else:
-
-        if default:
-            outfile = str(Path(avica_data_dir) / Path(outfile).name)
-
-        if global_default:
-            outfile = str(Path(avica_pkg_dir) / Path(outfile).name)
-
-        create_config(params=params, out=outfile, rj=1, lj=1)
+        update_config(params=params, out=outfile, rj=1, lj=1)
 
 @pipeline_app.command("run")
 def run_pipeline(

@@ -246,7 +246,7 @@ avica pipe run --configfile <path/to/config/file>
 
 If `--configfile` is not provided, AVICA uses `avica.inp` by default.
 
-To store defaults persistently, create `~/.avica/avica.inp` from an existing file:
+To store defaults persistently, merge an existing file into `~/.avica/avica.inp`:
 
 ```bash
 avica pipe config --default --inpfile <path/to/avica.inp>
@@ -264,6 +264,13 @@ To set global defaults in AVICA's installed directory, use `--global` in the sam
 avica pipe config --global --inpfile <path/to/avica.inp>
 avica pipe config --global key=value key2=value2 key3=value3
 ```
+
+Each of these commands only touches one file: `--default` writes to
+`~/.avica/avica.inp`, `--global` writes to the installed `avica.inp`, and plain
+`avica pipe config` writes to the local `avica.inp` (or `--outfile`). Only the
+keys you give it are changed; everything else already in that file — other
+settings, comments, `# str`/`# int` notes — stays as it was. A backup of the
+old file is saved as `avica.inp.bak`.
 
 To supersede the rPicard `input_template` files (`array.inp`, `observation.inp`, `array_finetune.inp`, `flagging.inp`, `constants.inp`) used by the `rpicard` step, point `picard_input_template_update` at a folder containing the parameters you want to fix:
 

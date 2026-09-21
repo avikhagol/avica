@@ -182,8 +182,8 @@ Minimal configuration:
    separation_thres          =   850.0
    source_extract_multi_fitsfiles    =   False
 
-To store defaults persistently in ``~/.avica/avica.inp``, pass an existing
-configuration file:
+To store defaults persistently, merge an existing configuration file into
+``~/.avica/avica.inp``:
 
 .. code-block:: bash
 
@@ -202,6 +202,13 @@ same way:
 
    avica pipe config --global --inpfile <path/to/avica.inp>
    avica pipe config --global key=value key2=value2 key3=value3
+
+Each of these commands only touches one file: ``--default`` writes to
+``~/.avica/avica.inp``, ``--global`` writes to the installed ``avica.inp``, and
+plain ``avica pipe config`` writes to the local ``avica.inp`` (or
+``--outfile``). Only the keys you give it are changed; everything else already
+in that file -- other settings, comments, ``# str``/``# int`` notes -- stays as
+it was. A backup of the old file is saved as ``avica.inp.bak``.
 
 Parameter summary
 ~~~~~~~~~~~~~~~~~

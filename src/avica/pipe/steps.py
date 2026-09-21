@@ -1278,7 +1278,7 @@ class FillInputMs(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, rfc_catalogfile, target, n_calib=6, flux_threshold_phref=7, hi_freq_ref=11,
+    def run(self, lf, wd_ifolder, rfc_catalogfile, target, n_calib=6, snr_threshold_phref=7, hi_freq_ref=11,
         removables=[], rm_only=False, rm_pre=False, delete_removables=False,
             min_channel_flagging=32, sci_solints="auto", solint_max_scan_partitions=8, verbose=True):
         self.result.start_stamp         =   datetime.now()
@@ -1317,7 +1317,7 @@ class FillInputMs(PipelineStepBase):
                         success                     =   fill_input_byvalues(iwd_b,
                                                                             iwd_b,
                                                                             str(vis_b), target,
-                                                                            flux_thres      =   flux_threshold_phref,
+                                                                            flux_thres      =   snr_threshold_phref,
                                                                             n_calib         =   n_calib,
                                                                             caliblist_file  =   rfc_catalogfile,
                                                                             sourcesf        =   sourcesf,

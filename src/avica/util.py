@@ -8,6 +8,7 @@ import glob, re
 from collections import defaultdict
 from pathlib import Path
 import json
+import os
 import subprocess
 import numpy as np
 import shutil
@@ -214,20 +215,71 @@ def run_fitsverify(fitsfile):
     return val
 
 
-def create_config(params, out='config.inp', lj=1, rj=1, verbose=True):
-    with open(out, 'w') as o:
-        for k,v in params.items():
+def format_config_value(v, rj=1):
+    """Render a parameter value the way an input file spells it."""
+    if isinstance(v, list):
+        v = f'{",".join(map(str, v))}'
+    elif isinstance(v, range):
+        v = f"{v.start}~{v.stop}"
+    if isinstance(v, str):
+        v = f"{v.rjust(rj)}"
+    return v
 
-            if isinstance(v,list) :
-                v=map(str, v)
-                v = f'{",".join(v)}'
-            elif isinstance(v, range):
-                v = f"{v.start}~{v.stop}"
-            if isinstance(v, str):
-                v = f"{v.rjust(rj)}"
-            o.write(f'{k.ljust(lj)} = {v}\n')
+
+def atomic_write(out, text, backup=True):
+    """Write `text` to `out` via a temporary file, keeping one `.bak` copy."""
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if backup and out.exists():
+        shutil.copy2(out, out.with_name(out.name + '.bak'))
+    tmp = out.with_name(out.name + '.tmp')
+    tmp.write_text(text)
+    os.replace(tmp, out)
+    return str(out)
+
+
+def create_config(params, out='config.inp', lj=1, rj=1, verbose=True, backup=True):
+    text = "".join(f'{k.ljust(lj)} = {format_config_value(v, rj)}\n'
+                   for k, v in params.items())
+    atomic_write(out, text, backup=backup)
     if verbose:print("created", f'{out}' )
     return out
+
+
+def update_config(params, out='config.inp', lj=1, rj=1, verbose=True, backup=True):
+    """Apply `params` to `out` in place, leaving every other line untouched.
+
+    Only the keys in `params` are rewritten, so comments, ordering, blank lines
+    and the `# str|int|float|bool` type suffixes that `read_inputfile` reads as
+    type declarations all survive.  Keys not already in the file are appended.
+    Values already in the file that nobody asked to change are never re-rendered,
+    which keeps them clear of the read-time coercions (wildcard expansion,
+    numeric casting) that a dict round-trip would bake in.
+    """
+    out = Path(out)
+    existed = out.exists()
+    pending = dict(params)
+    lines = []
+    column = lj
+
+    if existed:
+        for line in out.read_text().splitlines():
+            head, sep, rest = line.partition('=')
+            key = head.strip()
+            if sep and key and not key.startswith('#'):
+                column = max(column, len(head) - 1)
+                if key in pending:
+                    _, has_comment, comment = rest.partition('#')
+                    suffix = f" #{comment}" if has_comment else ""
+                    line = f"{head}= {format_config_value(pending.pop(key), rj)}{suffix}"
+            lines.append(line)
+
+    for k, v in pending.items():
+        lines.append(f'{k.ljust(column)} = {format_config_value(v, rj)}')
+
+    atomic_write(out, "\n".join(lines) + "\n" if lines else "", backup=backup)
+    if verbose:print("updated" if existed else "created", f'{out}')
+    return str(out)
 
 def read_txt_file(filename):
     """
