@@ -265,11 +265,12 @@ avica pipe config --global --inpfile <path/to/avica.inp>
 avica pipe config --global key=value key2=value2 key3=value3
 ```
 
-A write updates exactly one file — `~/.avica/avica.inp` for `--default`, the installed
-`avica.inp` for `--global`, the local `avica.inp` (or `--outfile`) otherwise. Only the
-keys you pass are rewritten, in place: every other setting, comment and `# str`/`# int`
-type suffix in that file is left alone, and no value is ever inherited from a lower layer
-into a higher one. The previous contents are kept alongside as `avica.inp.bak`.
+Each of these commands only touches one file: `--default` writes to
+`~/.avica/avica.inp`, `--global` writes to the installed `avica.inp`, and plain
+`avica pipe config` writes to the local `avica.inp` (or `--outfile`). Only the
+keys you give it are changed; everything else already in that file — other
+settings, comments, `# str`/`# int` notes — stays as it was. A backup of the
+old file is saved as `avica.inp.bak`.
 
 To supersede the rPicard `input_template` files (`array.inp`, `observation.inp`, `array_finetune.inp`, `flagging.inp`, `constants.inp`) used by the `rpicard` step, point `picard_input_template_update` at a folder containing the parameters you want to fix:
 
