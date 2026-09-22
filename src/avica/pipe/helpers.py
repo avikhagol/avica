@@ -137,6 +137,24 @@ def add_O(src_name):
         return prefix+zero_grouped[1]
 
 
+def normalize_strlist(value):
+    """Coerce a config list to a list of strings.
+
+    `read_inputfile` has no list syntax, so a list-valued option arrives as the
+    raw text -- `[]`, `[a, b]` or `a, b` -- and has to be unpacked here.
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = value.strip()
+        if not value or value == "[]":
+            return []
+        if value.startswith("[") and value.endswith("]"):
+            value = value[1:-1]
+        return [item.strip().strip("'\"") for item in value.split(",") if item.strip().strip("'\"")]
+    return list(value)
+
+
 def parse_params(lf, params):
     for ky in params:
         if ky=="folder_for_fits" and '$' in params[ky]:

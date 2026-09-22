@@ -3,8 +3,24 @@
 ## [0.3.1.14]
 
 ### Added
-- `artifact_dirs` option to `pipe config`.
-- existing antab is used when available in `artifact_dirs` or `folder_for_fits`.
+- `artifact_dirs`, `use_local_antab`, and `local_antab_require_full_array` options to `pipe config`.
+- existing antab is used when available in `artifact_dirs`, `folder_for_fits` or `<workdir>/raw`.
+- local antab selection requires more than `valid_perc` overlap with the UV data
+  for matching antennas. Full-array coverage is required by default; partial
+  station calibration can be enabled explicitly. IF mismatch remains a warning.
+- eligible candidates are ranked by time coverage, antenna coverage, and IF
+  agreement; equal ranks raise an ambiguity error. Malformed and unrelated
+  candidates are skipped before falling back to VLBA calibration retrieval.
+- candidate decisions and calibration sources are recorded in preprocessing metadata.
+
+### Fixed
+- `TIMEOFF=*` in an ANTAB is read as `TIMEOFF=0`, with a printed and logged warning,
+  instead of failing the keyin parser.
+- an empty `POLY=` is now refused with an explicit error rather than being written or
+  silently treated as unity gain; discovery skips such candidates.
+- appending calibration preserves existing gains for uncovered antennas and TSYS
+  outside the incoming per-antenna/array/frequency time spans. Empty imported tables
+  and incompatible merge schemas fail before staged files replace working data.
 
 ## [0.3.1.13]
 

@@ -1,8 +1,5 @@
 # required
 # assumes `folder_for_fits` is a folder containing all the raw visibility fits files.
-# Place ready-to-use .antab files alongside the FITS files (or in folder_for_fits).
-# Local ANTABs are selected by observation time overlap before the VLBA fallback.
-# Extensions are case-insensitive; equally matching files raise an ambiguity error.
 # `casadir` is the path to the monolithic CASA installation used for running CASA tasks.
 
 folder_for_fits           =   /path/to/source/folder/with/raw/visibility/fitsfiles
@@ -16,6 +13,21 @@ casadir                  =  "path/to/monolithic-casa/casa-6.x.x-xx-py3.xx.xxx/"
 target_dir                =   "reductions"
 picard_input_template     =   "path/to/rpicard"
 accor_solint              =   4
+# Ready-to-use .antab files are picked up before falling back to the VLBA archive.
+# `artifact_dirs` are searched in addition to `folder_for_fits` and <workdir>/raw;
+# leave it empty to search only those. The extension match is case-insensitive.
+# A candidate is used when it covers more than `valid_perc` (5%) of the file's UV
+# data -- the same threshold applied to TSYS already in the file. Candidates must
+# match antennas; by default all FITS antennas need TSYS rows in the ANTAB.
+# Malformed/unrelated candidates are skipped. Ranking uses time coverage, antenna
+# coverage, then IF agreement; equally suitable files raise an ambiguity error.
+# IF disagreement only warns (it never rejects a candidate).
+# Allow partial arrays explicitly; existing calibration for other antennas and
+# TSYS times outside the appended span is preserved.
+# Set `use_local_antab = False` to ignore local .antab files entirely.
+artifact_dirs             =   []
+use_local_antab           =   True
+local_antab_require_full_array = True
 # Configure MPI independently for each pipeline step. Set a CASA step to 1
 # for serial execution. rPICARD also retains its upstream convention for 2.
 fits_to_ms.mpi_cores      =   5

@@ -35,17 +35,9 @@ log = logging.getLogger("avica.pipeline")
 #                                Pipeline Steps                                       #
 #_____________________________________________________________________________________#
 
-def _normalize_removables(removables):
-    if removables is None:
-        return []
-    if isinstance(removables, str):
-        value = removables.strip()
-        if not value or value == "[]":
-            return []
-        if value.startswith("[") and value.endswith("]"):
-            value = value[1:-1]
-        return [item.strip().strip("'\"") for item in value.split(",") if item.strip().strip("'\"")]
-    return list(removables)
+from avica.pipe.helpers import normalize_strlist as _normalize_strlist
+
+_normalize_removables = _normalize_strlist
 
 
 def _rm_only_result(result, removed_count):
@@ -85,7 +77,8 @@ class PreProcessFitsIdi(PipelineStepBase):
     # ----------------------------------------------------------
 
     def run(self, lf, fitsfiles, target, wd_ifolder, source_extract_multi_fitsfiles=False,
-        removables=[], rm_only=False, rm_pre=False, delete_removables=False, verbose=False):
+        removables=[], rm_only=False, rm_pre=False, delete_removables=False, artifact_dirs=[],
+        use_local_antab=True, local_antab_require_full_array=True, verbose=False):
         self.result.start_stamp   = datetime.now()
         from avica.fitsidiutil.validation import fitsidi_check
         from avica.fitsidiutil.obs import ObservationSummary
@@ -209,7 +202,7 @@ class PreProcessFitsIdi(PipelineStepBase):
 
         log.info(msg_info)
         with step_stage(msg_info, fitsfiles=fitsfiles, multifreqid=multifreqid):
-            artifact_dirs = PipelineContext.params.get('artifact_dirs', [])
+            artifact_dirs = _normalize_strlist(artifact_dirs)
             if not artifact_dirs and PipelineContext.params.get('folder_for_fits'):
                 artifact_dirs = [PipelineContext.params['folder_for_fits']]
             if multifreqid:
@@ -224,12 +217,14 @@ class PreProcessFitsIdi(PipelineStepBase):
                     else:
                         print(f"  {Path(ff).name} --> {Path(newff).name}")
 
-                ga              =   GenerateAndAppendAntab(fitsfiles=res_splitdata['workingfits'], metafolder=metafolder, verbose=True, wd=wd, valid_perc=5, artifact_dirs=artifact_dirs)
+                ga              =   GenerateAndAppendAntab(fitsfiles=res_splitdata['workingfits'], metafolder=metafolder, verbose=True, wd=wd, valid_perc=5, artifact_dirs=artifact_dirs, use_local_antab=use_local_antab, local_antab_require_full_array=local_antab_require_full_array)
+                self.result.detail['calibration_decisions'] = ga.calibration_decisions
 
                 ga.attach_antab(only_first=False, attach_all=True)               #  to attach antab if it is mixed w. splitted freqid and non multiple?
                 fitsfiles_used  =   ga.workingfits
             else:
-                ga              =   GenerateAndAppendAntab(fitsfiles=fitsfiles_used, metafolder=metafolder, verbose=True, wd=wd, valid_perc=5, artifact_dirs=artifact_dirs)
+                ga              =   GenerateAndAppendAntab(fitsfiles=fitsfiles_used, metafolder=metafolder, verbose=True, wd=wd, valid_perc=5, artifact_dirs=artifact_dirs, use_local_antab=use_local_antab, local_antab_require_full_array=local_antab_require_full_array)
+                self.result.detail['calibration_decisions'] = ga.calibration_decisions
                 ga.attach_antab(only_first=False)
                 fitsfiles_used  =   ga.workingfits
 
@@ -239,7 +234,9 @@ class PreProcessFitsIdi(PipelineStepBase):
         with step_stage("saving metadata", fitsfiles=fitsfiles):
             self.result.detail['calibration_sources'] = ga.calibration_sources
             PipelineContext.params['filepaths']     =   fitsfiles_used
-            save_metafile(wd_meta.metafile_used_ff, {"filepath": fitsfiles_used})
+            save_metafile(wd_meta.metafile_used_ff, {"filepath": fitsfiles_used,
+                          "calibration_sources": ga.calibration_sources,
+                          "calibration_decisions": ga.calibration_decisions})
 
         # ___________________________________________________________                                                        Fill meta [optional]
 

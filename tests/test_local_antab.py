@@ -7,8 +7,9 @@ from unittest.mock import patch
 
 from astropy.time import Time
 
-from avica.pipe.core import GenerateAndAppendAntab
-from avica.fitsidiutil.op import parse_antab
+from avica.pipe.core import GenerateAndAppendAntab, antab_spw_count
+from avica.fitsidiutil import op
+from avica.fitsidiutil.op import AntabGainError, check_antab_poly, parse_antab
 
 
 ANTAB = """! Ready-to-use station calibration
@@ -44,6 +45,15 @@ class LocalAntabTest(unittest.TestCase):
             False, None, None, Time('2025-04-10T10:00:00'), Time('2025-04-10T12:00:00')))
         self.times.start()
         self.addCleanup(self.times.stop)
+        self.layout = patch.object(self.ga, '_fits_layout', return_value=({'EF'}, 1))
+        self.layout.start()
+        self.addCleanup(self.layout.stop)
+        # Most tests use text stand-ins; real FITS integration tests stop this patch.
+        self.preserve = patch.object(self.ga, '_preserve_calibration')
+        self.preserve.start()
+        self.addCleanup(self.preserve.stop)
+        op._TIMEOFF_WARNED.clear()
+        self.addCleanup(op._TIMEOFF_WARNED.clear)
 
     def antab(self, name='experiment.AnTaB', text=ANTAB, directory=None):
         path = (directory or self.artifacts) / name
@@ -84,13 +94,124 @@ class LocalAntabTest(unittest.TestCase):
         self.assertEqual(append.call_args.args, (local, [self.fits[1]]))
         download.assert_not_called()
 
-    def test_best_overlap_and_ambiguous_tie(self):
+    def test_best_overlap_wins(self):
         local = self.antab()
         self.antab('partial.antab', ANTAB.replace('12:00:00', '11:00:00'))
         self.assertEqual(self.ga._find_local_antab(self.fits[0]), local)
-        self.antab('duplicate.antab')
-        with self.assertRaisesRegex(ValueError, 'Ambiguous ANTAB'):
-            self.ga._find_local_antab(self.fits[0])
+
+    def test_equal_candidates_raise_before_append_or_download(self):
+        self.antab('a_duplicate.antab')
+        self.antab('b_duplicate.antab')
+        with patch.object(self.ga, '_append_antab_file') as append, \
+             patch('avica.pipe.core.find_tsys') as download:
+            with self.assertRaisesRegex(ValueError, 'Ambiguous ANTAB'):
+                self.run_find()
+        append.assert_not_called()
+        download.assert_not_called()
+        self.assertTrue(all(d['status'] == 'ambiguous' for d in self.ga.calibration_decisions))
+
+    def test_overlap_below_valid_perc_is_not_used(self):
+        # UV data spans 10:00-12:00; 5 minutes is 4.17%, under the 5% threshold.
+        self.antab('sliver.antab', ANTAB.replace('100 12:00:00', '100 10:05:00'))
+        self.assertIsNone(self.ga._find_local_antab(self.fits[0]))
+
+    def test_overlap_above_valid_perc_is_used(self):
+        # 10 minutes is 8.33%, over the threshold.
+        wide = self.antab('wide.antab', ANTAB.replace('100 12:00:00', '100 10:10:00'))
+        self.assertEqual(self.ga._find_local_antab(self.fits[0]), wide)
+
+    def test_if_mismatch_only_warns(self):
+        local = self.antab()
+        with patch.object(self.ga, '_fits_layout', return_value=({'EF'}, 4)), \
+             self.assertLogs('avica.pipeline', level='WARNING') as logged:
+            chosen = self.ga._find_local_antab(self.fits[0])
+        self.assertEqual(chosen, local)
+        messages = '\n'.join(logged.output)
+        self.assertIn('NO_BAND=4', messages)
+        self.assertFalse(self.ga.calibration_decisions[-1]['if_compatible'])
+
+    def test_unrelated_array_falls_back_to_vlba(self):
+        self.antab()
+        with patch.object(self.ga, '_fits_layout', return_value=({'LA', 'PT'}, 1)), \
+             patch('avica.pipe.core.find_tsys', return_value=(0, 1, [])) as download, \
+             self.assertWarnsRegex(RuntimeWarning, 'no matching antennas'):
+            self.run_find()
+        download.assert_called_once()
+        self.assertEqual(self.ga.calibration_decisions[-1]['status'], 'vlba_fallback')
+
+    def test_partial_array_requires_explicit_opt_in(self):
+        local = self.antab()
+        with patch.object(self.ga, '_fits_layout', return_value=({'EF', 'WB'}, 1)):
+            with self.assertWarnsRegex(RuntimeWarning, 'missing TSYS antennas'):
+                self.assertIsNone(self.ga._find_local_antab(self.fits[0]))
+            self.ga.local_antab_require_full_array = False
+            self.assertEqual(self.ga._find_local_antab(self.fits[0]), local)
+
+    def test_antenna_coverage_breaks_time_tie(self):
+        self.antab('partial.antab')
+        full = self.antab('full.antab', ANTAB + ANTAB.replace('EF', 'WB'))
+        self.ga.local_antab_require_full_array = False
+        with patch.object(self.ga, '_fits_layout', return_value=({'EF', 'WB'}, 1)):
+            self.assertEqual(self.ga._find_local_antab(self.fits[0]), full)
+
+    def test_if_agreement_breaks_time_and_antenna_tie(self):
+        self.antab('wrong_if.antab', ANTAB.replace("'R1','L1'", "'R2','L2'"))
+        right = self.antab('right_if.antab')
+        self.assertEqual(self.ga._find_local_antab(self.fits[0]), right)
+
+    def test_unknown_station_times_do_not_establish_coverage(self):
+        self.antab(text=ANTAB.replace('100 ', '101 ') + ANTAB.replace('EF', 'WB'))
+        self.assertIsNone(self.ga._find_local_antab(self.fits[0]))
+
+    def test_use_local_antab_false_falls_back_to_vlba(self):
+        self.antab()
+        self.ga.use_local_antab = False
+        with patch('avica.pipe.core.find_tsys', return_value=(0, 1, [])) as download:
+            self.run_find()
+        download.assert_called_once()
+
+    def test_timeoff_star_is_read_as_no_offset(self):
+        starred = self.antab('starred.antab', ANTAB.replace('TIMEOFF=0', 'TIMEOFF=*'))
+        with self.assertLogs('avica.pipeline', level='WARNING') as logged:
+            parsed = parse_antab(starred, self.fits[0])
+        self.assertIn('TIMEOFF=0', '\n'.join(logged.output))
+        # identical to an explicit TIMEOFF=0, i.e. the rows are not shifted
+        self.assertEqual(parsed['tsys_dic']['start_time'], datetime(2025, 4, 10, 10, 0))
+        self.assertEqual(parsed['tsys_dic']['end_time'], datetime(2025, 4, 10, 12, 0))
+
+    def test_empty_poly_is_refused_rather_than_assumed_unity(self):
+        empty = self.antab('nogain.antab', ANTAB.replace('POLY=1.0, /', 'POLY= /'))
+        with self.assertRaisesRegex(AntabGainError, 'POLY'):
+            parse_antab(empty, self.fits[0])
+        with self.assertWarnsRegex(RuntimeWarning, 'Skipping ANTAB'):
+            self.assertIsNone(self.ga._find_local_antab(self.fits[0]))
+
+    def test_unrelated_empty_poly_does_not_block_valid_candidate(self):
+        self.antab('broken.antab', ANTAB.replace('100 ', '101 ').replace('POLY=1.0, /', 'POLY= /'))
+        valid = self.antab('valid.antab')
+        with self.assertWarnsRegex(RuntimeWarning, 'Skipping ANTAB'):
+            self.assertEqual(self.ga._find_local_antab(self.fits[0]), valid)
+
+    def test_empty_poly_candidate_allows_vlba_fallback(self):
+        self.antab(text=ANTAB.replace('POLY=1.0, /', 'POLY= /'))
+        with patch('avica.pipe.core.find_tsys', return_value=(0, 1, [])) as download, \
+             self.assertWarnsRegex(RuntimeWarning, 'Skipping ANTAB'):
+            self.run_find()
+        download.assert_called_once()
+
+    def test_check_antab_poly_guards_the_writer(self):
+        for empty in ([], None):
+            with self.assertRaisesRegex(AntabGainError, 'LA'):
+                check_antab_poly(empty, 'LA', 'x.idifits')
+        check_antab_poly([1.0], 'LA', 'x.idifits')           # real coefficients pass
+
+    def test_antab_spw_count_matches_update_map(self):
+        self.assertEqual(antab_spw_count({'INDEX': ['R1', 'L1']}), 1)
+        self.assertEqual(antab_spw_count({'INDEX': 'R1:4'}), 4)
+        self.assertEqual(antab_spw_count({'INDEX': ['R1|L1', 'R2|L2']}), 2)
+        self.assertEqual(antab_spw_count({'INDEX': ['R1'], 'INDEX2': ['L2']}), 2)
+        self.assertEqual(antab_spw_count({'INDEX': ['X1', 'R2']}), 1)
+        self.assertEqual(antab_spw_count({'DPFU': 0.1}), 0)
 
     def test_raw_directory_discovery(self):
         local = self.antab(directory=self.raw)
@@ -153,6 +274,7 @@ class LocalAntabTest(unittest.TestCase):
 
     def test_real_jive_append_creates_tsys_and_gain_tables(self):
         from astropy.io import fits
+        self.preserve.stop()
 
         def table(name, columns):
             return fits.BinTableHDU.from_columns([

@@ -1,4 +1,5 @@
 import numpy as np
+import logging
 import re
 from astropy.io import fits
 from typing import List
@@ -646,6 +647,7 @@ class ANTAB:
                                     antab_header        =   ""
                                     for bn, (b_mount, b_dpfu, b_poly) in bands_gain.items():
                                         fr_lo, fr_hi    =   bands_freq[bn]
+                                        check_antab_poly(b_poly, an, self.fitsfile, band=bn, freq=(fr_lo, fr_hi))
                                         antab_header    +=  (
                                             f"GAIN {an} {b_mount} "
                                             f"FREQ={fr_lo},{fr_hi} "
@@ -653,6 +655,7 @@ class ANTAB:
                                             f"POLY={','.join(map(str,b_poly))} /\n"
                                         )
                                 else:
+                                    check_antab_poly(poly, an, self.fitsfile)
                                     antab_header        =   f"GAIN {an} {mount} DPFU={','.join(map(str,dpfu))} POLY={','.join(map(str,poly))} /\n"
                                 antab_header           +=  f"TSYS {an} {' '.join(an_values)} INDEX={','.join(ind)} /\n"
                                 pols, ind               =   [], []
@@ -728,9 +731,64 @@ def parse_tsys_from_antab(tsys_dic, antb_line_cols):
     tsys_dic['data']   =   []
     return tsys_dic
 
-def normalize_antab_keyin(text):
-    """Accept ANTAB writers that leave a trailing comma before a block terminator."""
-    return re.sub(r",(?=\s*/\s*(?:!.*)?$)", "", text, flags=re.MULTILINE)
+log                 =   logging.getLogger("avica.pipeline")
+
+
+class AntabGainError(ValueError):
+    """An ANTAB GAIN block carries no usable gain polynomial."""
+
+
+_TRAILING_COMMA     =   re.compile(r",(?=\s*/\s*(?:!.*)?$)", re.MULTILINE)
+_TIMEOFF_STAR       =   re.compile(r"\bTIMEOFF\s*=\s*\*", re.IGNORECASE)
+_EMPTY_POLY         =   re.compile(r"\bPOLY\s*=(?=\s*[,/])", re.IGNORECASE)
+_TIMEOFF_WARNED     =   set()
+
+
+def check_antab_poly(poly, antenna, fitsfile, band=None, freq=None):
+    """Refuse to write a GAIN block with no polynomial.
+
+    An empty ``POLY=`` is not valid keyin, and defaulting it to unity gain would
+    silently corrupt the amplitude scale, so this fails loudly instead. The
+    pipeline runner catches the exception and writes the params snapshot to
+    `avica_crash_<step>.json`.
+    """
+    if poly is not None and len(poly):
+        return
+    at          =   f" band {band}" if band else ""
+    at         +=  f" ({freq[0]}-{freq[1]} MHz)" if freq else ""
+    msg         =   (f"No gain-curve coefficients (POLY) for antenna {antenna}{at} in {fitsfile}. "
+                     f"The GAIN_CURVE table / vlba_gains.key lookup returned nothing usable; "
+                     f"writing `POLY=` would produce an unparseable ANTAB and assuming unity "
+                     f"gain would corrupt the amplitude calibration.")
+    print(f"  ERROR: {msg}")
+    log.error(msg)
+    raise AntabGainError(msg)
+
+
+def normalize_antab_keyin(text, source=None):
+    """Make ANTAB keyin headers readable by `read_keyfile`.
+
+    Tolerated: a trailing comma before a block terminator, and AIPS' ``TIMEOFF=*``,
+    which ANTAB defines as no offset (printed and logged once per file).
+    Rejected:  an empty ``POLY=`` -- see `check_antab_poly`.
+    """
+    where               =   f" in {source}" if source else ""
+    text                =   _TRAILING_COMMA.sub("", text)
+    text, n_timeoff     =   _TIMEOFF_STAR.subn("TIMEOFF=0", text)
+    if n_timeoff and str(source) not in _TIMEOFF_WARNED:
+        _TIMEOFF_WARNED.add(str(source))
+        msg             =   (f"ANTAB{where}: TIMEOFF=* is not a number, assuming TIMEOFF=0 "
+                             f"(no time offset) as AIPS TASK ANTAB does.")
+        print(f"  WARNING: {msg}")
+        log.warning(msg)
+    if _EMPTY_POLY.search(text):
+        msg             =   (f"ANTAB{where}: GAIN block has an empty `POLY=` (no gain-curve "
+                             f"coefficients). Refusing to assume unity gain -- the amplitude "
+                             f"calibration would be silently wrong. Fix or drop the GAIN block.")
+        print(f"  ERROR: {msg}")
+        log.error(msg)
+        raise AntabGainError(msg)
+    return text
 
 
 def parse_antab(antabfile, fitsfile):
@@ -772,7 +830,7 @@ def parse_antab(antabfile, fitsfile):
             header.append(line)
             if not line.endswith('/'):
                 continue
-            groups = read_keyfile(StringIO(normalize_antab_keyin('\n'.join(header))))
+            groups = read_keyfile(StringIO(normalize_antab_keyin('\n'.join(header), source=antabfile)))
             header = []
             for group in groups:
                 if not group or group[0][0] not in ('GAIN', 'TSYS'):

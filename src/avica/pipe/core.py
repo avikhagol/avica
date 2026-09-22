@@ -47,7 +47,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 
 from avica.pipe.helpers import find_tsys, FileSize, tsys_exists, tsys_exists_in_fitsfiles, overlap_percentage, del_fl, parse_params, get_allfitsfiles
-from avica.pipe.helpers import get_targets_filenames, setup_workdir, add_O, get_logfilename
+from avica.pipe.helpers import get_targets_filenames, setup_workdir, add_O, get_logfilename, normalize_strlist
 from avica.pipe.config import DEFAULT_PARAMS, CSV_POPULATED_STEPS, PipeConfig, _CASA_INPROCESS_MODULES,  setup_casa_path, get_added_casa_paths, get_added_casa_lib_dirs
 
 from copy import deepcopy
@@ -763,7 +763,10 @@ class InitVariables(PipelineStepValidatorBase):
             fitsfilenames = fitsfilenames.split(",")
 
         wd_ifolder, filepaths                       = setup_workdir(lf, f"{str(Path(target_dir).absolute())}/", fitsfilenames, allfitsfile, picard_input_template=picard_input_template)
+        # Configured dirs come first and are kept: the derived ones only add to them.
+        configured_artifact_dirs = normalize_strlist(PipelineContext.params.get('artifact_dirs'))
         PipelineContext.params['artifact_dirs'] = list(dict.fromkeys(
+            [str(Path(d).resolve()) for d in configured_artifact_dirs] +
             [str(Path(folder_for_fits).resolve())] +
             [str(Path(fp).resolve().parent) for fp in allfitsfile
              if any(Path(str(name).strip()).name == Path(fp).name for name in fitsfilenames)]
@@ -1348,8 +1351,37 @@ class CasaTask:
 
 # _____________________________________________________________________             fitsidiutil related core class
 
+def antab_spws(values):
+    """Zero-based spectral windows in INDEX/INDEX2 (cf. update_map)."""
+    spws = set()
+    for keyname in ('INDEX', 'INDEX2'):
+        index = values.get(keyname)
+        if index is None:
+            continue
+        if not isinstance(index, (list, tuple)):
+            index = [index]
+        for labels in index:
+            for label in str(labels).split('|'):
+                if not label or label[0] == 'X':
+                    continue
+                rng = label[1:].split(':')
+                if len(rng) == 1:
+                    rng.append(rng[0])
+                try:
+                    lo, hi = int(rng[0]) - 1, int(rng[1]) - 1
+                except ValueError:
+                    continue
+                spws.update(range(lo, hi + 1))
+    return spws
+
+
+def antab_spw_count(values):
+    return len(antab_spws(values))
+
+
 class GenerateAndAppendAntab:
-    def __init__(self, fitsfiles, metafolder, verbose, wd, valid_perc=5, artifact_dirs=None):
+    def __init__(self, fitsfiles, metafolder, verbose, wd, valid_perc=5, artifact_dirs=None,
+                 use_local_antab=True, local_antab_require_full_array=True):
 
         self.fitsfiles                  =   fitsfiles
         self.metafolder                 =   metafolder
@@ -1367,11 +1399,65 @@ class GenerateAndAppendAntab:
         self.artifact_dirs = list(dict.fromkeys(
             Path(p).resolve() for p in [*(artifact_dirs or []), Path(wd) / 'raw']
         ))
+        self.use_local_antab = use_local_antab
+        self.local_antab_require_full_array = local_antab_require_full_array
         self.calibration_sources = []
+        self.calibration_decisions = []
+        self._layout_cache = {}
+
+    def _fits_layout(self, fitsfile):
+        """Antenna names and band count of a working file, read once and cached."""
+        key = str(fitsfile)
+        if key not in self._layout_cache:
+            annames, n_band = set(), None
+            try:
+                hdul = read_idi(fitsfile)
+                for table in ('ANTENNA', 'ARRAY_GEOMETRY'):
+                    try:
+                        annames = {str(a).strip().upper() for a in hdul[table]['ANNAME']}
+                    except Exception:
+                        continue
+                    if annames:
+                        break
+                n_band = next((int(hdu.header['NO_BAND']) for hdu in hdul
+                               if 'NO_BAND' in hdu.header), None)
+            except Exception as exc:
+                warnings.warn(f"Could not read antenna/band layout from {fitsfile}: {exc}",
+                              RuntimeWarning)
+            self._layout_cache[key] = (annames, n_band)
+        return self._layout_cache[key]
+
+    def _warn_antab_mismatch(self, candidate, tsys, fitsfile):
+        """Report antenna and IF disagreement; IF differences remain warnings."""
+        log = logging.getLogger("avica.pipeline")
+        annames, n_band = self._fits_layout(fitsfile)
+        antab_ans = {an for an in tsys if an not in ('start_time', 'end_time')}
+        name = Path(fitsfile).name
+
+        def _warn(msg):
+            print(f"  {Y}WARNING:{X} {msg}")
+            log.warning(msg)
+
+        if annames and antab_ans:
+            unknown = sorted(antab_ans - annames)
+            uncovered = sorted(annames - antab_ans)
+            if unknown:
+                _warn(f"ANTAB {candidate}: antenna(s) {', '.join(unknown)} are not in {name}")
+            if uncovered:
+                _warn(f"ANTAB {candidate}: no TSYS for {', '.join(uncovered)} of {name}")
+
+        if n_band:
+            odd = {an: sorted(antab_spws(tsys[an])) for an in sorted(antab_ans)
+                   if antab_spws(tsys[an]) != set(range(n_band))}
+            if odd:
+                detail = ', '.join(f"{an}={n}" for an, n in odd.items())
+                _warn(f"ANTAB {candidate}: INDEX differs from {name} (NO_BAND={n_band}); "
+                      f"zero-based IFs: {detail}. Missing or incorrectly mapped values may result.")
 
     def _find_local_antab(self, fitsfile):
-        """Select an unambiguous ANTAB by overlap with this file's UV data."""
+        """Rank compatible candidates by time, station coverage, then IF agreement."""
         from avica.fitsidiutil import parse_antab
+        log = logging.getLogger("avica.pipeline")
         _, _, _, start, end = tsys_exists(fitsfile, self.valid_perc)
         if start is None or end is None:
             return None
@@ -1381,23 +1467,65 @@ class GenerateAndAppendAntab:
                 candidates.update(p.resolve() for p in directory.iterdir()
                                   if p.is_file() and p.suffix.lower() == '.antab')
         matches = []
+        annames, n_band = self._fits_layout(fitsfile)
         for candidate in sorted(candidates):
+            decision = dict(fitsfile=str(fitsfile), source=str(candidate), status='rejected')
+            self.calibration_decisions.append(decision)
             try:
                 parsed = parse_antab(candidate, fitsfile)
                 tsys = parsed['tsys_dic']
-                first, last = Time(tsys['start_time']).mjd, Time(tsys['end_time']).mjd
-                overlap = min(last, end.mjd) - max(first, start.mjd)
-                if overlap > 0 or (overlap == 0 and start.mjd == end.mjd):
-                    matches.append((overlap, candidate))
+                ants = {an for an, values in tsys.items()
+                        if an not in ('start_time', 'end_time') and values.get('data')}
+                matched = ants & annames
+                missing = annames - ants
+                compatible = {an for an in matched
+                              if n_band and antab_spws(tsys[an]) == set(range(n_band))}
+                decision.update(matched_antennas=sorted(matched), missing_antennas=sorted(missing),
+                                unknown_antennas=sorted(ants - annames),
+                                if_compatible=(len(compatible) == len(matched)) if n_band else None,
+                                if_layouts={an: sorted(antab_spws(tsys[an])) for an in sorted(matched)})
+                if not annames:
+                    raise ValueError('FITS antenna layout unavailable; cannot establish compatibility')
+                if not matched:
+                    raise ValueError('no matching antennas')
+                # Only relevant stations may establish observation-time coverage.
+                times = [Time(row[0]).mjd for an in matched for row in tsys[an]['data']]
+                first, last = min(times), max(times)
+                # Judged like in-file TSYS is (tsys_exists): the ANTAB has to cover
+                # more than valid_perc of the UV data, not merely touch it.
+                perc = overlap_percentage(first, last, start.mjd, end.mjd)
+                decision['time_coverage_percent'] = float(perc)
+                decision['antenna_coverage_percent'] = 100 * len(matched) / len(annames)
+                if not (perc > self.valid_perc
+                        or (start.mjd == end.mjd and first <= start.mjd <= last)):
+                    decision['reason'] = 'insufficient observation-time overlap'
+                    continue
+                self._warn_antab_mismatch(candidate, tsys, fitsfile)
+                if missing and self.local_antab_require_full_array:
+                    raise ValueError('missing TSYS antennas: ' + ', '.join(sorted(missing)) +
+                                     '; set local_antab_require_full_array=False to allow partial calibration')
+                decision.update(status='eligible', reason='compatible antennas and observation time')
+                matches.append(((float(perc), len(matched), len(compatible)), candidate, decision))
             except Exception as exc:
+                decision['reason'] = str(exc)
+                log.warning("Skipping ANTAB %s for %s: %s", candidate, fitsfile, exc)
                 warnings.warn(f"Skipping ANTAB {candidate}: {exc}", RuntimeWarning)
         if not matches:
             return None
-        matches.sort(reverse=True)
-        best = [path for overlap, path in matches if overlap == matches[0][0]]
+        matches.sort(key=lambda m: m[0], reverse=True)
+        best = [m for m in matches if m[0] == matches[0][0]]
         if len(best) > 1:
-            raise ValueError(f"Ambiguous ANTAB files for {fitsfile}: {', '.join(map(str, best))}")
-        return best[0]
+            for _, _, decision in best:
+                decision.update(status='ambiguous', reason='equally suitable candidates')
+            raise ValueError(f"Ambiguous ANTAB files for {fitsfile}: " +
+                             ', '.join(str(m[1]) for m in best))
+        best[0][2].update(status='selected', reason='highest time, antenna and IF coverage rank')
+        return best[0][1]
+
+    @staticmethod
+    def _preserve_calibration(original, staged, has_gain):
+        from avica.fitsidiutil.calibration import preserve_calibration
+        preserve_calibration(original, staged, has_gain)
 
     def _append_antab_file(self, antabfile, fitsfiles):
         """Stage every append before replacing any working FITS file."""
@@ -1410,7 +1538,7 @@ class GenerateAndAppendAntab:
         prepared_cleanup = None
         try:
             original = prepared_antab.read_text()
-            normalized = normalize_antab_keyin(original)
+            normalized = normalize_antab_keyin(original, source=antabfile)
             if normalized != original:
                 with tempfile.NamedTemporaryFile(dir=self.wd, prefix=prepared_antab.stem + '.',
                                                  suffix='.antab', mode='w', delete=False) as stream:
@@ -1431,6 +1559,7 @@ class GenerateAndAppendAntab:
                 else:
                     warnings.warn(f"ANTAB {antabfile} has no gain entries; preserving existing gain curves",
                                   RuntimeWarning)
+                self._preserve_calibration(ff, tmp, bool(parsed['gain_dic']))
             for tmp, ff in staged:
                 os.replace(tmp, ff)
         finally:
@@ -1447,8 +1576,11 @@ class GenerateAndAppendAntab:
         missing = []
         local_groups = {}
         for ff in fitsfiles:
-            local = self._find_local_antab(ff)
+            local = self._find_local_antab(ff) if self.use_local_antab else None
             if local is None:
+                self.calibration_decisions.append(dict(
+                    fitsfile=str(ff), status='vlba_fallback',
+                    reason='no compatible local ANTAB' if self.use_local_antab else 'local ANTAB disabled'))
                 missing.append(ff)
                 continue
             local_groups.setdefault(local, []).append(ff)
