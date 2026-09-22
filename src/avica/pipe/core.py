@@ -1402,21 +1402,32 @@ class GenerateAndAppendAntab:
     def _append_antab_file(self, antabfile, fitsfiles):
         """Stage every append before replacing any working FITS file."""
         from avica.fitsidiutil import parse_antab
+        from avica.fitsidiutil.op import normalize_antab_keyin
         from avica.external.jive import append_tsys as TsysData, append_gc as GCData
 
         staged = []
+        prepared_antab = Path(antabfile)
+        prepared_cleanup = None
         try:
+            original = prepared_antab.read_text()
+            normalized = normalize_antab_keyin(original)
+            if normalized != original:
+                with tempfile.NamedTemporaryFile(dir=self.wd, prefix=prepared_antab.stem + '.',
+                                                 suffix='.antab', mode='w', delete=False) as stream:
+                    stream.write(normalized)
+                    prepared_cleanup = Path(stream.name)
+                prepared_antab = prepared_cleanup
             for ff in fitsfiles:
-                parsed = parse_antab(antabfile, ff)
+                parsed = parse_antab(prepared_antab, ff)
                 with tempfile.NamedTemporaryFile(dir=Path(ff).parent,
                                                  prefix=Path(ff).name + '.', suffix='.tmp',
                                                  delete=False) as stream:
                     tmp = Path(stream.name)
                 staged.append((tmp, Path(ff)))
                 shutil.copy2(ff, tmp)
-                TsysData.append_tsys(antabfile=str(antabfile), idifiles=str(tmp), replace=True)
+                TsysData.append_tsys(antabfile=str(prepared_antab), idifiles=str(tmp), replace=True)
                 if parsed['gain_dic']:
-                    GCData.append_gc(antabfile=str(antabfile), idifile=str(tmp), replace=True)
+                    GCData.append_gc(antabfile=str(prepared_antab), idifile=str(tmp), replace=True)
                 else:
                     warnings.warn(f"ANTAB {antabfile} has no gain entries; preserving existing gain curves",
                                   RuntimeWarning)
@@ -1425,6 +1436,8 @@ class GenerateAndAppendAntab:
         finally:
             for tmp, _ in staged:
                 tmp.unlink(missing_ok=True)
+            if prepared_cleanup is not None:
+                prepared_cleanup.unlink(missing_ok=True)
 
     def find_and_attach_antab(self, fitsfile, fitsfiles, antabfile, attach_all, verbose=False):
         from avica.fitsidiutil import ANTAB, get_dateobs, parse_antab

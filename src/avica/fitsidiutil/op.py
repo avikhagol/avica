@@ -1,4 +1,5 @@
 import numpy as np
+import re
 from astropy.io import fits
 from typing import List
 import polars as pl
@@ -727,6 +728,11 @@ def parse_tsys_from_antab(tsys_dic, antb_line_cols):
     tsys_dic['data']   =   []
     return tsys_dic
 
+def normalize_antab_keyin(text):
+    """Accept ANTAB writers that leave a trailing comma before a block terminator."""
+    return re.sub(r",(?=\s*/\s*(?:!.*)?$)", "", text, flags=re.MULTILINE)
+
+
 def parse_antab(antabfile, fitsfile):
     """Read standard keyin headers and TSYS rows, including fractional minutes."""
     from io import StringIO
@@ -766,7 +772,7 @@ def parse_antab(antabfile, fitsfile):
             header.append(line)
             if not line.endswith('/'):
                 continue
-            groups = read_keyfile(StringIO('\n'.join(header)))
+            groups = read_keyfile(StringIO(normalize_antab_keyin('\n'.join(header))))
             header = []
             for group in groups:
                 if not group or group[0][0] not in ('GAIN', 'TSYS'):

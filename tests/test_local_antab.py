@@ -12,7 +12,8 @@ from avica.fitsidiutil.op import parse_antab
 
 
 ANTAB = """! Ready-to-use station calibration
-GAIN EF ELEV DPFU=0.1 POLY=1 /
+GAIN EF ELEV DPFU=0.1
+POLY=1.0, /
 TSYS EF TIMEOFF=0
  INDEX='R1','L1' /
  100 10:00.0 30 31
@@ -143,7 +144,7 @@ class LocalAntabTest(unittest.TestCase):
         self.assertEqual(list(self.raw.glob('*.tmp')), [])
 
     def test_missing_gain_preserves_existing_gain_table(self):
-        local = self.antab(text=ANTAB.replace('GAIN EF ELEV DPFU=0.1 POLY=1 /\n', ''))
+        local = self.antab(text=ANTAB.replace('GAIN EF ELEV DPFU=0.1\nPOLY=1.0, /\n', ''))
         with patch('avica.external.jive.append_tsys.append_tsys'), \
              patch('avica.external.jive.append_gc.append_gc') as gain, \
              self.assertWarnsRegex(RuntimeWarning, 'no gain entries'):
