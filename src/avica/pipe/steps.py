@@ -75,7 +75,7 @@ class PreProcessFitsIdi(PipelineStepBase):
     name            =   "preprocess_fitsidi"
     colnames        =   ColName('preprocess_fitsidi', 'Comment_prepfits', 'timestamp_prepfits')
     py_env          =   ""
-    description     =   """performs sanity checks and applies fixes on table data and headers, splits file to keep desired sources, splits by freqid, downloads TSYS and GC and generates ANTAB and attaches the ANTAB to the fitsfiles."""
+    description     =   """Fixes FITS-IDI data and headers, selects sources, splits by frequency ID, and attaches local ANTAB calibration or falls back to downloading and converting VLBA calibration."""
     validate_by     =   [InitVariables, RunValidation, UpdateResults, UpdateSheet]
     result          =   StepResult(name=name, detail={},
                                        success_count=0, failed_count=0, start_stamp=datetime.now())
@@ -209,6 +209,9 @@ class PreProcessFitsIdi(PipelineStepBase):
 
         log.info(msg_info)
         with step_stage(msg_info, fitsfiles=fitsfiles, multifreqid=multifreqid):
+            artifact_dirs = PipelineContext.params.get('artifact_dirs', [])
+            if not artifact_dirs and PipelineContext.params.get('folder_for_fits'):
+                artifact_dirs = [PipelineContext.params['folder_for_fits']]
             if multifreqid:
                 log.info("observation has multiple frequennct IDs")
                 res_splitdata   = split_in_freqid(fitsfiles=fitsfiles, verbose=verbose) # result = {"workingfits": workingfits, "split_result": split_result}
@@ -221,12 +224,12 @@ class PreProcessFitsIdi(PipelineStepBase):
                     else:
                         print(f"  {Path(ff).name} --> {Path(newff).name}")
 
-                ga              =   GenerateAndAppendAntab(fitsfiles=res_splitdata['workingfits'], metafolder=metafolder, verbose=True, wd=wd, valid_perc=5)
+                ga              =   GenerateAndAppendAntab(fitsfiles=res_splitdata['workingfits'], metafolder=metafolder, verbose=True, wd=wd, valid_perc=5, artifact_dirs=artifact_dirs)
 
                 ga.attach_antab(only_first=False, attach_all=True)               #  to attach antab if it is mixed w. splitted freqid and non multiple?
                 fitsfiles_used  =   ga.workingfits
             else:
-                ga              =   GenerateAndAppendAntab(fitsfiles=fitsfiles_used, metafolder=metafolder, verbose=True, wd=wd, valid_perc=5)
+                ga              =   GenerateAndAppendAntab(fitsfiles=fitsfiles_used, metafolder=metafolder, verbose=True, wd=wd, valid_perc=5, artifact_dirs=artifact_dirs)
                 ga.attach_antab(only_first=False)
                 fitsfiles_used  =   ga.workingfits
 
@@ -234,6 +237,7 @@ class PreProcessFitsIdi(PipelineStepBase):
             ga.validate()
 
         with step_stage("saving metadata", fitsfiles=fitsfiles):
+            self.result.detail['calibration_sources'] = ga.calibration_sources
             PipelineContext.params['filepaths']     =   fitsfiles_used
             save_metafile(wd_meta.metafile_used_ff, {"filepath": fitsfiles_used})
 

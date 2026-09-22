@@ -55,6 +55,7 @@ from copy import deepcopy
 from contextlib import contextmanager
 
 import time, shutil
+import tempfile
 from datetime import datetime
 from collections import UserList
 import inspect
@@ -746,6 +747,7 @@ class InitVariables(PipelineStepValidatorBase):
         folder_for_fits    = PipelineContext.params['folder_for_fits']
         if folder_for_fits and "." == folder_for_fits:
             folder_for_fits = str(Path().cwd())
+        PipelineContext.params['folder_for_fits'] = folder_for_fits
 
         filename_col       = PipelineContext.params['filename_col']
         targetname_col     = PipelineContext.params['targetname_col']
@@ -761,6 +763,11 @@ class InitVariables(PipelineStepValidatorBase):
             fitsfilenames = fitsfilenames.split(",")
 
         wd_ifolder, filepaths                       = setup_workdir(lf, f"{str(Path(target_dir).absolute())}/", fitsfilenames, allfitsfile, picard_input_template=picard_input_template)
+        PipelineContext.params['artifact_dirs'] = list(dict.fromkeys(
+            [str(Path(folder_for_fits).resolve())] +
+            [str(Path(fp).resolve().parent) for fp in allfitsfile
+             if any(name in fp for name in fitsfilenames)]
+        ))
         if not filepaths:
             return PipelineStepValidatorResult(success=[False], msg="no fitsfiles found")
 
@@ -1342,7 +1349,7 @@ class CasaTask:
 # _____________________________________________________________________             fitsidiutil related core class
 
 class GenerateAndAppendAntab:
-    def __init__(self, fitsfiles, metafolder, verbose, wd, valid_perc=5):
+    def __init__(self, fitsfiles, metafolder, verbose, wd, valid_perc=5, artifact_dirs=None):
 
         self.fitsfiles                  =   fitsfiles
         self.metafolder                 =   metafolder
@@ -1355,10 +1362,95 @@ class GenerateAndAppendAntab:
         self.desc                       =   ""
 
         self.tsysfiles                  =   set()
+        if isinstance(artifact_dirs, (str, Path)):
+            artifact_dirs = [artifact_dirs]
+        self.artifact_dirs = list(dict.fromkeys(
+            Path(p).resolve() for p in [*(artifact_dirs or []), Path(wd) / 'raw']
+        ))
+        self.calibration_sources = []
+
+    def _find_local_antab(self, fitsfile):
+        """Select an unambiguous ANTAB by overlap with this file's UV data."""
+        from avica.fitsidiutil import parse_antab
+        _, _, _, start, end = tsys_exists(fitsfile, self.valid_perc)
+        if start is None or end is None:
+            return None
+        candidates = set()
+        for directory in self.artifact_dirs:
+            if directory.is_dir():
+                candidates.update(p.resolve() for p in directory.iterdir()
+                                  if p.is_file() and p.suffix.lower() == '.antab')
+        matches = []
+        for candidate in sorted(candidates):
+            try:
+                parsed = parse_antab(candidate, fitsfile)
+                tsys = parsed['tsys_dic']
+                first, last = Time(tsys['start_time']).mjd, Time(tsys['end_time']).mjd
+                overlap = min(last, end.mjd) - max(first, start.mjd)
+                if overlap > 0 or (overlap == 0 and start.mjd == end.mjd):
+                    matches.append((overlap, candidate))
+            except Exception as exc:
+                warnings.warn(f"Skipping ANTAB {candidate}: {exc}", RuntimeWarning)
+        if not matches:
+            return None
+        matches.sort(reverse=True)
+        best = [path for overlap, path in matches if overlap == matches[0][0]]
+        if len(best) > 1:
+            raise ValueError(f"Ambiguous ANTAB files for {fitsfile}: {', '.join(map(str, best))}")
+        return best[0]
+
+    def _append_antab_file(self, antabfile, fitsfiles):
+        """Stage every append before replacing any working FITS file."""
+        from avica.fitsidiutil import parse_antab
+        from avica.external.jive import append_tsys as TsysData, append_gc as GCData
+
+        staged = []
+        try:
+            for ff in fitsfiles:
+                parsed = parse_antab(antabfile, ff)
+                with tempfile.NamedTemporaryFile(dir=Path(ff).parent,
+                                                 prefix=Path(ff).name + '.', suffix='.tmp',
+                                                 delete=False) as stream:
+                    tmp = Path(stream.name)
+                staged.append((tmp, Path(ff)))
+                shutil.copy2(ff, tmp)
+                TsysData.append_tsys(antabfile=str(antabfile), idifiles=str(tmp), replace=True)
+                if parsed['gain_dic']:
+                    GCData.append_gc(antabfile=str(antabfile), idifile=str(tmp), replace=True)
+                else:
+                    warnings.warn(f"ANTAB {antabfile} has no gain entries; preserving existing gain curves",
+                                  RuntimeWarning)
+            for tmp, ff in staged:
+                os.replace(tmp, ff)
+        finally:
+            for tmp, _ in staged:
+                tmp.unlink(missing_ok=True)
 
     def find_and_attach_antab(self, fitsfile, fitsfiles, antabfile, attach_all, verbose=False):
         from avica.fitsidiutil import ANTAB, get_dateobs, parse_antab
-        from avica.external.jive import append_tsys as TsysData, append_gc as GCData
+
+        # Select separately for each split/working file: a candidate need not cover
+        # every file in the group, and must remain reusable across frequency IDs.
+        missing = []
+        local_groups = {}
+        for ff in fitsfiles:
+            local = self._find_local_antab(ff)
+            if local is None:
+                missing.append(ff)
+                continue
+            local_groups.setdefault(local, []).append(ff)
+        for local, selected in local_groups.items():
+            if verbose:
+                print(f"Using local ANTAB {local} for {selected}")
+            self._append_antab_file(local, selected)
+            self.calibration_sources.extend(
+                {'fitsfile': str(ff), 'source': str(local), 'kind': 'local_antab'}
+                for ff in selected)
+        if not missing:
+            return
+        fitsfiles = missing
+        if fitsfile not in missing:
+            fitsfile = missing[0]
 
         ans_found                       =   set()
         dic_gf                          =   {}
@@ -1404,36 +1496,19 @@ class GenerateAndAppendAntab:
                 if _file and Path(dic_gf[_file][-1]).exists():
                     if Path(antabfile).exists() : Path(antabfile).unlink()
                     Path(dic_gf[_file][2]).rename(antabfile)
-                    t1              =   time.time()
-                    self.tmpfs      =   deepcopy(fitsfiles)
-
-
-                    for i, ff in enumerate(fitsfiles):
-                        tmpf            =   f"{Path(ff)}.tmp"
-                        self.tmpfs[i]   =   tmpf
-                        if Path(tmpf).exists(): Path(tmpf).unlink()
-                        shutil.copy(str(Path(ff).absolute()), tmpf)
-
-                    alldobs = [get_dateobs(fitsfile_tmp) for fitsfile_tmp in self.tmpfs]
-                    dict_res = parse_antab(antabfile=antabfile, fitsfile=self.tmpfs[0])
+                    alldobs = [get_dateobs(ff) for ff in fitsfiles]
+                    dict_res = parse_antab(antabfile=antabfile, fitsfile=fitsfiles[0])
                     # print(dict_res.keys())
                     antab_start_time    = dict_res["tsys_dic"]['start_time']
                     antab_end_time      = dict_res["tsys_dic"]['end_time']
 
 
                     if any(antab_start_time.date() <= dobs.date() <= antab_end_time.date() for dobs in alldobs):
-                        for idifile in self.tmpfs:
-                            if verbose: print(f"....appending System Temperature to {idifile}")
-                            TsysData.append_tsys(antabfile=antabfile, idifiles=idifile, replace=True)
-                            if verbose: print(f"....appending Gain Curve to {idifile}")
-                            GCData.append_gc(antabfile=antabfile, idifile=idifile, replace=True)
-
-                    for i, ff in enumerate(fitsfiles):
-                        tmpf            =   f"{Path(ff)}.tmp"
-                        Path(ff).unlink()
-                        Path(tmpf).rename(ff)
-                        self.tmpfs[i]   =   ff
-                    self.tsysfiles.add(gf)
+                        self._append_antab_file(antabfile, fitsfiles)
+                        self.calibration_sources.extend(
+                            {'fitsfile': str(ff), 'source': str(_file), 'kind': 'vlba'}
+                            for ff in fitsfiles)
+                        self.tsysfiles.add(_file)
 
     def attach_antab(self, only_first=True, attach_all=False):
         """

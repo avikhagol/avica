@@ -1,5 +1,8 @@
 # required
 # assumes `folder_for_fits` is a folder containing all the raw visibility fits files.
+# Place ready-to-use .antab files alongside the FITS files (or in folder_for_fits).
+# Local ANTABs are selected by observation time overlap before the VLBA fallback.
+# Extensions are case-insensitive; equally matching files raise an ambiguity error.
 # `casadir` is the path to the monolithic CASA installation used for running CASA tasks.
 
 folder_for_fits           =   /path/to/source/folder/with/raw/visibility/fitsfiles
