@@ -35,17 +35,9 @@ log = logging.getLogger("avica.pipeline")
 #                                Pipeline Steps                                       #
 #_____________________________________________________________________________________#
 
-def _normalize_removables(removables):
-    if removables is None:
-        return []
-    if isinstance(removables, str):
-        value = removables.strip()
-        if not value or value == "[]":
-            return []
-        if value.startswith("[") and value.endswith("]"):
-            value = value[1:-1]
-        return [item.strip().strip("'\"") for item in value.split(",") if item.strip().strip("'\"")]
-    return list(removables)
+from avica.pipe.helpers import normalize_strlist as _normalize_strlist
+
+_normalize_removables = _normalize_strlist
 
 
 def _rm_only_result(result, removed_count):
@@ -75,7 +67,7 @@ class PreProcessFitsIdi(PipelineStepBase):
     name            =   "preprocess_fitsidi"
     colnames        =   ColName('preprocess_fitsidi', 'Comment_prepfits', 'timestamp_prepfits')
     py_env          =   ""
-    description     =   """performs sanity checks and applies fixes on table data and headers, splits file to keep desired sources, splits by freqid, downloads TSYS and GC and generates ANTAB and attaches the ANTAB to the fitsfiles."""
+    description     =   """Fixes FITS-IDI data and headers, selects sources, splits by frequency ID, and attaches local ANTAB calibration or falls back to downloading and converting VLBA calibration."""
     validate_by     =   [InitVariables, RunValidation, UpdateResults, UpdateSheet]
     result          =   StepResult(name=name, detail={},
                                        success_count=0, failed_count=0, start_stamp=datetime.now())
@@ -85,7 +77,8 @@ class PreProcessFitsIdi(PipelineStepBase):
     # ----------------------------------------------------------
 
     def run(self, lf, fitsfiles, target, wd_ifolder, source_extract_multi_fitsfiles=False,
-        removables=[], rm_only=False, rm_pre=False, delete_removables=False, verbose=False):
+        removables=[], rm_only=False, rm_pre=False, delete_removables=False, artifact_dirs=[],
+        use_local_antab=True, local_antab_require_full_array=False, verbose=False):
         self.result.start_stamp   = datetime.now()
         from avica.fitsidiutil.validation import fitsidi_check
         from avica.fitsidiutil.obs import ObservationSummary
@@ -209,6 +202,9 @@ class PreProcessFitsIdi(PipelineStepBase):
 
         log.info(msg_info)
         with step_stage(msg_info, fitsfiles=fitsfiles, multifreqid=multifreqid):
+            artifact_dirs = _normalize_strlist(artifact_dirs)
+            if not artifact_dirs and PipelineContext.params.get('folder_for_fits'):
+                artifact_dirs = [PipelineContext.params['folder_for_fits']]
             if multifreqid:
                 log.info("observation has multiple frequennct IDs")
                 res_splitdata   = split_in_freqid(fitsfiles=fitsfiles, verbose=verbose) # result = {"workingfits": workingfits, "split_result": split_result}
@@ -221,12 +217,14 @@ class PreProcessFitsIdi(PipelineStepBase):
                     else:
                         print(f"  {Path(ff).name} --> {Path(newff).name}")
 
-                ga              =   GenerateAndAppendAntab(fitsfiles=res_splitdata['workingfits'], metafolder=metafolder, verbose=True, wd=wd, valid_perc=5)
+                ga              =   GenerateAndAppendAntab(fitsfiles=res_splitdata['workingfits'], metafolder=metafolder, verbose=True, wd=wd, valid_perc=5, artifact_dirs=artifact_dirs, use_local_antab=use_local_antab, local_antab_require_full_array=local_antab_require_full_array)
+                self.result.detail['calibration_decisions'] = ga.calibration_decisions
 
                 ga.attach_antab(only_first=False, attach_all=True)               #  to attach antab if it is mixed w. splitted freqid and non multiple?
                 fitsfiles_used  =   ga.workingfits
             else:
-                ga              =   GenerateAndAppendAntab(fitsfiles=fitsfiles_used, metafolder=metafolder, verbose=True, wd=wd, valid_perc=5)
+                ga              =   GenerateAndAppendAntab(fitsfiles=fitsfiles_used, metafolder=metafolder, verbose=True, wd=wd, valid_perc=5, artifact_dirs=artifact_dirs, use_local_antab=use_local_antab, local_antab_require_full_array=local_antab_require_full_array)
+                self.result.detail['calibration_decisions'] = ga.calibration_decisions
                 ga.attach_antab(only_first=False)
                 fitsfiles_used  =   ga.workingfits
 
@@ -234,8 +232,11 @@ class PreProcessFitsIdi(PipelineStepBase):
             ga.validate()
 
         with step_stage("saving metadata", fitsfiles=fitsfiles):
+            self.result.detail['calibration_sources'] = ga.calibration_sources
             PipelineContext.params['filepaths']     =   fitsfiles_used
-            save_metafile(wd_meta.metafile_used_ff, {"filepath": fitsfiles_used})
+            save_metafile(wd_meta.metafile_used_ff, {"filepath": fitsfiles_used,
+                          "calibration_sources": ga.calibration_sources,
+                          "calibration_decisions": ga.calibration_decisions})
 
         # ___________________________________________________________                                                        Fill meta [optional]
 
@@ -281,7 +282,7 @@ class FitsIdiToMS(PipelineStepBase):
     # ----------------------------------------------------------
 
     def _flagcmd_file(self, vis, flag_source="fitsidi"):
-        suffix = "idi_flags" if flag_source == "fitsidi" else "ms_flag_cmd"
+        suffix = {"fitsidi": "idi_flags", "ms": "ms_flag_cmd", "artifact": "artifact_flags"}[flag_source]
         return Path(vis).parent / f"{Path(vis).name}.{suffix}.flagcmd"
 
     def _build_idi_flagcmd(self, fitsfiles, output):
@@ -328,35 +329,74 @@ class FitsIdiToMS(PipelineStepBase):
             raise RuntimeError(failed)
         return response
 
-    def _apply_flags(self, mpi_runner, vis, fitsfiles, casalogfile, errcasalogfile, casadir, flag_source="fitsidi"):
+    def _build_artifact_flagcmd(self, fitsfiles, output, **options):
+        from .artifact_flags import build_artifact_flagcmd
+        return build_artifact_flagcmd(fitsfiles, output, **options)
+
+    def _apply_selected_flags(self, *, apply_flag_from_idi, apply_flag_from_artifacts,
+                              artifact_options, flag_source, **kwargs):
+        if apply_flag_from_idi:
+            self._apply_flags(flag_source=flag_source, **kwargs)
+        if apply_flag_from_artifacts:
+            self._apply_flags(flag_source='artifact', artifact_options=artifact_options, **kwargs)
+        return True
+
+    def _apply_flags(self, mpi_runner, vis, fitsfiles, casalogfile, errcasalogfile, casadir, flag_source="fitsidi", artifact_options=None):
         flagcmd = self._flagcmd_file(vis, flag_source=flag_source)
+        provenance = None
+        version_suffix = ''
         if flag_source == "fitsidi":
             nflags = self._build_idi_flagcmd(fitsfiles, flagcmd)
         elif flag_source == "ms":
             nflags = self._build_ms_flagcmd(vis, flagcmd)
+        elif flag_source == 'artifact':
+            nflags, reports = self._build_artifact_flagcmd(fitsfiles, flagcmd, **artifact_options)
+            version_suffix = '_' + datetime.now().strftime('%Y%m%dT%H%M%S%f')
+            provenance = dict(vis=str(vis), flagcmd=str(flagcmd), files=reports,
+                              command_count=nflags, status='prepared',
+                              before_version=f'before_artifact_flags{version_suffix}')
+            self.result.detail.setdefault('artifact_flags', {})[str(vis)] = provenance
+            save_metafile(str(flagcmd) + '.json', provenance)
         else:
             raise ValueError(f"unsupported flag_source={flag_source!r}")
 
         if not nflags:
+            if provenance is not None:
+                provenance['status'] = 'no_commands'
+                save_metafile(str(flagcmd) + '.json', provenance)
             self.result.desc.append(f"no {flag_source} flag rows found for {Path(vis).name}")
             return True
 
-        save_imported = FlagManager(vis=str(vis),mode="save",versionname=f"before_{flag_source}_flags",comment=f"Before applying {flag_source} flags",
+        save_imported = FlagManager(vis=str(vis),mode="save",versionname=f"before_{flag_source}_flags{version_suffix}",comment=f"Before applying {flag_source} flags",
                 ).to_step(logfile=casalogfile, errf=errcasalogfile, casadir=casadir)
         apply_flags = FlagData(vis=str(vis),mode="list",inpfile=str(flagcmd),action="apply",flagbackup=True,savepars=False,
                         ).to_step(logfile=casalogfile, errf=errcasalogfile, casadir=casadir)
-        save_flagged = FlagManager(vis=str(vis),mode="save",versionname=f"after_{flag_source}_flags",comment=f"After applying {flag_source} flags",
+        save_flagged = FlagManager(vis=str(vis),mode="save",versionname=f"after_{flag_source}_flags{version_suffix}",comment=f"After applying {flag_source} flags",
                                     ).to_step(logfile=casalogfile, errf=errcasalogfile, casadir=casadir)
 
-        for step in [save_imported, apply_flags, save_flagged]:
-            self._run_casa_step(mpi_runner, step)
+        try:
+            for step in [save_imported, apply_flags, save_flagged]:
+                self._run_casa_step(mpi_runner, step)
+            if provenance is not None:
+                provenance['status'] = 'applied'
+                for report in provenance['files']:
+                    report['applied_commands'] = report['unique_commands']
+        except Exception as exc:
+            if provenance is not None:
+                provenance.update(status='failed', error=str(exc))
+            raise
+        finally:
+            if provenance is not None:
+                save_metafile(str(flagcmd) + '.json', provenance)
 
         self.result.desc.append(f"applied {nflags} {flag_source} flag rows to {Path(vis).name}")
         return True
 
     def run(self, lf, casadir, wd_ifolder, apply_flag_from_idi=True, mpi_cores=5, flag_source="ms",
         removables=[], rm_only=False, rm_pre=False, delete_removables=False,
-        apply_flag_to_existing_vis=False,):
+        apply_flag_to_existing_vis=False, apply_flag_from_artifacts=True, artifact_dirs=None,
+        artifact_flag_extensions='.fg;.uvflag;.uvflg;.uvfg;.flag;.flg;.uvflags;.uvflgs;.uvfgs;.flags;.flgs',
+        artifact_flagfiles=None,):
 
         self.result.start_stamp   = datetime.now()
         if flag_source not in ["fitsidi", "ms"]:
@@ -369,6 +409,13 @@ class FitsIdiToMS(PipelineStepBase):
         wd              =   wd_meta.wd
         metafolder      =   wd_meta.metafolder
         vis             =   wd_meta.vis
+        artifact_search_dirs = _normalize_strlist(artifact_dirs)
+        artifact_search_dirs += _normalize_strlist(PipelineContext.params.get('folder_for_fits'))
+        artifact_search_dirs += [str(Path(ff).resolve().parent) for ff in fitsfiles]
+        artifact_search_dirs.append(str(Path(wd) / 'raw'))
+        artifact_options = dict(directories=list(dict.fromkeys(artifact_search_dirs)),
+                                extensions=artifact_flag_extensions, explicit=artifact_flagfiles)
+        flagging_enabled = apply_flag_from_idi or apply_flag_from_artifacts
         if delete_removables:
             removables = _normalize_removables(removables)
             if rm_pre or rm_only:
@@ -474,7 +521,7 @@ class FitsIdiToMS(PipelineStepBase):
         try:
             with step_stage("Serial CASA execution" if mpi_cores == 1 else "MPI execution", vis=vis):
                 res         =   []
-                if tasks_list or (apply_flag_from_idi and apply_flag_to_existing_vis and existing_flag_targets):
+                if tasks_list or (flagging_enabled and apply_flag_to_existing_vis and existing_flag_targets):
                     mpi_runner = PersistentMpiCasaRunner(casadir=casadir, mpi_cores=mpi_cores)
                 for casastep in tasks_list:
                     print(f"processing vis={casastep.cmd.args['vis']}")
@@ -500,9 +547,12 @@ class FitsIdiToMS(PipelineStepBase):
                 if task_success and output_vis.exists():
                     print(f"processed vis={casastep.cmd.args['vis']}")
                     flag_success = True
-                    if apply_flag_from_idi:
+                    if flagging_enabled:
                         try:
-                            flag_success = self._apply_flags(
+                            flag_success = self._apply_selected_flags(
+                                apply_flag_from_idi=apply_flag_from_idi,
+                                apply_flag_from_artifacts=apply_flag_from_artifacts,
+                                artifact_options=artifact_options,
                                 mpi_runner=mpi_runner,
                                 vis=output_vis,
                                 fitsfiles=casastep.cmd.args['fitsidifile'],
@@ -522,7 +572,7 @@ class FitsIdiToMS(PipelineStepBase):
                         self.result.success.append(True)
                     else:
                         self.result.failed_count     +=  1
-                        self.result.desc.append(f"{flag_source} flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
+                        self.result.desc.append(f"flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
                         self.result.success.append(False)
                 else:
                     print(f"failed vis={casastep.cmd.args['vis']}")
@@ -535,11 +585,14 @@ class FitsIdiToMS(PipelineStepBase):
                         self.result.desc.append(f"input fitsidifile not found! {casastep.cmd.args['fitsidifile']}")
                     self.result.success.append(False)
 
-            if apply_flag_from_idi and apply_flag_to_existing_vis:
+            if flagging_enabled and apply_flag_to_existing_vis:
                 for output_vis, source_fitsfiles in existing_flag_targets:
                     output_vis_for_lock_cleanup.append(output_vis)
                     try:
-                        flag_success = self._apply_flags(
+                        flag_success = self._apply_selected_flags(
+                            apply_flag_from_idi=apply_flag_from_idi,
+                            apply_flag_from_artifacts=apply_flag_from_artifacts,
+                            artifact_options=artifact_options,
                             mpi_runner=mpi_runner,
                             vis=output_vis,
                             fitsfiles=source_fitsfiles,
@@ -553,10 +606,10 @@ class FitsIdiToMS(PipelineStepBase):
                         flag_success = False
 
                     if flag_success:
-                        self.result.desc.append(f"{flag_source} flagging successfull! for {output_vis.name}")
+                        self.result.desc.append(f"flagging successful! for {output_vis.name}")
                     else:
                         self.result.failed_count     +=  1
-                        self.result.desc.append(f"{flag_source} flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
+                        self.result.desc.append(f"flagging failed! vis:{output_vis.name} check logs: {errcasalogfile}")
                         self.result.success.append(False)
         finally:
             if mpi_runner is not None:

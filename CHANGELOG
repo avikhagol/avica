@@ -1,11 +1,42 @@
 # Changelog
 
+## [0.3.1.14]
+
+### Added
+- Added `artifact_dirs` to find local ANTAB and AIPS UVFLG flag files. AVICA
+  searches these directories, `folder_for_fits`, and `<workdir>/raw`.
+- `fits_to_ms` can apply discovered flag files. It supports antenna, time, IF,
+  channel, reason, `TIMEOFF`, and `DTIMRANG` values.
+- Added `apply_flag_from_artifacts`, `artifact_flag_extensions`, and
+  `artifact_flagfiles` options. Applying flags to an existing MS still requires
+  `apply_flag_to_existing_vis=True`.
+- Flag commands are deduplicated. Skipped records are listed in a JSON report,
+  and before/after flag backups are saved for each run.
+- Added `use_local_antab` and `local_antab_require_full_array` options. ANTAB
+  files may cover only part of the array; missing antennas and IF differences
+  produce warnings.
+- Local ANTAB files are selected by time, antenna, and IF coverage. Invalid or
+  unrelated files are skipped before AVICA tries the VLBA archive.
+- ANTAB selection and calibration sources are saved in preprocessing metadata.
+
+### Fixed
+- VLBA archive fallback reads HTML row strings consistently and constructs the
+  nested project/jobs URLs correctly, avoiding the obsolete `get_text()` call.
+- `TIMEOFF=*` in an ANTAB is read as `TIMEOFF=0`, with a printed and logged warning,
+  instead of failing the keyin parser.
+- an empty `POLY=` is now refused with an explicit error rather than being written or
+  silently treated as unity gain; discovery skips such candidates.
+- appending calibration preserves existing gains for uncovered antennas and TSYS
+  outside the incoming per-antenna/array/frequency time spans. Empty imported tables
+  and incompatible merge schemas fail before staged files replace working data.
+
 ## [0.3.1.13]
 
 ### Fixed
 - `--default` for `pipe config` now preserves the existing config.
 - `snr_threshold_phref` was misspelled, corrected.
 
+[0.3.1.14] : https://github.com/avikhagol/avica/compare/v0.3.1.13...v0.3.1.14
 [0.3.1.13] : https://github.com/avikhagol/avica/compare/v0.3.1.12...v0.3.1.13
 [0.3.1.12] : https://github.com/avikhagol/avica/compare/v0.3.1.11...v0.3.1.12
 [0.3.1.11] : https://github.com/avikhagol/avica/compare/v0.3.1.10...v0.3.1.11

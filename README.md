@@ -156,6 +156,36 @@ You can pass one or more step names to run only part of the pipeline:
 avica pipe run preprocess_fitsidi fits_to_ms --fitsfilenames <file.uvfits>
 ```
 
+During `fits_to_ms`, AVICA also discovers station flag files in `artifact_dirs`,
+`folder_for_fits`, the input FITS directories, and `<workdir>/raw`. AIPS UVFLG
+files using `ANT_NAME` (such as EVN `.flag` files) are converted and added after the existing FITS-IDI/MS flags. 
+
+```ini
+apply_flag_from_artifacts = True
+artifact_flag_extensions = .fg;.uvflag;.uvflg;.uvfg;.flag;.flg;.uvflags;.uvflgs;.uvfgs;.flags;.flgs
+artifact_flagfiles = []
+```
+
+Extensions are case-insensitive. A nonempty `artifact_flagfiles` list overrides
+automatic discovery and accepts arbitrary filenames. Set
+`apply_flag_from_artifacts=False` to disable this pass independently of
+`apply_flag_from_idi`. Existing measurement sets are flagged only when
+`apply_flag_to_existing_vis=True`.
+
+Supported UVFLG fields are `ANT_NAME`, `TIMERANG`, `OPCODE='FLAG'`, `REASON`,
+`TIMEOFF`, `DTIMRANG`, `BIF`/`EIF`, and `BCHAN`/`ECHAN`. TIMEOFF and DTIMRANG are
+in seconds and retain their nonzero settings between entries, following
+[AIPS UVFLG INTEXT semantics](https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?UVFLG).
+Malformed files and records with unsupported selectors, invalid IF/channel
+ranges, absent antennas, or unrelated times are reported and skipped.
+
+Generated commands are saved as `<MS>.artifact_flags.flagcmd`; its `.json`
+sidecar records input files, row counts, skipped records and application status.
+Each application saves uniquely named `before_artifact_flags_*` and
+`after_artifact_flags_*` versions using CASA flagmanager. If application fails,
+the step reports failure and the before-version remains available for restoration.
+Source flag files are read in place and are not copied into rPICARD directories.
+
 Common options:
 
 | Option | Description |

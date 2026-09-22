@@ -1,4 +1,6 @@
 import numpy as np
+import logging
+import re
 from astropy.io import fits
 from typing import List
 import polars as pl
@@ -645,6 +647,7 @@ class ANTAB:
                                     antab_header        =   ""
                                     for bn, (b_mount, b_dpfu, b_poly) in bands_gain.items():
                                         fr_lo, fr_hi    =   bands_freq[bn]
+                                        check_antab_poly(b_poly, an, self.fitsfile, band=bn, freq=(fr_lo, fr_hi))
                                         antab_header    +=  (
                                             f"GAIN {an} {b_mount} "
                                             f"FREQ={fr_lo},{fr_hi} "
@@ -652,6 +655,7 @@ class ANTAB:
                                             f"POLY={','.join(map(str,b_poly))} /\n"
                                         )
                                 else:
+                                    check_antab_poly(poly, an, self.fitsfile)
                                     antab_header        =   f"GAIN {an} {mount} DPFU={','.join(map(str,dpfu))} POLY={','.join(map(str,poly))} /\n"
                                 antab_header           +=  f"TSYS {an} {' '.join(an_values)} INDEX={','.join(ind)} /\n"
                                 pols, ind               =   [], []
@@ -727,50 +731,126 @@ def parse_tsys_from_antab(tsys_dic, antb_line_cols):
     tsys_dic['data']   =   []
     return tsys_dic
 
+log                 =   logging.getLogger("avica.pipeline")
+
+
+class AntabGainError(ValueError):
+    """An ANTAB GAIN block carries no usable gain polynomial."""
+
+
+_TRAILING_COMMA     =   re.compile(r",(?=\s*/\s*(?:!.*)?$)", re.MULTILINE)
+_TIMEOFF_STAR       =   re.compile(r"\bTIMEOFF\s*=\s*\*", re.IGNORECASE)
+_EMPTY_POLY         =   re.compile(r"\bPOLY\s*=(?=\s*[,/])", re.IGNORECASE)
+_TIMEOFF_WARNED     =   set()
+
+
+def check_antab_poly(poly, antenna, fitsfile, band=None, freq=None):
+    """Refuse to write a GAIN block with no polynomial.
+
+    An empty ``POLY=`` is not valid keyin, and defaulting it to unity gain would
+    silently corrupt the amplitude scale, so this fails loudly instead. The
+    pipeline runner catches the exception and writes the params snapshot to
+    `avica_crash_<step>.json`.
+    """
+    if poly is not None and len(poly):
+        return
+    at          =   f" band {band}" if band else ""
+    at         +=  f" ({freq[0]}-{freq[1]} MHz)" if freq else ""
+    msg         =   (f"No gain-curve coefficients (POLY) for antenna {antenna}{at} in {fitsfile}. "
+                     f"The GAIN_CURVE table / vlba_gains.key lookup returned nothing usable; "
+                     f"writing `POLY=` would produce an unparseable ANTAB and assuming unity "
+                     f"gain would corrupt the amplitude calibration.")
+    print(f"  ERROR: {msg}")
+    log.error(msg)
+    raise AntabGainError(msg)
+
+
+def normalize_antab_keyin(text, source=None):
+    """Make ANTAB keyin headers readable by `read_keyfile`.
+
+    Tolerated: a trailing comma before a block terminator, and AIPS' ``TIMEOFF=*``,
+    which ANTAB defines as no offset (printed and logged once per file).
+    Rejected:  an empty ``POLY=`` -- see `check_antab_poly`.
+    """
+    where               =   f" in {source}" if source else ""
+    text                =   _TRAILING_COMMA.sub("", text)
+    text, n_timeoff     =   _TIMEOFF_STAR.subn("TIMEOFF=0", text)
+    if n_timeoff and str(source) not in _TIMEOFF_WARNED:
+        _TIMEOFF_WARNED.add(str(source))
+        msg             =   (f"ANTAB{where}: TIMEOFF=* is not a number, assuming TIMEOFF=0 "
+                             f"(no time offset) as AIPS TASK ANTAB does.")
+        print(f"  WARNING: {msg}")
+        log.warning(msg)
+    if _EMPTY_POLY.search(text):
+        msg             =   (f"ANTAB{where}: GAIN block has an empty `POLY=` (no gain-curve "
+                             f"coefficients). Refusing to assume unity gain -- the amplitude "
+                             f"calibration would be silently wrong. Fix or drop the GAIN block.")
+        print(f"  ERROR: {msg}")
+        log.error(msg)
+        raise AntabGainError(msg)
+    return text
+
+
 def parse_antab(antabfile, fitsfile):
+    """Read standard keyin headers and TSYS rows, including fractional minutes."""
+    from io import StringIO
+    from avica.external.jive.casavlbitools.key import read_keyfile
+
     yy              =   get_dateobs(fitsfile=fitsfile).year
+    gain_dic, tsys_dic = {}, {}
+    mintime, maxtime = None, None
     with open(antabfile) as antb:
-        gain_dic                =   {}
-        tsys_dic                =   {}
-        tsys_row                =   False
-        tsys_head_recorded      =   False
-        mintime, maxtime        =   "", ""
-        for antb_line in antb.readlines():
-            antb_line_cols      =   antb_line.split(" ")
-            firstcol            =   antb_line_cols[0].strip()
-
-            if firstcol in ["GAIN", "TSYS"]:
-                antenna         =   antb_line_cols[1].strip()
-                if firstcol == "GAIN":                                          # Record gain header
-                    tsys_row    =   False
-                    gain_dic[antenna]    =   {}
-                    gain_dic[antenna]    =   parse_gain_from_antab(gain_dic[antenna], antb_line_cols)
-
-                elif firstcol == "TSYS":                                        # Record tsys header
-                    tsys_row            =   True
-                    tsys_head_recorded  =   True
-                    if not antenna in tsys_dic:  tsys_dic[antenna]   =   {}
-                    tsys_dic[antenna]   =   parse_tsys_from_antab(tsys_dic[antenna], antb_line_cols)
-
-            if tsys_row:
-                if tsys_head_recorded:
-                    tsys_head_recorded  =   False
+        header = []
+        antenna = None
+        timeoff = 0
+        for line in antb:
+            line = line.split('!', 1)[0].strip()
+            if not line:
+                continue
+            if antenna is not None:
+                ends = line.endswith('/')
+                fields = line.rstrip('/').split()
+                if fields:
+                    day = int(fields[0])
+                    clock = [float(part) for part in fields[1].split(':')]
+                    if len(clock) not in (2, 3):
+                        raise ValueError(f"Invalid ANTAB time: {fields[1]}")
+                    dt = datetime(yy, 1, 1) + timedelta(
+                        days=day - 1, hours=clock[0], minutes=clock[1],
+                        seconds=(clock[2] if len(clock) == 3 else 0) + timeoff)
+                    values = [float(value) for value in fields[2:]]
+                    if not values:
+                        raise ValueError("ANTAB TSYS row has no values")
+                    tsys_dic[antenna]['data'].append([str(dt), values])
+                    mintime = min(mintime, dt) if mintime else dt
+                    maxtime = max(maxtime, dt) if maxtime else dt
+                if ends:
+                    antenna = None
+                continue
+            header.append(line)
+            if not line.endswith('/'):
+                continue
+            groups = read_keyfile(StringIO(normalize_antab_keyin('\n'.join(header), source=antabfile)))
+            header = []
+            for group in groups:
+                if not group or group[0][0] not in ('GAIN', 'TSYS'):
+                    continue
+                kind = group[0][0]
+                if len(group) < 2 or group[1][1] is not True:
+                    raise ValueError(f"Missing antenna in ANTAB {kind} header")
+                name = group[1][0]
+                values = dict(group[2:])
+                if kind == 'GAIN':
+                    gain_dic[name] = values
                 else:
-                    if firstcol != "/":                                         # Record tsys Data
-                        antb_line_cols[-1]  =   antb_line_cols[-1].replace("\n", "")
-                        # tsys_dic[antenna]['data'].append(antb_line_cols)
-
-                        s               =   " ".join(antb_line_cols[:2])
-                        tsys_values     =   [float(v) for v in antb_line_cols[2:]]
-
-                        # dt              =   datetime.strptime(s, "%j %H:%M:%S.%f").replace(year=yy) # does not consider leap year
-                        dt              =   datetime.strptime(f"{yy} {s}", "%Y %j %H:%M:%S.%f")
-                        if not mintime or mintime> dt: mintime = dt
-                        if not maxtime or maxtime< dt: maxtime = dt
-
-                        tsys_dic[antenna]['data'].append([str(dt), tsys_values])
-                        tsys_dic["start_time"] = mintime
-                        tsys_dic["end_time"] = maxtime
+                    antenna = name
+                    timeoff = float(values.get('TIMEOFF', 0))
+                    rows = tsys_dic.get(name, {}).get('data', [])
+                    tsys_dic[name] = dict(values, data=rows)
+        if header or antenna is not None:
+            raise ValueError("Unterminated ANTAB header or TSYS block")
+    if mintime is not None:
+        tsys_dic['start_time'], tsys_dic['end_time'] = mintime, maxtime
     return {"gain_dic": gain_dic, "tsys_dic": tsys_dic}
 
 def find_gain_fromgaintable(fitsfile, vlbagainfile, an, freq, gaintbname="GAIN_CURVE", date="", verbose=True, hdul=None):
