@@ -1213,15 +1213,20 @@ def find_url_tsys(fitsfile, proj=''):
     res, found, urls = proj_search(url, proj)
 
     if not found and res:
+        from html import unescape
+        from urllib.parse import urljoin
         for r in res:
-            row_res = r.get_text().split(' ')[0]
-
-            if proj.lower() in row_res.lower():
-                url = url + f'/{r.contents[1].text}'
-                res, found, urls = proj_search(url, proj)
-                if not found and res:
-                    url = url + 'jobs/'
-                    res, found, urls = proj_search(url, proj)
+            # proj_search returns HTML strings, not BeautifulSoup Tag objects.
+            fields = unescape(re.sub(r'<[^>]+>', ' ', r)).split()
+            link = re.search(r'<a[^>]+href=["\']([^"\']+)["\']', r, re.IGNORECASE)
+            if fields and link and proj.lower() in fields[0].lower():
+                project_url = urljoin(url.rstrip('/') + '/', unescape(link.group(1)))
+                project_rows, found, urls = proj_search(project_url, proj)
+                if not found and project_rows:
+                    jobs_url = project_url.rstrip('/') + '/jobs/'
+                    _, found, urls = proj_search(jobs_url, proj)
+                if found:
+                    break
     if not found:
         res, found, urls = proj_search(url, proj.replace('0', ''))          # sometimes project name without zeros are stored as names of the cal.vlba file
 

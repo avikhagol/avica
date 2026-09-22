@@ -139,13 +139,24 @@ class LocalAntabTest(unittest.TestCase):
         download.assert_called_once()
         self.assertEqual(self.ga.calibration_decisions[-1]['status'], 'vlba_fallback')
 
-    def test_partial_array_requires_explicit_opt_in(self):
+    def test_partial_array_is_accepted_by_default_and_strict_check_is_opt_in(self):
         local = self.antab()
         with patch.object(self.ga, '_fits_layout', return_value=({'EF', 'WB'}, 1)):
+            with self.assertLogs('avica.pipeline', level='WARNING') as logged:
+                self.assertEqual(self.ga._find_local_antab(self.fits[0]), local)
+            self.assertIn('no TSYS for WB', '\n'.join(logged.output))
+            self.ga.local_antab_require_full_array = True
             with self.assertWarnsRegex(RuntimeWarning, 'missing TSYS antennas'):
                 self.assertIsNone(self.ga._find_local_antab(self.fits[0]))
-            self.ga.local_antab_require_full_array = False
-            self.assertEqual(self.ga._find_local_antab(self.fits[0]), local)
+
+    def test_missing_stations_do_not_trigger_archive_fallback(self):
+        local = self.antab()
+        with patch.object(self.ga, '_fits_layout', return_value=({'EF', 'DE', 'KN'}, 1)), \
+             patch('avica.pipe.core.find_tsys') as download, \
+             patch.object(self.ga, '_append_antab_file') as append:
+            self.run_find()
+        download.assert_not_called()
+        append.assert_called_once_with(local, self.fits)
 
     def test_antenna_coverage_breaks_time_tie(self):
         self.antab('partial.antab')

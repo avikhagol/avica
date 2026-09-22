@@ -78,7 +78,7 @@ class PreProcessFitsIdi(PipelineStepBase):
 
     def run(self, lf, fitsfiles, target, wd_ifolder, source_extract_multi_fitsfiles=False,
         removables=[], rm_only=False, rm_pre=False, delete_removables=False, artifact_dirs=[],
-        use_local_antab=True, local_antab_require_full_array=True, verbose=False):
+        use_local_antab=True, local_antab_require_full_array=False, verbose=False):
         self.result.start_stamp   = datetime.now()
         from avica.fitsidiutil.validation import fitsidi_check
         from avica.fitsidiutil.obs import ObservationSummary

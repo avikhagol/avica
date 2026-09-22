@@ -1381,7 +1381,7 @@ def antab_spw_count(values):
 
 class GenerateAndAppendAntab:
     def __init__(self, fitsfiles, metafolder, verbose, wd, valid_perc=5, artifact_dirs=None,
-                 use_local_antab=True, local_antab_require_full_array=True):
+                 use_local_antab=True, local_antab_require_full_array=False):
 
         self.fitsfiles                  =   fitsfiles
         self.metafolder                 =   metafolder
