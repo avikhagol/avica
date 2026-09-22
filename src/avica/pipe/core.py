@@ -766,7 +766,7 @@ class InitVariables(PipelineStepValidatorBase):
         PipelineContext.params['artifact_dirs'] = list(dict.fromkeys(
             [str(Path(folder_for_fits).resolve())] +
             [str(Path(fp).resolve().parent) for fp in allfitsfile
-             if any(name in fp for name in fitsfilenames)]
+             if any(Path(str(name).strip()).name == Path(fp).name for name in fitsfilenames)]
         ))
         if not filepaths:
             return PipelineStepValidatorResult(success=[False], msg="no fitsfiles found")

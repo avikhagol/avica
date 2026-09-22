@@ -33,43 +33,42 @@ def get_targets_filenames(lf, filename_col, targetname_col):
 
 
 def get_wd_ifolder_multiplefits(fitsfiles, target_dir, ifolder):
-
-    wds = []
+    """Reuse a complete input set, preferring preprocessed, newer workdirs."""
+    if not fitsfiles:
+        raise ValueError("No FITS filenames supplied")
+    wds = set()
     for fitsfile in fitsfiles:
-        wds.extend(str(Path(iwd).parent.absolute()) for iwd in iwd_for_fitsfile(fitsfile, target_dir, ifolder=ifolder, create=False, allwds=True)[0])       # not taking set, as that randomizes wds for further selection, we anyway select the first wd with fitting criterion
-    wds             =   np.sort(list(set(wds)))
-
-    new             =   False
-    wd_ifolder      =   None
-    rawf            =   ""
+        wds.update(Path(iwd).parent.absolute() for iwd in
+                   iwd_for_fitsfile(fitsfile, target_dir, ifolder=ifolder,
+                                   create=False, allwds=True)[0])
+    wds = {wd for wd in wds if re.fullmatch(r'wd(?:_\d+)?', wd.name)}
     expected_ffnames = {Path(f).name for f in fitsfiles}
-
+    matching = []
     for wd in wds:
+        rawf = wd / 'raw'
+        found_ffnames = {f.name for f in rawf.iterdir() if f.is_file()}
+        if expected_ffnames.issubset(found_ffnames) and (wd / Path(ifolder).name).is_dir():
+            matching.append(wd)
+    if matching:
+        wd = max(matching, key=lambda path: (
+            (path / 'avica.meta' / 'fitsfiles_used.avica').is_file(),
+            int(path.name[3:]) if path.name != 'wd' else 0,
+            str(path),
+        ))
+        return str(wd / Path(ifolder).name)
 
-        rawf        =   Path(wd).absolute() / 'raw'
-        found_ffnames = {f.name for f in rawf.glob('*fits') if f.is_file()}
-        if  all(expected_ffname in found_ffnames for expected_ffname in expected_ffnames):
-            new         =   False
-            wd_ifolder  =   f"{wd}/{Path(ifolder).name}"
-            break
-        else:
-            new         =   True
-
-
-    if new:
-        allwds  = [wd.name for wd in Path(wds[0]).parent.glob("wd*")]
-        n_incr = [int(wd.split('_')[1]) for wd in allwds if '_' in wd]
-        incr = np.max(n_incr)+1 if len(n_incr) else 1
-        wd = f"{str(Path(wds[0]).parent)}/wd_{incr}"
-        wd_ifolder = f"{wd}/{Path(ifolder).name}"
-
-        shutil.copytree(f"{ifolder}", wd_ifolder)
-        rawf = f"{wd}/raw"
-        Path(rawf).mkdir(parents=True, exist_ok=False)
-        print(f"{wd_ifolder} created")
-
-
-    return wd_ifolder
+    if not wds:
+        return None  # setup_workdir creates the initial directory.
+    project_dir = sorted(wds)[0].parent
+    generations = [int(path.name[3:]) if path.name != 'wd' else 0
+                   for path in project_dir.iterdir()
+                   if re.fullmatch(r'wd(?:_\d+)?', path.name)]
+    wd = project_dir / f'wd_{max(generations, default=0) + 1}'
+    wd_ifolder = wd / Path(ifolder).name
+    shutil.copytree(ifolder, wd_ifolder)
+    (wd / 'raw').mkdir()
+    print(f"{wd_ifolder} created")
+    return str(wd_ifolder)
 
 def search_input_template(picard_input_template, ifolder, depth=4):
         pattern = ""
@@ -89,7 +88,18 @@ def search_input_template(picard_input_template, ifolder, depth=4):
         return ifolder
 
 def setup_workdir(lf, target_dir, fitsfilenames, allfitsfile, picard_input_template):
-    ff_path_existing            =   [fpe for fpe in allfitsfile for ff in fitsfilenames if ff in fpe]
+    requested_names = list(dict.fromkeys(Path(str(ff).strip()).name
+                                        for ff in fitsfilenames if str(ff).strip()))
+    if not requested_names:
+        raise ValueError("No FITS filenames supplied")
+    ff_path_existing = []
+    for name in requested_names:
+        matches = list(dict.fromkeys(str(fp) for fp in allfitsfile if Path(fp).name == name))
+        if not matches:
+            raise ValueError(f"Requested FITS file not found: {name}")
+        if len(matches) > 1:
+            raise ValueError(f"Ambiguous FITS filename {name}: {matches}")
+        ff_path_existing.append(matches[0])
     ifolder = []
     if not Path(picard_input_template).exists():
         raise FileNotFoundError(f"{picard_input_template}")
@@ -99,26 +109,17 @@ def setup_workdir(lf, target_dir, fitsfilenames, allfitsfile, picard_input_templ
 
     filepaths                   =   []
 
-    ff_path                     =   []
-
-    for ff in fitsfilenames:
-        if ff:
-            ff_path             =   [fp for fp in allfitsfile if ff in fp]
-
-        if not ff_path:
-            raise ValueError(f"`{ff}` is not correct `fitsfile` \n \
-                            Check params : fitsfile_path, primary_colname, primary_value:\n \
-                            ({ff_path}, {lf.primary_colname}, {lf.primary_value})")
+    for ff, source in zip(requested_names, ff_path_existing):
         if not wd_ifolder:
-            wd_ifolder                  =   get_wd_ifolder(fitsfile=ff_path[0], target_dir=target_dir, ifolder=ifolder)[0]
+            wd_ifolder                  =   get_wd_ifolder(fitsfile=source, target_dir=target_dir, ifolder=ifolder)[0]
         destpath                    =   f"{(Path(wd_ifolder).parent)}/raw/{ff}"
         if destpath not in filepaths:
             filepaths.append(destpath)
         if not Path(destpath).exists():
-            shutil.copy(ff_path[0], destpath)
+            shutil.copy(source, destpath)
         if not Path(destpath).exists():
-            raise FileNotFoundError(f"{ff_path[0]} --> {destpath}")
-    return wd_ifolder, filepaths
+            raise FileNotFoundError(f"{source} --> {destpath}")
+    return str(Path(wd_ifolder)), filepaths
 
 
 
