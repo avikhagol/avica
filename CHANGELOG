@@ -3,23 +3,21 @@
 ## [0.3.1.14]
 
 ### Added
-- `fits_to_ms` adds discovered AIPS UVFLG station artifacts to existing IDI/MS
-  flagging, with `apply_flag_from_artifacts`, `artifact_flag_extensions`, and
-  `artifact_flagfiles` options. Conversion reuses JIVE keyin parsing, normalizes
-  day-of-year times, and honors TIMEOFF, DTIMRANG, reasons and IF/channel ranges.
-- Artifact commands are deduplicated per output MS; invalid/irrelevant records
-  are reported in a JSON sidecar. Unique before/after flag versions preserve
-  rerun backups. Existing MSs retain the apply_flag_to_existing_vis opt-in.
-- `artifact_dirs`, `use_local_antab`, and `local_antab_require_full_array` options to `pipe config`.
-- existing antab is used when available in `artifact_dirs`, `folder_for_fits` or `<workdir>/raw`.
-- local antab selection requires more than `valid_perc` overlap with the UV data
-  for matching antennas. Partial station calibration is accepted by default,
-  with warnings for missing antennas; full-array coverage is an opt-in check.
-  IF mismatch remains a warning.
-- eligible candidates are ranked by time coverage, antenna coverage, and IF
-  agreement; equal ranks raise an ambiguity error. Malformed and unrelated
-  candidates are skipped before falling back to VLBA calibration retrieval.
-- candidate decisions and calibration sources are recorded in preprocessing metadata.
+- Added `artifact_dirs` to find local ANTAB and AIPS UVFLG flag files. AVICA
+  searches these directories, `folder_for_fits`, and `<workdir>/raw`.
+- `fits_to_ms` can apply discovered flag files. It supports antenna, time, IF,
+  channel, reason, `TIMEOFF`, and `DTIMRANG` values.
+- Added `apply_flag_from_artifacts`, `artifact_flag_extensions`, and
+  `artifact_flagfiles` options. Applying flags to an existing MS still requires
+  `apply_flag_to_existing_vis=True`.
+- Flag commands are deduplicated. Skipped records are listed in a JSON report,
+  and before/after flag backups are saved for each run.
+- Added `use_local_antab` and `local_antab_require_full_array` options. ANTAB
+  files may cover only part of the array; missing antennas and IF differences
+  produce warnings.
+- Local ANTAB files are selected by time, antenna, and IF coverage. Invalid or
+  unrelated files are skipped before AVICA tries the VLBA archive.
+- ANTAB selection and calibration sources are saved in preprocessing metadata.
 
 ### Fixed
 - VLBA archive fallback reads HTML row strings consistently and constructs the
@@ -38,6 +36,7 @@
 - `--default` for `pipe config` now preserves the existing config.
 - `snr_threshold_phref` was misspelled, corrected.
 
+[0.3.1.14] : https://github.com/avikhagol/avica/compare/v0.3.1.13...v0.3.1.14
 [0.3.1.13] : https://github.com/avikhagol/avica/compare/v0.3.1.12...v0.3.1.13
 [0.3.1.12] : https://github.com/avikhagol/avica/compare/v0.3.1.11...v0.3.1.12
 [0.3.1.11] : https://github.com/avikhagol/avica/compare/v0.3.1.10...v0.3.1.11
