@@ -47,6 +47,13 @@ minsnr                    =  3.2
 sci_solints               =   auto
 solint_max_scan_partitions=   8
 apply_flag_from_idi       =   True
+# Add AIPS UVFLG station files from artifact_dirs, folder_for_fits and raw.
+# All matching files are combined; missing stations only skip their own rows.
+# Existing MSs are touched only when apply_flag_to_existing_vis=True.
+apply_flag_from_artifacts =   True
+artifact_flag_extensions =   .fg;.uvflag;.uvflg;.uvfg;.flag;.flg;.uvflags;.uvflgs;.uvfgs;.flags;.flgs
+# Optional explicit file list overrides discovery, including unusual extensions.
+artifact_flagfiles        =   []
 size_limit                =   2000.0
 
 # configure google sheet

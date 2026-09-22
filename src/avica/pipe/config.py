@@ -501,6 +501,7 @@ DEFAULT_PARAMS: dict = {
     "sci_solints"               :   "manual",
     "solint_max_scan_partitions":   8,
     "apply_flag_from_idi"       :   True,
+    "apply_flag_from_artifacts" :   True,
     "source_extract_multi_fitsfiles"    :   False,
     "delete_removables"         :   False,
     "removables"                :   [],

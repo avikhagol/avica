@@ -3,6 +3,13 @@
 ## [0.3.1.14]
 
 ### Added
+- `fits_to_ms` adds discovered AIPS UVFLG station artifacts to existing IDI/MS
+  flagging, with `apply_flag_from_artifacts`, `artifact_flag_extensions`, and
+  `artifact_flagfiles` options. Conversion reuses JIVE keyin parsing, normalizes
+  day-of-year times, and honors TIMEOFF, DTIMRANG, reasons and IF/channel ranges.
+- Artifact commands are deduplicated per output MS; invalid/irrelevant records
+  are reported in a JSON sidecar. Unique before/after flag versions preserve
+  rerun backups. Existing MSs retain the apply_flag_to_existing_vis opt-in.
 - `artifact_dirs`, `use_local_antab`, and `local_antab_require_full_array` options to `pipe config`.
 - existing antab is used when available in `artifact_dirs`, `folder_for_fits` or `<workdir>/raw`.
 - local antab selection requires more than `valid_perc` overlap with the UV data
