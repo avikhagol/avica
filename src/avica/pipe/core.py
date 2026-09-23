@@ -1856,6 +1856,7 @@ class MsTransform(CasaTask):
     spw:str             =   ""
     antenna:str         =   ""
     scan:str            =   ""
+    correlation:str     =   ""
     chanaverage:bool    =   False
     chanbin:int|List[int]    =   1
     timeaverage:bool    =   False

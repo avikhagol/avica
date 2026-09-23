@@ -342,6 +342,85 @@ def repair_mixed_single_pol_syscal_tsys(vis):
 
     return nfixed
 
+# ------------------------------ single-pol bands: drop the dead correlation -------------------------------
+# CASA bandpass (corrdepflags=True) finds no good solutions when correlation 0 is fully flagged,
+# even if the other correlation is good. Single-pol-per-band data (e.g. KVN K=LCP, Q=RCP) must
+# therefore be split with only the live correlation.
+
+CORR_TYPE_NAMES = {5: "RR", 6: "RL", 7: "LR", 8: "LL", 9: "XX", 10: "XY", 11: "YX", 12: "YY"}
+
+
+def dead_corr_mask(flag, data, corr_axis):
+    """True for each correlation that is fully flagged or non-finite in the sample."""
+    bad = np.asarray(flag, dtype=bool) | ~np.isfinite(np.asarray(data))
+    corr_axis = corr_axis % bad.ndim
+    other_axes = tuple(ax for ax in range(bad.ndim) if ax != corr_axis)
+    return bad.all(axis=other_axes)
+
+
+def live_correlations(vis, spws, nchunks=8, chunk_rows=50):
+    """
+    Return ``{spw: (corr_types, [live corr index, ...])}`` for the cross-correlations of ``vis``.
+
+    A correlation is dead when every sampled FLAG is set or every sampled DATA value is non-finite.
+    Reads ``nchunks`` contiguous blocks of ``chunk_rows`` rows spread over each spw: contiguous
+    reads stay tile-friendly on large (4096-channel) MSs, unlike a row stride.
+    """
+    from avica.ms.compat import CTABLE_BACKEND
+
+    corr_axis = 0 if CTABLE_BACKEND == "casatools" else -1
+    spws = {int(s) for s in spws}
+    tb = ctable(str(vis), readonly=True, ack=False)
+    ddtb = ctable(f"{vis}/DATA_DESCRIPTION", readonly=True, ack=False)
+    poltb = ctable(f"{vis}/POLARIZATION", readonly=True, ack=False)
+    out = {}
+    try:
+        dd_spw = [int(s) for s in ddtb.getcol("SPECTRAL_WINDOW_ID")]
+        dd_pol = [int(p) for p in ddtb.getcol("POLARIZATION_ID")]
+        for dd, spw in enumerate(dd_spw):
+            if spw not in spws:
+                continue
+            corr_types = [int(c) for c in np.ravel(poltb.getcell("CORR_TYPE", dd_pol[dd]))]
+            sel = tb.query(f"DATA_DESC_ID=={dd} && ANTENNA1!=ANTENNA2")
+            try:
+                nrow = sel.nrows()
+                if nrow == 0:
+                    continue
+                nread = min(chunk_rows, nrow)
+                starts = np.unique(np.linspace(0, nrow - nread, nchunks).astype(int))
+                dead = None
+                for start in starts:
+                    flag = sel.getcol("FLAG", int(start), nread)
+                    data = sel.getcol("DATA", int(start), nread)
+                    chunk_dead = dead_corr_mask(flag, data, corr_axis)
+                    dead = chunk_dead if dead is None else dead & chunk_dead
+                    if not dead.any():
+                        break
+            finally:
+                sel.close()
+            out[spw] = (corr_types, [i for i, d in enumerate(dead) if not d])
+    finally:
+        for t in (tb, ddtb, poltb):
+            t.close()
+    return out
+
+
+def choose_live_correlation(live):
+    """
+    Pick the single mstransform ``correlation`` selection from ``live_correlations`` output.
+
+    Returns the correlation name (e.g. ``'LL'``) only when every spw has exactly one live
+    correlation and it is the same one; otherwise ``''`` (keep all correlations).
+    """
+    names = set()
+    for corr_types, alive in live.values():
+        if len(alive) != 1:
+            return ""
+        names.add(CORR_TYPE_NAMES.get(corr_types[alive[0]], ""))
+    if len(names) != 1 or "" in names:
+        return ""
+    return names.pop()
+
 # ------------------------------ check the Similar MS tables and fix duplicated rows -------------------------------
 
 def chk_tbl(subt1, subt2, relax_order=False):

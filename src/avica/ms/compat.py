@@ -4,6 +4,7 @@ from traceback import print_exc
 import numpy as np
 try:
     from casatools import table as _casatools_table
+    CTABLE_BACKEND = "casatools"      # array columns: (..., nrow), e.g. DATA (ncorr, nchan, nrow)
     def ctable(path=None, readonly=True, **_):
         t = _casatools_table()
         if path is not None:
@@ -11,6 +12,7 @@ try:
         return t
 except ImportError:
     from casacore.tables import table as ctable
+    CTABLE_BACKEND = "casacore"       # array columns: (nrow, ...), e.g. DATA (nrow, nchan, ncorr)
 
 class CasaMSMetadata:
     def __init__(self):
