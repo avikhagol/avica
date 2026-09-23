@@ -1393,6 +1393,58 @@ def tsys_exists_in_fitsfiles(fitsfile, fitsfiles, valid_perc=5, verbose=True):
 
     return success
 
+def _antenna_names(hdul):
+    """{ANTENNA_NO: ANNAME} from the ANTENNA table, else ARRAY_GEOMETRY."""
+    for table, idcol in (('ANTENNA', 'ANTENNA_NO'), ('ARRAY_GEOMETRY', 'NOSTA')):
+        if table in hdul and idcol in hdul[table].columns.names:
+            data = hdul[table].data
+            return {int(n): str(a).strip().upper() for n, a in zip(data[idcol], data['ANNAME'])}
+    return {}
+
+def tsys_antenna_coverage(fitsfile, valid_perc=5):
+    """{ANNAME: percent of the UV_DATA time range covered by valid TSYS}.
+
+    A TSYS row is valid if any TSYS_* value is finite and > 0 (single-hand bands
+    carry -999.9 in the other hand). Antennas without valid rows get 0.0.
+    Time reference and overlap follow `tsys_exists`.
+    """
+    found, st_tsys, _, st_uvd, lt_uvd = tsys_exists(fitsfile, valid_perc)
+    with fits.open(fitsfile, memmap=True, lazy_load_hdus=True) as hdul:
+        names = _antenna_names(hdul)
+        coverage = dict.fromkeys(names.values(), 0.0)
+        if st_tsys is None or st_uvd is None or 'SYSTEM_TEMPERATURE' not in hdul:
+            return coverage
+        st = hdul['SYSTEM_TEMPERATURE'].data
+        if not len(st):
+            return coverage
+        valid = np.zeros(len(st), dtype=bool)
+        for col in (c for c in st.columns.names if c.startswith('TSYS_')):
+            values = np.asarray(st[col], dtype=float).reshape(len(st), -1)
+            valid |= (np.isfinite(values) & (values > 0)).any(axis=1)
+        zero_mjd = st_tsys.mjd - float(st['TIME'][0])
+        antenna_no = np.asarray(st['ANTENNA_NO'])
+        times = zero_mjd + np.asarray(st['TIME'], dtype=float)
+        for anno in np.unique(antenna_no[valid]):
+            if int(anno) in names:
+                t = times[valid & (antenna_no == anno)]
+                coverage[names[int(anno)]] = float(overlap_percentage(t.min(), t.max(), st_uvd.mjd, lt_uvd.mjd))
+    return coverage
+
+def gain_curve_antennas(fitsfile):
+    """Antenna names that have at least one GAIN_CURVE row."""
+    with fits.open(fitsfile, memmap=True, lazy_load_hdus=True) as hdul:
+        names = _antenna_names(hdul)
+        if 'GAIN_CURVE' not in hdul:
+            return set()
+        return {names[int(n)] for n in np.unique(hdul['GAIN_CURVE'].data['ANTENNA_NO']) if int(n) in names}
+
+def uncalibrated_antennas(fitsfile, valid_perc=5):
+    """{'tsys': [...], 'gain': [...]}: antennas lacking TSYS coverage or any gain curve."""
+    coverage = tsys_antenna_coverage(fitsfile, valid_perc)
+    with_gain = gain_curve_antennas(fitsfile)
+    return {'tsys': sorted(an for an, perc in coverage.items() if perc <= valid_perc),
+            'gain': sorted(an for an in coverage if an not in with_gain)}
+
 
 def attach_antab(self, only_first=True, attach_all=False):
         """
