@@ -11,12 +11,14 @@ from astropy.io import fits
 from astropy.time import Time
 
 from avica.external.jive import append_gc as GCData
-from avica.fitsidiutil.antab_bands import antab_groups, band_gain_curve, if_centres_mhz
+from avica.fitsidiutil import FITSIDI, read_idi
+from avica.fitsidiutil.antab_bands import (antab_groups, band_gain_curve, if_centres_mhz, make_skeleton,
+                                           read_cal_table, write_gain_curve)
 from avica.pipe.core import GenerateAndAppendAntab
 from avica.pipe.helpers import uncalibrated_antennas
 
 RDATE = '2025-03-21'
-# IF1-2 K band, IF3-4 Q band, as in the KVN simultaneous K/Q N24JK03 layout.
+# IF1-2 K band, IF3-4 Q band, as in the KVN combined K/Q layout.
 BANDFREQ = [0.0, 2.048e9, 21.55e9, 23.598e9]
 REF_FREQ = 21.55e9
 BANDWIDTH = 2.048e9
@@ -118,17 +120,21 @@ class AntabBandsTest(unittest.TestCase):
     def test_one_row_per_antenna_with_per_band_dpfu_poly_and_mount(self):
         ff = make_idi(self.root / 'a.fits')
         antab = self.write('kvn.antab', station('KC') + station('KT', mount='ALTAZ', q_poly=(0.97, 0.002)))
-        hdu = band_gain_curve(antab, ff, GCData.append_gc, workdir=self.root)
-        self.assertEqual(sorted(hdu.data['ANTENNA_NO']), [1, 2])
-        self.assertEqual(hdu.header['NO_TABS'], 3)
-        rows = {int(r['ANTENNA_NO']): r for r in hdu.data}
-        np.testing.assert_allclose(rows[1]['SENS_1'], [0.0955, 0.0955, 0.0854, 0.0854], rtol=1e-6)
-        self.assertEqual(list(rows[1]['Y_TYP_1']), [1, 1, 1, 1])                   # ELEV
-        self.assertEqual(list(rows[2]['Y_TYP_1']), [2, 2, 2, 2])                   # ALTAZ kept as given
-        poly = rows[2]['GAIN_1'].reshape(4, 3)
+        table = band_gain_curve(antab, ff, GCData.append_gc, workdir=self.root)
+        self.assertEqual(sorted(table.columns['ANTENNA_NO']), [1, 2])
+        self.assertEqual(table.get('NO_TABS'), 3)
+        self.assertEqual(table.formats['Y_TYP_1'], '4J')
+        self.assertEqual(table.formats['GAIN_1'], '12E')
+        self.assertEqual(table.columns['Y_TYP_1'].dtype, np.int64)
+        rows = {int(a): j for j, a in enumerate(table.columns['ANTENNA_NO'])}
+        col = lambda name, an: table.columns[name][rows[an]]
+        np.testing.assert_allclose(col('SENS_1', 1), [0.0955, 0.0955, 0.0854, 0.0854], rtol=1e-6)
+        self.assertEqual(list(col('Y_TYP_1', 1)), [1, 1, 1, 1])                   # ELEV
+        self.assertEqual(list(col('Y_TYP_1', 2)), [2, 2, 2, 2])                   # ALTAZ kept as given
+        poly = col('GAIN_1', 2).reshape(4, 3)
         np.testing.assert_allclose(poly[0], [1.02, 0.00033, -0.0000062], rtol=1e-5)
         np.testing.assert_allclose(poly[2], [0.97, 0.002, 0.0], rtol=1e-5)          # shorter Q poly padded
-        self.assertEqual(list(rows[2]['NTERM_1']), [3, 3, 2, 2])
+        self.assertEqual(list(col('NTERM_1', 2)), [3, 3, 2, 2])
 
     def test_plain_append_gc_has_duplicates_that_the_splice_removes(self):
         ff = make_idi(self.root / 'a.fits')
@@ -154,9 +160,16 @@ class AntabBandsTest(unittest.TestCase):
     def test_stations_absent_from_fits_are_ignored(self):
         ff = make_idi(self.root / 'a.fits', antennas=('KC',))
         antab = self.write('extra.antab', station('KX') + station('KC'))
-        hdu = band_gain_curve(antab, ff, GCData.append_gc, workdir=self.root)
-        self.assertEqual(list(hdu.data['ANTENNA_NO']), [1])
-        np.testing.assert_allclose(hdu.data['SENS_1'][0], [0.0955, 0.0955, 0.0854, 0.0854], rtol=1e-6)
+        table = band_gain_curve(antab, ff, GCData.append_gc, workdir=self.root)
+        self.assertEqual(list(table.columns['ANTENNA_NO']), [1])
+        np.testing.assert_allclose(table.columns['SENS_1'][0], [0.0955, 0.0955, 0.0854, 0.0854], rtol=1e-6)
+
+    def test_old_extension_without_replace_table_falls_back(self):
+        ff = make_idi(self.root / 'a.fits')
+        antab = self.write('kvn.antab', station('KC'))
+        with patch('avica.fitsidiutil.antab_bands.ReadIO', object), \
+             self.assertWarnsRegex(RuntimeWarning, 'rebuild'):
+            self.assertIsNone(band_gain_curve(antab, ff, GCData.append_gc, workdir=self.root))
 
     def test_append_failure_in_band_path_falls_back(self):
         ff = make_idi(self.root / 'a.fits')
@@ -164,6 +177,85 @@ class AntabBandsTest(unittest.TestCase):
         with self.assertWarnsRegex(RuntimeWarning, 'boom'):
             self.assertIsNone(band_gain_curve(antab, ff, lambda **kw: (_ for _ in ()).throw(RuntimeError('boom')),
                                               workdir=self.root))
+
+
+class FitsidiutilIOTest(unittest.TestCase):
+    """read(hdus=), column types and replace_table of avica.fitsidiutil on small FITS-IDI files."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.ff = make_idi(self.root / 'a.fits', infile_tsys={1: [65.5, 70.6, 161.8, 247.6]})
+        self.antab = self.root / 'kvn.antab'
+        self.antab.write_text(station('KC') + station('KT'))
+        GCData.append_gc(antabfile=str(self.antab), idifile=str(self.ff), replace=True)   # 8 plain rows
+
+    def test_read_only_requested_tables(self):
+        hdul = read_idi(str(self.ff), hdus=['FREQUENCY'])
+        self.assertIn('SYSTEM_TEMPERATURE', hdul.names)                  # headers of every HDU
+        self.assertIsNotNone(hdul['FREQUENCY'].cols)
+        self.assertIsNone(hdul['SYSTEM_TEMPERATURE'].cols)
+        self.assertIsNotNone(read_idi(str(self.ff))['SYSTEM_TEMPERATURE'].cols)   # default unchanged
+
+    def test_column_formats_and_typed_restore_integer_vectors(self):
+        gc = read_idi(str(self.ff), hdus=['GAIN_CURVE'])['GAIN_CURVE']
+        self.assertEqual(gc.column_formats['Y_TYP_1'], (4, 'J'))
+        self.assertEqual(gc.column_formats['ANTENNA_NO'], (1, 'J'))
+        self.assertEqual(np.asarray(gc['Y_TYP_1']).dtype, np.float64)        # as read_table_chunked returns it
+        self.assertEqual(gc.typed('Y_TYP_1').dtype, np.int64)
+        self.assertEqual(gc.typed('SENS_1').dtype, np.float64)
+        self.assertEqual(gc.typed('Y_TYP_1').tolist(), [[1, 1, 1, 1]] * 8)
+
+    def test_replace_table_shrinks_in_place_and_keeps_other_hdus(self):
+        with fits.open(self.ff) as before:
+            names = [h.name for h in before]
+            kept = {h.name: (h.header.tostring(), h.data.tobytes() if h.data is not None else b'')
+                    for h in before if h.name != 'GAIN_CURVE'}
+        table = band_gain_curve(self.antab, self.ff, GCData.append_gc, workdir=self.root)
+        write_gain_curve(self.ff, table)
+        with fits.open(self.ff) as after:
+            self.assertEqual([h.name for h in after], names)                # same position
+            for h in after:
+                if h.name != 'GAIN_CURVE':
+                    self.assertEqual((h.header.tostring(), h.data.tobytes() if h.data is not None else b''),
+                                     kept[h.name], h.name)
+            gc = after['GAIN_CURVE']
+            self.assertEqual(len(gc.data), 2)
+            self.assertEqual(gc.header['NO_TABS'], 3)
+            self.assertEqual(gc.header['NO_BAND'], 4)
+            self.assertEqual(gc.columns['Y_TYP_1'].format, '4J')
+            np.testing.assert_allclose(gc.data['SENS_1'][0], [0.0955, 0.0955, 0.0854, 0.0854], rtol=1e-6)
+            self.assertEqual(gc.data['NTERM_1'][0].tolist(), [3, 3, 3, 3])
+        again = read_cal_table(self.ff, 'GAIN_CURVE')                        # same values via fitsidiutil
+        np.testing.assert_allclose(again.columns['GAIN_1'], table.columns['GAIN_1'], rtol=1e-6)
+
+    def test_jive_append_still_works_after_replace(self):
+        write_gain_curve(self.ff, band_gain_curve(self.antab, self.ff, GCData.append_gc, workdir=self.root))
+        from avica.external.jive import append_tsys as TsysData
+        TsysData.append_tsys(antabfile=str(self.antab), idifiles=str(self.ff), replace=True)
+        GCData.append_gc(antabfile=str(self.antab), idifile=str(self.ff), replace=True)
+        with fits.open(self.ff) as hdul:
+            self.assertEqual(sorted(set(hdul['SYSTEM_TEMPERATURE'].data['ANTENNA_NO'])), [1, 2])
+
+    def test_replace_table_appends_when_absent(self):
+        ff = make_idi(self.root / 'nogc.fits', infile_tsys={1: [65.5, 70.6, 161.8, 247.6]})
+        write_gain_curve(ff, band_gain_curve(self.antab, ff, GCData.append_gc, workdir=self.root))
+        with fits.open(ff) as hdul:
+            self.assertEqual(hdul[-1].name, 'GAIN_CURVE')
+            self.assertEqual(len(hdul['GAIN_CURVE'].data), 2)
+
+    def test_replace_table_needs_write_mode(self):
+        with FITSIDI(str(self.ff)).open('r') as fo:
+            with self.assertRaises(IOError):
+                fo.replace_table('GAIN_CURVE', [('ANTENNA_NO', '1J', '')], {'ANTENNA_NO': np.array([1])})
+
+    def test_skeleton_has_every_hdu_and_one_uv_row(self):
+        out = self.root / 'skel.fits'
+        make_skeleton(self.ff, out)
+        hdul = read_idi(str(out))
+        self.assertEqual(hdul.names, read_idi(str(self.ff), hdus=[]).names)
+        self.assertEqual(hdul['UV_DATA'].nrows, 1)
 
 
 class PartialCalibrationAttachTest(unittest.TestCase):

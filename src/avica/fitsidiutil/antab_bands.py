@@ -6,10 +6,14 @@ avica's own multi-band VLBA ANTAB) list one GAIN line per receiver band, so a
 FITS-IDI file ends up with several conflicting rows per antenna.
 
 `band_gain_curve` keeps ``append_gc`` unchanged: it runs it once per distinct IF
-selection on a small skeleton copy of the FITS-IDI file, feeding only the GAIN
-lines whose ``FREQ`` range contains those IFs, then splices each IF slot from the
-matching run into one row per antenna. Whenever the selection is not unique it
-returns None and the caller keeps the plain ``append_gc`` result.
+selection on a small copy of the FITS-IDI file (`FITSIDI.save_as` with one
+UV_DATA row), feeding only the GAIN lines whose ``FREQ`` range contains those
+IFs, then splices each IF slot from the matching run into one row per antenna.
+Whenever the selection is not unique it returns None and the caller keeps the
+plain ``append_gc`` result.
+
+All FITS access here goes through `avica.fitsidiutil` (CFITSIO); only the
+vendored JIVE code uses astropy.
 """
 
 import logging
@@ -18,20 +22,25 @@ import shutil
 import tempfile
 import warnings
 from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import NamedTuple
+from typing import Dict, List, NamedTuple, Tuple
 
 import numpy as np
-from astropy.io import fits
+
+from .core import ReadIO
+from .io import FITSIDI, I, F, L, read_idi
 
 log = logging.getLogger("avica.pipeline")
 
 _FREQ = re.compile(r"\bFREQ\s*=\s*([-+\d.eE]+)\s*,\s*([-+\d.eE]+)", re.I)
 _UNSUPPORTED_GAIN = re.compile(r"\b(TABLE|GCNRAO)\b", re.I)
-_SKELETON_HDUS = ('ARRAY_GEOMETRY', 'SOURCE', 'ANTENNA', 'FREQUENCY')
 _KEYS = ('ANTENNA_NO', 'ARRAY', 'FREQID')
 _PER_IF = ('TYPE', 'NTERM', 'X_TYP', 'Y_TYP', 'X_VAL', 'SENS')          # [NO_BAND]
 _PER_IF_TAB = ('Y_VAL', 'GAIN')                                          # [NO_BAND * NO_TABS]
+_SKELETON_NEEDS = ('ARRAY_GEOMETRY', 'SOURCE', 'FREQUENCY', 'UV_DATA')
+_STRUCTURAL = re.compile(r"^(XTENSION|BITPIX|NAXIS\d*|PCOUNT|GCOUNT|TFIELDS|EXTNAME|"
+                         r"TTYPE\d+|TFORM\d+|TUNIT\d+|TDIM\d+|TNULL\d+|TSCAL\d+|TZERO\d+|THEAP|END)$")
 
 
 class AntabGroup(NamedTuple):
@@ -39,6 +48,25 @@ class AntabGroup(NamedTuple):
     antenna: str
     text: str           # verbatim text, including leading comments and TSYS rows
 
+
+@dataclass
+class CalTable:
+    """A binary table independent of any FITS library; vectors are rows-first 2-D arrays."""
+    name: str
+    columns: Dict[str, np.ndarray]
+    formats: Dict[str, str]                                   # TFORM, e.g. '4J'
+    units: Dict[str, str] = field(default_factory=dict)
+    header: List[Tuple[str, object, str]] = field(default_factory=list)   # (key, value, comment)
+
+    @property
+    def nrows(self):
+        return len(next(iter(self.columns.values()))) if self.columns else 0
+
+    def get(self, key, default=None):
+        return next((value for k, value, _ in self.header if k == key), default)
+
+
+# ------------------------------------------------------------------ ANTAB text
 
 def _body(line):
     return line.split('!', 1)[0].strip()
@@ -82,42 +110,83 @@ def _gain_freq(group):
     return (float(match[1]), float(match[2])) if match else None
 
 
-def if_centres_mhz(fitsfile):
+# ------------------------------------------------------------------ FITS-IDI access (fitsidiutil)
+
+def _require(hdul, fitsfile, names):
+    missing = [n for n in names if n not in hdul.names]
+    if missing:
+        raise IOError(f"{fitsfile}: missing HDU(s) {', '.join(missing)} (read gave {hdul.names})")
+
+
+def if_centres_mhz(fitsfile, hdul=None):
     """IF centre frequencies of FREQID 1, or None if the file has several FREQIDs."""
-    with fits.open(fitsfile, memmap=True, lazy_load_hdus=True) as hdul:
-        freq = hdul['FREQUENCY']
-        if len(freq.data) != 1:
-            return None
-        row = freq.data[0]
-        names = freq.columns.names
-        bandfreq = np.atleast_1d(row['BANDFREQ']).astype(float)
-        width = np.atleast_1d(row['TOTAL_BANDWIDTH']).astype(float) if 'TOTAL_BANDWIDTH' in names else np.zeros_like(bandfreq)
-        sideband = np.atleast_1d(row['SIDEBAND']) if 'SIDEBAND' in names else np.ones_like(bandfreq)
-        ref = freq.header.get('REF_FREQ', hdul['ARRAY_GEOMETRY'].header.get('REF_FREQ'))
-        centre = ref + bandfreq + np.where(sideband >= 0, width, -width) / 2
+    hdul = read_idi(str(fitsfile), hdus=['FREQUENCY']) if hdul is None else hdul
+    _require(hdul, fitsfile, ['FREQUENCY'])
+    freq = hdul['FREQUENCY']
+    if freq.nrows != 1:
+        return None
+    bandfreq = np.atleast_2d(np.asarray(freq['BANDFREQ'], dtype=float))[0]
+    width = (np.atleast_2d(np.asarray(freq['TOTAL_BANDWIDTH'], dtype=float))[0]
+             if 'TOTAL_BANDWIDTH' in freq.cols else np.zeros_like(bandfreq))
+    sideband = (np.atleast_2d(freq.typed('SIDEBAND'))[0]
+                if 'SIDEBAND' in freq.cols else np.ones_like(bandfreq))
+    ref = freq.header.get('REF_FREQ', hdul['ARRAY_GEOMETRY'].header.get('REF_FREQ')
+                          if 'ARRAY_GEOMETRY' in hdul.names else None)
+    centre = float(ref) + bandfreq + np.where(sideband >= 0, width, -width) / 2
     return centre / 1e6
 
 
-def _idi_antennas(fitsfile):
+def _idi_antennas(fitsfile, hdul=None):
     """Antenna names as the JIVE IdiData antenna_map sees them."""
-    with fits.open(fitsfile, memmap=True, lazy_load_hdus=True) as hdul:
-        names = hdul['ARRAY_GEOMETRY'].data['ANNAME']
+    hdul = read_idi(str(fitsfile), hdus=['ARRAY_GEOMETRY']) if hdul is None else hdul
+    _require(hdul, fitsfile, ['ARRAY_GEOMETRY'])
     return {(n.decode('ascii', errors='ignore').strip()[:2] if isinstance(n, bytes) else str(n).strip()).upper()
-            for n in names}
+            for n in hdul['ARRAY_GEOMETRY']['ANNAME']}
 
 
 def make_skeleton(fitsfile, out):
-    """Small HDUs of `fitsfile` plus a one-row UV_DATA; enough for JIVE append_gc."""
-    with fits.open(fitsfile, memmap=True, lazy_load_hdus=True) as hdul:
-        hdus = [fits.PrimaryHDU(header=hdul[0].header.copy())]
-        hdus += [fits.BinTableHDU(data=hdul[name].data.copy(), header=hdul[name].header.copy())
-                 for name in _SKELETON_HDUS if name in hdul]
-    hdus.append(fits.BinTableHDU.from_columns([fits.Column(name='DATE', format='1D', array=[0.0]),
-                                               fits.Column(name='TIME', format='1D', array=[0.0]),
-                                               fits.Column(name='SOURCE', format='1J', array=[1])],
-                                              name='UV_DATA'))
-    fits.HDUList(hdus).writeto(out, overwrite=True)
+    """Copy of `fitsfile` with every HDU but a single UV_DATA row; enough for JIVE append_gc."""
+    with FITSIDI(str(fitsfile)).open('r') as fo:
+        fo.read(hdus=['UV_DATA'])
+        fo.save_as(str(out))
+    _require(read_idi(str(out), hdus=[]), out, _SKELETON_NEEDS)
 
+
+def read_cal_table(fitsfile, name):
+    """Read one binary table into a CalTable, restoring integer columns from TFORM."""
+    hdul = read_idi(str(fitsfile), hdus=[name])
+    _require(hdul, fitsfile, [name])
+    hdu = hdul[name]
+    formats = {col: f"{repeat}{code}" for col, (repeat, code) in hdu.column_formats.items()}
+    tfields = int(hdu.header.get('TFIELDS', 0) or 0)
+    units = {str(hdu.header.get(f'TTYPE{n}')).strip(): str(hdu.header.get(f'TUNIT{n}', '') or '').strip()
+             for n in range(1, tfields + 1)}
+    header = []
+    for card in hdu.header:
+        key = card['key']
+        if _STRUCTURAL.match(key):
+            continue
+        value = card['value']
+        if card.get('dtype') == L:
+            value = str(value).strip().upper().startswith('T')
+        elif card.get('dtype') == I:
+            value = int(value)
+        elif card.get('dtype') == F:
+            value = float(value)
+        header.append((key, value, card.get('comment', '') or ''))
+    columns = {col: hdu.typed(col) for col in formats} if hdu.nrows else {col: np.array([]) for col in formats}
+    return CalTable(name, columns, formats, units, header)
+
+
+def write_gain_curve(fitsfile, table):
+    """Replace (or append) GAIN_CURVE in place via fitsidiutil; later HDUs are shifted, not the file."""
+    with FITSIDI(str(fitsfile), mode='w').open('w') as fo:
+        fo.replace_table(table.name,
+                         [(name, table.formats[name], table.units.get(name, '')) for name in table.columns],
+                         table.columns, table.header)
+
+
+# ------------------------------------------------------------------ band-correct gain curve
 
 def _fallback(msg):
     msg = f"{msg}; keeping the plain append_gc GAIN_CURVE"
@@ -127,7 +196,7 @@ def _fallback(msg):
 
 
 def band_gain_curve(antabfile, fitsfile, append_gc, workdir=None):
-    """Return a band-correct GAIN_CURVE BinTableHDU for `fitsfile`, or None.
+    """Return a band-correct GAIN_CURVE `CalTable` for `fitsfile`, or None.
 
     None means the plain `append_gc` result is already right (at most one GAIN
     line per antenna) or the per-IF selection is not unique; the caller then
@@ -140,6 +209,9 @@ def band_gain_curve(antabfile, fitsfile, append_gc, workdir=None):
     per_antenna = Counter(g.antenna for g in gains)
     if not gains or max(per_antenna.values()) < 2:
         return None
+    if not hasattr(ReadIO, 'replace_table'):
+        return _fallback("the compiled avica.fitsidiutil extension has no replace_table "
+                         "(rebuild/reinstall avica)")
     try:
         return _band_gain_curve(antabfile, fitsfile, append_gc, workdir, gains)
     except Exception as exc:
@@ -150,10 +222,11 @@ def _band_gain_curve(antabfile, fitsfile, append_gc, workdir, gains):
     if any(_UNSUPPORTED_GAIN.search(g.text) for g in gains):
         return _fallback(f"ANTAB {antabfile}: tabulated GAIN entries cannot be split per band")
 
-    centres = if_centres_mhz(fitsfile)
+    hdul = read_idi(str(fitsfile), hdus=['FREQUENCY', 'ARRAY_GEOMETRY'])
+    centres = if_centres_mhz(fitsfile, hdul=hdul)
     if centres is None:
         return _fallback(f"{Path(fitsfile).name}: several FREQIDs")
-    known = _idi_antennas(fitsfile)
+    known = _idi_antennas(fitsfile, hdul=hdul)
     gains = [g for g in gains if g.antenna in known]
     antennas = sorted({g.antenna for g in gains})
     if not gains:
@@ -180,17 +253,16 @@ def _band_gain_curve(antabfile, fitsfile, append_gc, workdir, gains):
             staged = Path(tmp) / f'gain_{n}.fits'
             shutil.copy(skeleton, staged)
             append_gc(antabfile=str(antab), idifile=str(staged), replace=True)
-            with fits.open(staged) as hdul:
-                runs[chosen] = hdul['GAIN_CURVE'].copy()
+            runs[chosen] = read_cal_table(staged, 'GAIN_CURVE')
 
-    hdu = _splice(runs, selections)
+    table = _splice(runs, selections)
     log.info("band-correct GAIN_CURVE for %s: %d antennas, %d IF selections from %s",
-             Path(fitsfile).name, len(hdu.data), len(runs), antabfile)
-    return hdu
+             Path(fitsfile).name, table.nrows, len(runs), antabfile)
+    return table
 
 
-def _row_keys(hdu):
-    return [tuple(int(row[k]) for k in _KEYS) for row in hdu.data]
+def _row_keys(table):
+    return [tuple(int(v) for v in row) for row in zip(*(table.columns[k] for k in _KEYS))]
 
 
 def _stem(name):
@@ -201,63 +273,49 @@ def _splice(runs, selections):
     """One row per antenna: IF slot i comes from the run selected for IF i."""
     first = runs[selections[0]]
     keys = _row_keys(first)
-    for hdu in runs.values():
-        run_keys = _row_keys(hdu)
+    for table in runs.values():
+        run_keys = _row_keys(table)
         if len(set(run_keys)) != len(run_keys) or set(run_keys) != set(keys):
             raise ValueError("append_gc produced inconsistent GAIN_CURVE rows per band")
     n_band = len(selections)
-    n_tab = max(int(hdu.header['NO_TABS']) for hdu in runs.values())
-    names = list(dict.fromkeys(n for hdu in runs.values() for n in hdu.columns.names))
+    n_tab = max(int(t.get('NO_TABS', 1)) for t in runs.values())
+    names = list(dict.fromkeys(n for t in runs.values() for n in t.columns))
 
-    def source(hdu, name):
+    def source(table, name):
         # A single-DPFU GAIN line is the common curve for both hands (as merge_calibration assumes).
-        return name if name in hdu.columns.names else name[:-1] + '1'
+        return name if name in table.columns else name[:-1] + '1'
 
-    columns = []
+    def index(table):
+        return {k: j for j, k in enumerate(_row_keys(table))}
+
+    columns, formats, units = {}, {}, {}
     for name in names:
-        template = next(hdu.columns[name] for hdu in runs.values() if name in hdu.columns.names)
-        stem, letter = _stem(name), template.format.format
+        template = next(t for t in runs.values() if name in t.columns)
+        stem, code = _stem(name), template.formats[name].lstrip('0123456789')
+        units[name] = template.units.get(name, '')
         if name in _KEYS:
-            array, fmt = np.array([k[_KEYS.index(name)] for k in keys]), f'1{letter}'
+            columns[name], formats[name] = np.array([k[_KEYS.index(name)] for k in keys], dtype=np.int64), f'1{code}'
         elif stem in _PER_IF:
-            array = np.zeros((len(keys), n_band), dtype=np.asarray(first.data[source(first, name)]).dtype)
+            array = np.zeros((len(keys), n_band), dtype=np.asarray(first.columns[source(first, name)]).dtype)
             for i, chosen in enumerate(selections):
-                hdu = runs[chosen]
-                index = {k: j for j, k in enumerate(_row_keys(hdu))}
-                values = np.asarray(hdu.data[source(hdu, name)]).reshape(len(hdu.data), n_band)
-                array[:, i] = [values[index[k], i] for k in keys]
-            fmt = f'{n_band}{letter}'
+                table = runs[chosen]
+                values = np.asarray(table.columns[source(table, name)]).reshape(table.nrows, n_band)
+                rows = index(table)
+                array[:, i] = [values[rows[k], i] for k in keys]
+            columns[name], formats[name] = array, f'{n_band}{code}'
         elif stem in _PER_IF_TAB:
             array = np.full((len(keys), n_band, n_tab), np.nan if stem == 'Y_VAL' else 0.0)
             for i, chosen in enumerate(selections):
-                hdu = runs[chosen]
-                tabs = int(hdu.header['NO_TABS'])
-                index = {k: j for j, k in enumerate(_row_keys(hdu))}
-                values = np.asarray(hdu.data[source(hdu, name)]).reshape(len(hdu.data), n_band, tabs)
-                array[:, i, :tabs] = [values[index[k], i] for k in keys]
-            array, fmt = array.reshape(len(keys), n_band * n_tab), f'{n_band * n_tab}{letter}'
+                table = runs[chosen]
+                tabs = int(table.get('NO_TABS', 1))
+                values = np.asarray(table.columns[source(table, name)], dtype=float).reshape(table.nrows, n_band, tabs)
+                rows = index(table)
+                array[:, i, :tabs] = [values[rows[k], i] for k in keys]
+            columns[name], formats[name] = array.reshape(len(keys), n_band * n_tab), f'{n_band * n_tab}{code}'
         else:
             raise ValueError(f"unexpected GAIN_CURVE column {name}")
-        columns.append(fits.Column(name=name, format=fmt, unit=template.unit, array=array))
 
-    header = first.header.copy()
-    for key in ('NAXIS1', 'NAXIS2', 'TFIELDS'):
-        header.remove(key, ignore_missing=True)
-    header['NO_TABS'] = n_tab
-    header['NO_POL'] = max(int(hdu.header.get('NO_POL', 1)) for hdu in runs.values())
-    hdu = fits.BinTableHDU.from_columns(columns, name='GAIN_CURVE')
-    for card in header.cards:
-        if not card.keyword.startswith(('TTYPE', 'TFORM', 'TUNIT', 'TDIM', 'XTENSION', 'BITPIX',
-                                        'NAXIS', 'PCOUNT', 'GCOUNT', 'TFIELDS')):
-            hdu.header[card.keyword] = (card.value, card.comment)
-    return hdu
-
-
-def write_gain_curve(fitsfile, hdu):
-    """Replace or append GAIN_CURVE the way JIVE append_gc does."""
-    with fits.open(fitsfile, memmap=True, lazy_load_hdus=True) as hdul:
-        present = 'GAIN_CURVE' in hdul
-    if present:
-        fits.update(fitsfile, hdu.data, hdu.header, 'GAIN_CURVE')
-    else:
-        fits.append(fitsfile, hdu.data, hdu.header)
+    header = [(k, v, c) for k, v, c in first.header if k not in ('NO_TABS', 'NO_POL')]
+    header += [('NO_POL', max(int(t.get('NO_POL', 1)) for t in runs.values()), ''),
+               ('NO_TABS', n_tab, '')]
+    return CalTable(first.name, columns, formats, units, header)
