@@ -869,7 +869,7 @@ def find_gain_fromgaintable(fitsfile, vlbagainfile, an, freq, gaintbname="GAIN_C
 
     mount, sensitivity, poly = None, None, None
 
-    if gaintbname in hdul:
+    if gaintbname in hdul.names:
 
         tb_ant  = hdul['ANTENNA']
 

@@ -802,12 +802,12 @@ class AverageMS(PipelineStepBase):
 
     # ----------------------------------------------------------
 
-    def run(self, lf, wd_ifolder, casadir, targets, target, mpi_cores=5,
+    def run(self, lf, wd_ifolder, casadir, targets, target, mpi_cores=5, drop_dead_pol="auto",
         removables=[], rm_only=False, rm_pre=False, delete_removables=False, verbose=True):
         self.result.start_stamp   = datetime.now()
         from avica.ms.meta import BandInfoMS
         from avica.ms import check_and_fix_spw_partitioning
-        from avica.ms.tables import repair_mixed_single_pol_syscal_tsys
+        from avica.ms.tables import repair_mixed_single_pol_syscal_tsys, live_correlations, choose_live_correlation
         # log = logging.getLogger("avica.pipeline")
 
         global_bands_dict               =   {}
@@ -938,6 +938,15 @@ class AverageMS(PipelineStepBase):
 
                                 if not Path(outvis).exists():
 
+                                    correlation         =   ""
+                                    if str(drop_dead_pol).lower() not in ("off", "false", "0", "none"):
+                                        live            =   live_correlations(vis, d_bands['spws'])
+                                        correlation     =   choose_live_correlation(live)
+                                        if correlation:
+                                            msg         =   f"{bandobs}: single live correlation {correlation} in all spws, dropping the dead correlation"
+                                            log.info(msg)
+                                            self.result.desc.append(msg)
+
                                     msg                 =   "executing casatask payload mstransform"
                                     log.info(msg)
                                     with step_stage(msg, chanbin=chanbin):
@@ -946,6 +955,7 @@ class AverageMS(PipelineStepBase):
 
                                         task            =   MsTransform(vis=vis, outputvis=outvis, antenna=an_remove,
                                             scan=good_scans, field=",".join(map(str, allsources)),
+                                            correlation=correlation,
                                             chanbin=chanbin, spw=",".join(spws), chanaverage=chanavg,
                                             timeaverage=timeavg, timebin=timebin)
 
@@ -1522,10 +1532,11 @@ class FinalSplitMs(PipelineStepBase):
                     if result["status"] == "success":
                         try:
                             outvis, selected_spws, obs_b, iwd_b, iwd_b_t, allsources = contexts[band]
-                            check_and_fix_spw_partitioning(str(outvis), selected_spws)
-                            # Populate the target input directory before reading it. A newly
-                            # created target directory has no refant value, which previously
-                            # produced the invalid rPicard input ``rldly_stations =``.
+                            res_spw_partitioning = check_and_fix_spw_partitioning(str(outvis), selected_spws)
+                            if res_spw_partitioning:
+                                print(f"SPW partitioning fixed for {band}")
+                                log.info(f"SPW partitioning fixed for {band} : {res_spw_partitioning}")
+                            # Populate the target input directory before reading it.
                             fillinp_fromiwd(iwd_b, iwd_b_t)
                             arr_finetune = wd_meta.get_inp(
                                 band=band, target=target, inpfile="array_finetune.inp")

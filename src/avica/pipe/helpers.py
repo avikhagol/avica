@@ -1393,6 +1393,76 @@ def tsys_exists_in_fitsfiles(fitsfile, fitsfiles, valid_perc=5, verbose=True):
 
     return success
 
+_CALIBRATION_HDUS = ['ANTENNA', 'ARRAY_GEOMETRY', 'SYSTEM_TEMPERATURE', 'GAIN_CURVE']
+
+def read_calibration_tables(fitsfile):
+    """read_idi of only the antenna and calibration tables (headers of all HDUs).
+
+    read_idi reports errors instead of raising and can return a truncated HDU
+    list (seen while a file was being rewritten); every FITS-IDI file has
+    UV_DATA, so its absence is treated as a failed read.
+    """
+    hdul = read_idi(str(fitsfile), hdus=_CALIBRATION_HDUS)
+    if 'UV_DATA' not in hdul.names:
+        raise IOError(f"incomplete read of {fitsfile}: HDUs {hdul.names}")
+    return hdul
+
+def _has_rows(hdul, name):
+    return name in hdul.names and hdul[name].nrows > 0 and bool(hdul[name].cols)
+
+def _antenna_names(hdul):
+    """{ANTENNA_NO: ANNAME} from the ANTENNA table, else ARRAY_GEOMETRY."""
+    for table, idcol in (('ANTENNA', 'ANTENNA_NO'), ('ARRAY_GEOMETRY', 'NOSTA')):
+        if _has_rows(hdul, table) and idcol in hdul[table].cols:
+            names = [a.decode('ascii', errors='ignore') if isinstance(a, bytes) else str(a)
+                     for a in hdul[table]['ANNAME']]
+            return {int(n): a.strip().upper() for n, a in zip(hdul[table].typed(idcol), names)}
+    return {}
+
+def tsys_antenna_coverage(fitsfile, valid_perc=5, hdul=None):
+    """{ANNAME: percent of the UV_DATA time range covered by valid TSYS}.
+
+    A TSYS row is valid if any TSYS_* value is finite and > 0 (single-hand bands
+    carry -999.9 in the other hand). Antennas without valid rows get 0.0.
+    Time reference and overlap follow `tsys_exists`.
+    """
+    found, st_tsys, _, st_uvd, lt_uvd = tsys_exists(fitsfile, valid_perc)
+    hdul = read_calibration_tables(fitsfile) if hdul is None else hdul
+    names = _antenna_names(hdul)
+    coverage = dict.fromkeys(names.values(), 0.0)
+    if st_tsys is None or st_uvd is None or not _has_rows(hdul, 'SYSTEM_TEMPERATURE'):
+        return coverage
+    st = hdul['SYSTEM_TEMPERATURE']
+    nrows = len(st['TIME'])
+    valid = np.zeros(nrows, dtype=bool)
+    for col in (c for c in st.cols if c.startswith('TSYS_')):
+        values = np.asarray(st[col], dtype=float).reshape(nrows, -1)
+        valid |= (np.isfinite(values) & (values > 0)).any(axis=1)
+    times = np.asarray(st['TIME'], dtype=float)
+    times = st_tsys.mjd - times[0] + times
+    antenna_no = st.typed('ANTENNA_NO')
+    for anno in np.unique(antenna_no[valid]):
+        if int(anno) in names:
+            t = times[valid & (antenna_no == anno)]
+            coverage[names[int(anno)]] = float(overlap_percentage(t.min(), t.max(), st_uvd.mjd, lt_uvd.mjd))
+    return coverage
+
+def gain_curve_antennas(fitsfile, hdul=None):
+    """Antenna names that have at least one GAIN_CURVE row."""
+    hdul = read_calibration_tables(fitsfile) if hdul is None else hdul
+    names = _antenna_names(hdul)
+    if not _has_rows(hdul, 'GAIN_CURVE'):
+        return set()
+    return {names[int(n)] for n in np.unique(hdul['GAIN_CURVE'].typed('ANTENNA_NO')) if int(n) in names}
+
+def uncalibrated_antennas(fitsfile, valid_perc=5):
+    """{'tsys': [...], 'gain': [...]}: antennas lacking TSYS coverage or any gain curve."""
+    hdul = read_calibration_tables(fitsfile)
+    coverage = tsys_antenna_coverage(fitsfile, valid_perc, hdul=hdul)
+    with_gain = gain_curve_antennas(fitsfile, hdul=hdul)
+    return {'tsys': sorted(an for an, perc in coverage.items() if perc <= valid_perc),
+            'gain': sorted(an for an in coverage if an not in with_gain)}
+
 
 def attach_antab(self, only_first=True, attach_all=False):
         """

@@ -47,6 +47,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 
 from avica.pipe.helpers import find_tsys, FileSize, tsys_exists, tsys_exists_in_fitsfiles, overlap_percentage, del_fl, parse_params, get_allfitsfiles
+from avica.pipe.helpers import uncalibrated_antennas
 from avica.pipe.helpers import get_targets_filenames, setup_workdir, add_O, get_logfilename, normalize_strlist
 from avica.pipe.config import DEFAULT_PARAMS, CSV_POPULATED_STEPS, PipeConfig, _CASA_INPROCESS_MODULES,  setup_casa_path, get_added_casa_paths, get_added_casa_lib_dirs
 
@@ -1454,8 +1455,12 @@ class GenerateAndAppendAntab:
                 _warn(f"ANTAB {candidate}: INDEX differs from {name} (NO_BAND={n_band}); "
                       f"zero-based IFs: {detail}. Missing or incorrectly mapped values may result.")
 
-    def _find_local_antab(self, fitsfile):
-        """Rank compatible candidates by time, station coverage, then IF agreement."""
+    def _find_local_antab(self, fitsfile, need=None):
+        """Rank compatible candidates by time, station coverage, then IF agreement.
+
+        `need` (antenna names) restricts the choice to candidates that calibrate at
+        least one of them; used when the file already has partial calibration.
+        """
         from avica.fitsidiutil import parse_antab
         log = logging.getLogger("avica.pipeline")
         _, _, _, start, end = tsys_exists(fitsfile, self.valid_perc)
@@ -1488,6 +1493,12 @@ class GenerateAndAppendAntab:
                     raise ValueError('FITS antenna layout unavailable; cannot establish compatibility')
                 if not matched:
                     raise ValueError('no matching antennas')
+                if need:
+                    fills = (matched | {an.upper() for an in parsed['gain_dic']}) & set(need)
+                    decision['fills_antennas'] = sorted(fills)
+                    if not fills:
+                        decision['reason'] = 'calibrates none of the uncalibrated antennas ' + ', '.join(sorted(need))
+                        continue
                 # Only relevant stations may establish observation-time coverage.
                 times = [Time(row[0]).mjd for an in matched for row in tsys[an]['data']]
                 first, last = min(times), max(times)
@@ -1532,6 +1543,7 @@ class GenerateAndAppendAntab:
         from avica.fitsidiutil import parse_antab
         from avica.fitsidiutil.op import normalize_antab_keyin
         from avica.external.jive import append_tsys as TsysData, append_gc as GCData
+        from avica.fitsidiutil.antab_bands import band_gain_curve, write_gain_curve
 
         staged = []
         prepared_antab = Path(antabfile)
@@ -1555,7 +1567,12 @@ class GenerateAndAppendAntab:
                 shutil.copy2(ff, tmp)
                 TsysData.append_tsys(antabfile=str(prepared_antab), idifiles=str(tmp), replace=True)
                 if parsed['gain_dic']:
-                    GCData.append_gc(antabfile=str(prepared_antab), idifile=str(tmp), replace=True)
+                    # One GAIN line per band (e.g. KVN): append_gc would copy every line to all IFs.
+                    band_gc = band_gain_curve(prepared_antab, ff, GCData.append_gc, workdir=self.wd)
+                    if band_gc is None:
+                        GCData.append_gc(antabfile=str(prepared_antab), idifile=str(tmp), replace=True)
+                    else:
+                        write_gain_curve(tmp, band_gc)
                 else:
                     warnings.warn(f"ANTAB {antabfile} has no gain entries; preserving existing gain curves",
                                   RuntimeWarning)
@@ -1681,8 +1698,47 @@ class GenerateAndAppendAntab:
                     if only_first:   break
                 else:
                     if self.verbose: print("TSYS exists in another fitsfile!")
+            elif self.use_local_antab:
+                self.attach_partial_antab(fitsfile)
         if len(tsys_found_in_files) and (not all(tsys_found_in_files)) and self.verbose:
             print("Attaching TSYS finished!")
+
+    def attach_partial_antab(self, fitsfile):
+        """TSYS exists but not for every antenna, or gain curves are missing: use a local
+        ANTAB that calibrates at least one of those antennas. Never downloads (the
+        archive fallback is only for files without any TSYS)."""
+        log = logging.getLogger("avica.pipeline")
+        try:
+            missing = uncalibrated_antennas(fitsfile, self.valid_perc)
+        except Exception as exc:          # unusual layouts keep the previous behaviour (no attach)
+            log.warning("could not check per-antenna calibration of %s: %s", fitsfile, exc)
+            return None
+        need = sorted(set(missing['tsys']) | set(missing['gain']))
+        if not need:
+            return None
+        msg = (f"partial calibration in {Path(fitsfile).name}: no TSYS for "
+               f"{', '.join(missing['tsys']) or '-'}; no gain curve for {', '.join(missing['gain']) or '-'}")
+        print(f"  {Y}WARNING:{X} {msg}")
+        log.warning(msg)
+        unresolved = dict(fitsfile=str(fitsfile), status='partial_unresolved', missing_tsys=missing['tsys'],
+                          missing_gain=missing['gain'])
+        # Files like this passed preprocessing before; a failure here is reported, not raised.
+        try:
+            local = self._find_local_antab(fitsfile, need=need)
+            if local is None:
+                self.calibration_decisions.append(dict(unresolved, reason='no local ANTAB calibrates these antennas'))
+                log.warning("no local ANTAB in %s calibrates %s", [str(d) for d in self.artifact_dirs], ', '.join(need))
+                return None
+            if self.verbose:
+                print(f"Using local ANTAB {local} for {fitsfile}")
+            self._append_antab_file(local, [fitsfile])
+        except Exception as exc:
+            self.calibration_decisions.append(dict(unresolved, reason=str(exc)))
+            log.error("attaching a local ANTAB to %s failed, file left unchanged: %s", fitsfile, exc)
+            print(f"  {Y}ERROR:{X} attaching a local ANTAB to {Path(fitsfile).name} failed, file left unchanged: {exc}")
+            return None
+        self.calibration_sources.append({'fitsfile': str(fitsfile), 'source': str(local), 'kind': 'local_antab'})
+        return local
 
     def sort_by_time(self, reverse=False):
         starttime = []
@@ -1800,6 +1856,7 @@ class MsTransform(CasaTask):
     spw:str             =   ""
     antenna:str         =   ""
     scan:str            =   ""
+    correlation:str     =   ""
     chanaverage:bool    =   False
     chanbin:int|List[int]    =   1
     timeaverage:bool    =   False

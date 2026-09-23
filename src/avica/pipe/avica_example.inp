@@ -36,6 +36,9 @@ avica_avg.mpi_cores       =   5
 avica_snr.mpi_cores       =   5
 avica_split_ms.mpi_cores  =   10
 rpicard.mpi_cores         =   10
+# "auto": split single-pol bands (e.g. KVN K=LCP, Q=RCP) with only the live
+# correlation, so CASA bandpass does not fail on a dead RR; "off" keeps all.
+avica_avg.drop_dead_pol   =   auto
 hi_freq_ref               =   11
 snr_threshold_phref       =   7
 flux_threshold_phref      =   0.15

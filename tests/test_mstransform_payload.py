@@ -241,9 +241,13 @@ class AverageTests(unittest.TestCase):
             if mode == "repair":
                 repairs.side_effect = RuntimeError("bad SPW")
             tsys = Mock(return_value=0)
+            live = Mock(return_value={0: ([5, 8], [1])})
+            choose = Mock(return_value="LL")
             modules = {"avica.ms": SimpleNamespace(check_and_fix_spw_partitioning=repairs),
                        "avica.ms.meta": SimpleNamespace(BandInfoMS=lambda *a, **kw: band_info),
-                       "avica.ms.tables": SimpleNamespace(repair_mixed_single_pol_syscal_tsys=tsys)}
+                       "avica.ms.tables": SimpleNamespace(repair_mixed_single_pol_syscal_tsys=tsys,
+                                                          live_correlations=live,
+                                                          choose_live_correlation=choose)}
             configs = Mock()
             cls = pipeline_class("AverageMS", dict(
                 WorkDirMeta=lambda **kw: meta, del_fl=Mock(), save_metafile=Mock(),
@@ -261,6 +265,7 @@ class AverageTests(unittest.TestCase):
                     return {}
                 self.assertEqual(jobs["C"].cmd.args["chanbin"], 4)
                 self.assertEqual(jobs["C"].cmd.args["spw"], "0:0~15")
+                self.assertEqual(jobs["C"].cmd.args["correlation"], "LL")
                 output.mkdir()
                 return {"C": {"status": "error" if mode == "task" else "success", "err_msg": "bad task"}}
             cls.run.__globals__["task_mstransform_payload"].side_effect = execute
@@ -276,6 +281,7 @@ class AverageTests(unittest.TestCase):
                 configs.assert_called_once()
                 repairs.assert_called_once()
                 tsys.assert_called_once()
+                live.assert_called_once_with(str(root / "test.ms"), [0])
             else:
                 configs.assert_not_called()
             if mode == "task":

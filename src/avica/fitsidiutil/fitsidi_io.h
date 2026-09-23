@@ -683,6 +683,97 @@ class ReadIO {
                     throw std::runtime_error("CFITSIO Write Error [" + colname + "]: " + std::string(err_text));
                 }
             }
+
+        // Replace the binary table `extname` at its current position, or append it
+        // when absent. Only the HDUs after it are shifted by CFITSIO, so replacing a
+        // trailing calibration table does not rewrite the whole file.
+        //   cols : list of (ttype, tform, tunit)
+        //   data : dict ttype -> rows-first array (vectors flattened per row) or list of str
+        //   keys : list of (key, value, comment); value is bool, int, float or str
+        void replace_table(const std::string& extname, py::list cols, py::dict data, py::list keys) {
+            if (!fptr) throw std::runtime_error("No FITS file is currently open.");
+
+            int st = 0, hdutype = 0, nhdus = 0;
+            auto check = [&](const std::string& what) {
+                if (st) {
+                    char err_text[FLEN_ERRMSG];
+                    fits_get_errstatus(st, err_text);
+                    st = 0;
+                    throw std::runtime_error("replace_table(" + extname + "): " + what + ": " + err_text);
+                }
+            };
+
+            fits_get_num_hdus(fptr, &nhdus, &st);
+            check("fits_get_num_hdus");
+
+            int target = 0;
+            for (int h = 1; h <= nhdus; ++h) {
+                fits_movabs_hdu(fptr, h, &hdutype, &st);
+                check("fits_movabs_hdu");
+                char name[FLEN_VALUE] = {0};
+                int key_status = 0;
+                fits_read_key(fptr, TSTRING, "EXTNAME", name, NULL, &key_status);
+                if (!key_status && extname == name) {
+                    if (target) throw std::runtime_error("replace_table: several HDUs named " + extname);
+                    target = h;
+                }
+            }
+
+            if (target) {
+                fits_movabs_hdu(fptr, target, &hdutype, &st);
+                check("fits_movabs_hdu");
+                if (hdutype != BINARY_TBL) throw std::runtime_error("replace_table: " + extname + " is not a binary table");
+                fits_delete_hdu(fptr, &hdutype, &st);
+                check("fits_delete_hdu");
+                fits_movabs_hdu(fptr, target - 1, &hdutype, &st);
+            } else {
+                fits_movabs_hdu(fptr, nhdus, &hdutype, &st);
+            }
+            check("fits_movabs_hdu");
+
+            const size_t ncols = py::len(cols);
+            std::vector<std::string> ttype_s, tform_s, tunit_s;
+            for (auto item : cols) {
+                py::tuple col = item.cast<py::tuple>();
+                ttype_s.push_back(col[0].cast<std::string>());
+                tform_s.push_back(col[1].cast<std::string>());
+                tunit_s.push_back(col.size() > 2 && !col[2].is_none() ? col[2].cast<std::string>() : "");
+            }
+            std::vector<char*> ttype(ncols), tform(ncols), tunit(ncols);
+            for (size_t i = 0; i < ncols; ++i) {
+                ttype[i] = const_cast<char*>(ttype_s[i].c_str());
+                tform[i] = const_cast<char*>(tform_s[i].c_str());
+                tunit[i] = const_cast<char*>(tunit_s[i].c_str());
+            }
+            fits_insert_btbl(fptr, 0, (int)ncols, ttype.data(), tform.data(), tunit.data(),
+                             const_cast<char*>(extname.c_str()), 0, &st);
+            check("fits_insert_btbl");
+
+            for (auto item : keys) {
+                py::tuple kv = item.cast<py::tuple>();
+                std::string key = kv[0].cast<std::string>();
+                std::string comment = kv.size() > 2 && !kv[2].is_none() ? kv[2].cast<std::string>() : "";
+                py::object value = kv[1];
+                if (py::isinstance<py::bool_>(value)) {
+                    int v = value.cast<bool>() ? 1 : 0;
+                    fits_update_key_log(fptr, key.c_str(), v, comment.c_str(), &st);
+                } else if (py::isinstance<py::int_>(value)) {
+                    fits_update_key_lng(fptr, key.c_str(), value.cast<LONGLONG>(), comment.c_str(), &st);
+                } else if (py::isinstance<py::float_>(value)) {
+                    fits_update_key_dbl(fptr, key.c_str(), value.cast<double>(), -15, comment.c_str(), &st);
+                } else {
+                    std::string v = py::str(value).cast<std::string>();
+                    fits_update_key_str(fptr, key.c_str(), v.c_str(), comment.c_str(), &st);
+                }
+                check("writing key " + key);
+            }
+
+            write_python_dict_to_table(fptr, data, &st);
+            check("writing table data");
+            fits_flush_file(fptr, &st);
+            check("fits_flush_file");
+        }
+
         py::dict read_table_chunked(int hdu_num, long start_row, long end_row) {
             py::dict result;
             if (!fptr) return result;

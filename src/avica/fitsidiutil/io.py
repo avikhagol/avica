@@ -1,9 +1,11 @@
+import re
 from collections import UserList
 from pathlib import Path
 from traceback import print_exc
 from typing import Any, Dict, List, Optional, Type, TypeAlias, Union
 from warnings import warn
 
+import numpy as np
 import polars as pl
 
 from .core import HeaderManager, ReadIO
@@ -27,6 +29,9 @@ pl.Config(
 global CLASS_ATTRS
 CLASS_ATTRS = {"cards"}
 
+
+_TFORM = re.compile(r"^(\d*)([A-Z])")
+_INTEGER_TFORMS = {"B", "I", "J", "K"}
 
 L = 76
 I = 73
@@ -235,13 +240,15 @@ class FITSIDI:
         with cls(fitsfile).open(mode) as fo:
             return fo.read(**read_kwargs)
 
-    def read(self, max_chunk=None, start_row=0, chunk_cols=["UV_DATA"]):
+    def read(self, max_chunk=None, start_row=0, chunk_cols=["UV_DATA"], hdus=None):
         """read the table data using chunk, by default reads 1 row.
 
         Args:
             max_chunk (int, optional): maximum number of chunks. Defaults to None.
             start_row (int, optional): row to start readin from. Defaults to 0.
             chunk_cols (list, optional): filter chunking only on the selected columns. Defaults to ['UV_DATA'].
+            hdus (list, optional): EXTNAMEs whose table data is read; the other HDUs get
+                headers only (table data None). Defaults to None, i.e. all HDUs.
 
             NOTE: if max_chunk=None, only single rows are read for the specified chunk_cols.
 
@@ -278,11 +285,12 @@ class FITSIDI:
                     end_row = total_rows
                     _start_row = 0
 
+                wanted = hdus is None or header.extension_name in hdus
                 _data = IdIHDU(
                     header_data=header,
                     table_data=self._reader.read_table_chunked(
                         _hdu_num, _start_row, end_row
-                    ),
+                    ) if wanted else None,
                     hdu_num=_hdu_num,
                     reader=self._reader,
                 )
@@ -314,6 +322,27 @@ class FITSIDI:
             self._reader.save_as(outputfile, uv_dict_by_idx, verbose)
         else:
             self._reader.save_as(outputfile, None, verbose)
+
+    def replace_table(self, extname: str, columns, data: Dict, keys=()):
+        """Replace the binary table `extname` in place (append it if absent).
+
+        Only the HDUs after it are shifted, so replacing a trailing calibration
+        table does not rewrite the file. Requires mode 'w'.
+
+        Args:
+            extname: EXTNAME of the table.
+            columns: [(TTYPE, TFORM, TUNIT)], e.g. [('SENS_1', '4E', 'K/Jy')].
+            data: {TTYPE: rows-first array (vectors 2-D) or list of str}.
+            keys: [(KEY, value, comment)] written after the table is created.
+        """
+        if not self._reader:
+            raise RuntimeError("No file open.")
+        if "w" not in self.mode:
+            raise IOError("replace_table requires the file opened with mode='w'")
+        payload = {name: (value if isinstance(value, list) else np.ascontiguousarray(value))
+                   for name, value in data.items()}
+        self._reader.replace_table(extname, [tuple(c) for c in columns], payload,
+                                   [tuple(k) for k in keys])
 
     def listobs(self, sids=None, *, source_col="SOURCE", inttim_col="INTTIM", freqid_col="FREQID"):
         """Read scan data, optionally overriding UV_DATA column names.
@@ -770,6 +799,31 @@ class IdIHDU:
     @property
     def nrows(self):
         return self.dim[0]
+
+    @property
+    def column_formats(self):
+        """{TTYPE: (repeat, code)} parsed from the TTYPEn/TFORMn cards, e.g. {'Y_TYP_1': (4, 'J')}.
+
+        `header.get_dtype` is the type of a header card's value; the column type is only in TFORMn.
+        """
+        formats = {}
+        for n in range(1, int(self.header.get("TFIELDS", 0) or 0) + 1):
+            name, tform = self.header.get(f"TTYPE{n}"), self.header.get(f"TFORM{n}")
+            match = _TFORM.match(str(tform or "").strip().upper())
+            if name is None or match is None:
+                continue
+            formats[str(name).strip()] = (int(match[1]) if match[1] else 1, match[2])
+        return formats
+
+    def typed(self, colname: str):
+        """Column data with integer TFORM codes restored (read_table_chunked returns vectors as float64)."""
+        values = self._table_data[colname]
+        if isinstance(values, list):
+            return values
+        code = self.column_formats.get(colname, (1, "D"))[1]
+        if code in _INTEGER_TFORMS:
+            return np.rint(np.asarray(values)).astype(np.int64)
+        return np.asarray(values)
 
     @property
     def df(self):

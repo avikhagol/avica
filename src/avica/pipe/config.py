@@ -494,6 +494,7 @@ DEFAULT_PARAMS: dict = {
     "avica_snr.mpi_cores"       :   5,
     "fits_to_ms.mpi_cores"      :   5,
     "avica_avg.mpi_cores"       :   5,
+    "avica_avg.drop_dead_pol"   :   "auto",     # "auto": split single-pol bands with only the live correlation; "off": keep all
     "avica_split_ms.mpi_cores"  :   10,
     "snr_threshold_phref"       :   7,
     "flux_threshold_phref"      :   0.15,

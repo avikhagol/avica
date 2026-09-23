@@ -485,7 +485,7 @@ class MultipleFrequencyIdValidator(IdiValidatorBase):
     def check(self, hdu_name: str, key: str, hdul) -> ValidationResult:
         def result(**kwargs):return ValidationResult(code=self.code,hdu=hdu_name, **kwargs)
 
-        if hdu_name not in hdul:return result(msg='skipped', key=key, need_fixing=False)
+        if hdu_name not in hdul.names:return result(msg='skipped', key=key, need_fixing=False)
         if 'FREQID' not in hdul[hdu_name]: return result(msg='missing', key='FREQID', need_fixing=True)
         if all(np.array(hdul[hdu_name]['FREQID'])==1): return result(msg='skipped', key='FREQID', need_fixing=False)
 

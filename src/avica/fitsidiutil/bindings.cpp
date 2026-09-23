@@ -94,6 +94,9 @@ PYBIND11_MODULE (_core, m){
         .def("delete_hdu", &ReadIO::delete_hdu,
             py::arg("hdu_num"),
                 "Delete an HDU from a FITS file by index.")
+        .def("replace_table", &ReadIO::replace_table,
+            py::arg("extname"), py::arg("cols"), py::arg("data"), py::arg("keys") = py::list(),
+                "Replace (or append) a binary table by EXTNAME, keeping its position.")
         .def("get_fits_byte_size", &ReadIO::get_fits_byte_size, 
                 "Returns (actual_size, expected_size).")
         .def("read_hdutable", &ReadIO::read_table_by_hdu, 
