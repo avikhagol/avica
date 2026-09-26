@@ -218,13 +218,26 @@ class PreProcessFitsIdi(PipelineStepBase):
                         print(f"  {Path(ff).name} --> {Path(newff).name}")
 
                 ga              =   GenerateAndAppendAntab(fitsfiles=res_splitdata['workingfits'], metafolder=metafolder, verbose=True, wd=wd, valid_perc=5, artifact_dirs=artifact_dirs, use_local_antab=use_local_antab, local_antab_require_full_array=local_antab_require_full_array)
-                self.result.detail['calibration_decisions'] = ga.calibration_decisions
+                for _obj in ga.calibration_decisions:
+                    if isinstance(_obj, dict):
+                        for k,v in _obj.items():
+                            log.info(f"{k}: {v}")
+                    else:
+                        log.info(str(_obj))
+
+                # self.result.detail['calibration_decisions'] = ga.calibration_decisions
 
                 ga.attach_antab(only_first=False, attach_all=True)               #  to attach antab if it is mixed w. splitted freqid and non multiple?
                 fitsfiles_used  =   ga.workingfits
             else:
                 ga              =   GenerateAndAppendAntab(fitsfiles=fitsfiles_used, metafolder=metafolder, verbose=True, wd=wd, valid_perc=5, artifact_dirs=artifact_dirs, use_local_antab=use_local_antab, local_antab_require_full_array=local_antab_require_full_array)
-                self.result.detail['calibration_decisions'] = ga.calibration_decisions
+                # self.result.detail['calibration_decisions'] = ga.calibration_decisions
+                for _obj in ga.calibration_decisions:
+                    if isinstance(_obj, dict):
+                        for k,v in _obj.items():
+                            log.info(f"{k}: {v}")
+                    else:
+                        log.info(str(_obj))
                 ga.attach_antab(only_first=False)
                 fitsfiles_used  =   ga.workingfits
 
@@ -235,8 +248,10 @@ class PreProcessFitsIdi(PipelineStepBase):
             self.result.detail['calibration_sources'] = ga.calibration_sources
             PipelineContext.params['filepaths']     =   fitsfiles_used
             save_metafile(wd_meta.metafile_used_ff, {"filepath": fitsfiles_used,
-                          "calibration_sources": ga.calibration_sources,
-                          "calibration_decisions": ga.calibration_decisions})
+                          # "calibration_sources": ga.calibration_sources,
+                          # "calibration_decisions": ga.calibration_decisions
+            }
+            )
 
         # ___________________________________________________________                                                        Fill meta [optional]
 
