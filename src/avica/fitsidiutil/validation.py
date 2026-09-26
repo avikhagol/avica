@@ -75,8 +75,13 @@ class ValidationReport(UserList[ValidationResult]):
         dicts = []
         for r in self.data:
             d = asdict(r)
-            if isinstance(d.get('detail'), (list, dict)):
-                d['detail'] = str(d['detail'])
+            # detail/bad_data hold heterogeneous types across validators
+            # (str, list[str], numpy/FITS columns, ...); stringify so polars
+            # can build a consistent schema.
+            for k in ('detail', 'bad_data'):
+                v = d.get(k)
+                if not isinstance(v, (str, type(None))):
+                    d[k] = str(v)
             dicts.append(d)
         return pl.DataFrame(dicts)
 
