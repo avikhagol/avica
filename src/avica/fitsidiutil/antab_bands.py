@@ -75,10 +75,18 @@ def _body(line):
 def antab_groups(text):
     """Split ANTAB text into keyin groups; a TSYS group keeps its rows up to the closing '/'."""
     groups, lines, header, in_rows = [], [], [], False
-    for line in text.splitlines(keepends=True):
+    for lineno, line in enumerate(text.splitlines(keepends=True), 1):
         lines.append(line)
         body = _body(line)
         if not body:
+            continue
+        if not in_rows and not header and not body.replace('/', '').strip():
+            # stray terminator (e.g. a doubled '/' after a TSYS block): keep it verbatim
+            # with the previous group instead of opening an empty keyin group
+            log.warning(f"ANTAB line {lineno}: stray '/' outside any keyin group — ignored")
+            if groups:
+                groups[-1] = groups[-1]._replace(text=groups[-1].text + ''.join(lines))
+                lines = []
             continue
         if in_rows:
             if body.endswith('/'):

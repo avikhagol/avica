@@ -1,10 +1,11 @@
 # Changelog
 
-## [0.3.1.16]
+## [0.3.1.17]
 
 ### Fixed
-- fixed data type conversion error for pipeline result view using polars.
+- stray `\` causing crash in the ANTAB parser.
 
+[0.3.1.17] : https://github.com/avikhagol/avica/compare/v0.3.1.15...v0.3.1.17
 [0.3.1.16] : https://github.com/avikhagol/avica/compare/v0.3.1.15...v0.3.1.16
 [0.3.1.15] : https://github.com/avikhagol/avica/compare/v0.3.1.14...v0.3.1.15
 [0.3.1.14] : https://github.com/avikhagol/avica/compare/v0.3.1.13...v0.3.1.14
