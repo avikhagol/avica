@@ -3,26 +3,9 @@
 ## [0.3.1.15]
 
 ### Fixed
-- `preprocess_fitsidi` now supports KVN ANTAB file which can be formed by merging the ANTABs.
-- ANTAB with one `GAIN ... FREQ=` line per band (KVN, multi-band VLBA ANTAB)
-  now give one GAIN_CURVE row per antenna with each IF's DPFU/POLY taken from
-  its band. The JIVE `append_gc` still does the conversion; AVICA runs it per
-  band on a small skeleton file and splices the IFs. Ambiguous selections keep
-  the plain `append_gc` result with a warning.
-- `find_gain_fromgaintable` and `MultipleFrequencyIdValidator` test HDU presence
-  with `hdul.names`; `name in hdul` was always False on an `IdiHDUList`.
+- fixed data type conversion error for pipeline result view using polars.
 
-### Added
-- `fitsidiutil`: `FITSIDI.read(hdus=[...])` reads table data only for the named
-  HDUs; `IdIHDU.column_formats` and `IdIHDU.typed()` restore integer columns
-  from `TFORMn` (vector columns are read as float64).
-- `fitsidiutil`: `ReadIO.replace_table` / `FITSIDI.replace_table` replace or
-  append a binary table in place; only later HDUs are shifted, so replacing a
-  trailing GAIN_CURVE does not rewrite the file. Requires rebuilding the
-  compiled extension; without it the band-correct GAIN_CURVE falls back to the
-  plain `append_gc` result with a warning.
-
-
+[0.3.1.16] : https://github.com/avikhagol/avica/compare/v0.3.1.15...v0.3.1.16
 [0.3.1.15] : https://github.com/avikhagol/avica/compare/v0.3.1.14...v0.3.1.15
 [0.3.1.14] : https://github.com/avikhagol/avica/compare/v0.3.1.13...v0.3.1.14
 [0.3.1.13] : https://github.com/avikhagol/avica/compare/v0.3.1.12...v0.3.1.13
