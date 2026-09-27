@@ -56,17 +56,25 @@ class CasaMSMetadata:
         spw_col = self._ddesc.getcol("SPECTRAL_WINDOW_ID")
         return [int(i) for i, s in enumerate(spw_col) if int(s) == int(spw)]
 
+    def _field_id(self, field) -> int | None:
+        """casatools semantics: an int is a zero-based field ID, a str is a field name."""
+        if isinstance(field, (int, np.integer)) and not isinstance(field, bool):
+            fid = int(field)
+            return fid if 0 <= fid < self._fld.nrows() else None
+        fids = self.fieldsforname(field)
+        return int(fids[0]) if len(fids) else None
+
     def spwsforfields(self) -> dict:
-        """{field_id: sorted unique spws appearing in MAIN for that field}."""
+        """{str(field_id): sorted unique spws in MAIN for that field} (keys are strings, as in casatools)."""
         fid_col = self._tbvis.getcol("FIELD_ID")
         ddid_col = self._tbvis.getcol("DATA_DESC_ID")
         spw_map = self._ddesc.getcol("SPECTRAL_WINDOW_ID")
-        out: dict[int, list[int]] = {}
+        out: dict[str, list[int]] = {}
         unique_fids = np.unique(fid_col)
         for fid in unique_fids:
             mask = fid_col == fid
             spws = np.unique(spw_map[ddid_col[mask]])
-            out[int(fid)] = [int(s) for s in spws]
+            out[str(int(fid))] = [int(s) for s in spws]
         return out
 
     def nobservations(self) -> int:
@@ -76,17 +84,20 @@ class CasaMSMetadata:
         return [str(n) for n in self._fld.getcol("NAME")]
 
     def scansforfield(self, field, obsid=-1, arrayid=-1) -> list[int]:
-        fid = self.fieldsforname(field)
-        if len(fid):
-            fid = fid[0]
-        else:
+        """Unique scans for a field given as zero-based ID (int) or name (str)."""
+        fid = self._field_id(field)
+        if fid is None:
             return []
         sub = self._tbvis.query(f"FIELD_ID=={int(fid)}")
         scan_col = sub.getcol("SCAN_NUMBER")
         return [int(s) for s in np.unique(scan_col)]
 
     def scansforspws(self, obsid: int | None = None) -> dict:
-        """{spw_id: sorted unique scans}, optionally restricted to obsid."""
+        """{str(spw_id): sorted unique int scans}, optionally restricted to obsid.
+
+        Matches casatools: keys are strings, scan numbers are integers.
+        (casatools defaults obsid=0; here None means all observations.)
+        """
         if obsid is None:
             sub = self._tbvis
             close_after = False
@@ -102,10 +113,10 @@ class CasaMSMetadata:
 
         spw_map = self._ddesc.getcol("SPECTRAL_WINDOW_ID")
         spws = spw_map[ddid_col]
-        out: dict[str, list[str]] = {}
+        out: dict[str, list[int]] = {}
         for spw in np.unique(spws):
             mask = spws == spw
-            out[str(spw)] = [str(s) for s in np.unique(scan_col[mask])]
+            out[str(int(spw))] = [int(s) for s in np.unique(scan_col[mask])]
         return out
 
     def reffreq(self, spw: int) -> dict:
@@ -196,12 +207,10 @@ class CasaMSMetadata:
         return out
 
     def spwsforfield(self, field: str | int) -> np.ndarray:
-        """SPW IDs that appear in MAIN rows of the given field."""
-        fid = self.fieldsforname(field)
-        if len(fid):
-            fid = fid[0]
-        else:
-            return np.array([])
+        """SPW IDs in MAIN rows of a field given as zero-based ID (int) or name (str)."""
+        fid = self._field_id(field)
+        if fid is None:
+            return np.array([], dtype=int)
         sub = self._tbvis.query(f"FIELD_ID=={int(fid)}")
         try:
             ddids = np.unique(sub.getcol("DATA_DESC_ID"))

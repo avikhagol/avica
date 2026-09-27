@@ -8,7 +8,12 @@ from avica.cli_new import avica_cli
 import warnings
 
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
-resource.setrlimit(resource.RLIMIT_NOFILE, (26000, rlimit[1]))
+_soft_target = 26000 if rlimit[1] == resource.RLIM_INFINITY else min(26000, rlimit[1])
+try:
+    if rlimit[0] != resource.RLIM_INFINITY and rlimit[0] < _soft_target:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (_soft_target, rlimit[1]))
+except (ValueError, OSError):
+    pass    # keep the inherited limit (e.g. macOS caps below the hard limit)
 
 avicadir = str(Path.home())+'/.avica/'
 

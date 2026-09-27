@@ -51,6 +51,7 @@ def test_rm_only_removes_before_processing_even_when_rm_pre_is_false(tmp_path):
             removables=["raw/*.tmp"],
             rm_only=True,
             rm_pre=False,
+            delete_removables=True,     # master switch (README: required for any cleanup)
         )
 
         assert not removable.exists()
