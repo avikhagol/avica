@@ -21,7 +21,7 @@ from casacore.tables import (
 
 
 def _load_compat_module():
-    path = Path(__file__).resolve().parents[1] / "src" / "avica" / "ms" / "_casa_compat.py"
+    path = Path(__file__).resolve().parents[1] / "src" / "avica" / "ms" / "compat.py"
     spec = importlib.util.spec_from_file_location("_avica_casa_compat", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -29,7 +29,7 @@ def _load_compat_module():
 
 
 _compat = _load_compat_module()
-MSMetadata = _compat.MSMetadata
+MSMetadata = _compat.CasaMSMetadata
 
 
 # ---------------------------------------------------------------------------
@@ -187,21 +187,23 @@ def test_nobservations(msmd):
 
 def test_spwsforfields(msmd):
     out = msmd.spwsforfields()
-    # Both fields appear with both spws (via ddid 0 and 1)
-    assert out == {0: [0, 1], 1: [0, 1]}
+    # Both fields appear with both spws (via ddid 0 and 1).
+    # casatools returns a record: field-ID keys are strings.
+    assert out == {"0": [0, 1], "1": [0, 1]}
 
 
 def test_scansforspws_all(msmd):
     out = msmd.scansforspws()
-    # Both spws appear in scans 1 and 2
-    assert set(out.keys()) == {0, 1}
-    assert out[0] == [1, 2]
-    assert out[1] == [1, 2]
+    # Both spws appear in scans 1 and 2.
+    # casatools: spw-ID keys are strings, scan numbers are integers.
+    assert set(out.keys()) == {"0", "1"}
+    assert out["0"] == [1, 2]
+    assert out["1"] == [1, 2]
 
 
 def test_scansforspws_obsid(msmd):
     out = msmd.scansforspws(obsid=0)
-    assert out == {0: [1, 2], 1: [1, 2]}
+    assert out == {"0": [1, 2], "1": [1, 2]}
 
 
 def test_reffreq_shape_matches_casatools(msmd):
@@ -268,10 +270,9 @@ def test_antennanames_list(msmd):
     assert msmd.antennanames([0, 2]) == ["AN1", "AN3"]
 
 
-def test_table_reexport_opens_subtable(mini_ms):
-    """Sanity check: the re-exported casacore table works on a subtable."""
-    compat_table = _compat.table
-    t = compat_table(f"{mini_ms}/ANTENNA", ack=False)
+def test_ctable_opens_subtable(mini_ms):
+    """Sanity check: the compat ctable() factory works on a subtable."""
+    t = _compat.ctable(f"{mini_ms}/ANTENNA", readonly=True, ack=False)
     try:
         assert list(t.getcol("NAME")) == ANT_NAMES
     finally:
@@ -313,8 +314,18 @@ def test_fieldsforsource(msmd):
 
 def test_spwsforfield(msmd):
     # Both fields have ddids 0 and 1 in MAIN, mapping to spws 0 and 1.
+    # casatools accepts a zero-based field ID (int) or a field name (str).
     np.testing.assert_array_equal(msmd.spwsforfield(0), np.array([0, 1]))
     np.testing.assert_array_equal(msmd.spwsforfield(1), np.array([0, 1]))
+    np.testing.assert_array_equal(msmd.spwsforfield("FIELD1"), np.array([0, 1]))
+    assert msmd.spwsforfield(99).size == 0
+    assert msmd.spwsforfield("NOPE").size == 0
+
+
+def test_scansforfield_id_or_name(msmd):
+    assert msmd.scansforfield(0) == [1]
+    assert msmd.scansforfield("FIELD1") == [2]
+    assert msmd.scansforfield("NOPE") == []
 
 
 def test_namesforfields_all(msmd):

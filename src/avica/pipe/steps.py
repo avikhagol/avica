@@ -97,8 +97,8 @@ class PreProcessFitsIdi(PipelineStepBase):
                     if rm_only:
                         return _rm_only_result(self.result, removed_count)
 
-        targets         =   PipelineContext.params['targets'] or [] if 'targets' in PipelineContext.params else []
-        target          =   PipelineContext.params['target']
+        targets         =   PipelineContext.params.get('targets', [])
+        target          =   PipelineContext.params.get('target', target)
         tmpfitsfiles        =   deepcopy(fitsfiles)
 
         rfc_catalog_file        =   PipelineContext.params['rfc_catalogfile']
