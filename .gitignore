@@ -142,3 +142,4 @@ src/avica/fitsioutil/__init__.py
 uv.lock
 reduction/
 avica.logs/
+casa.logs/

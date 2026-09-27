@@ -217,6 +217,8 @@ def casatask_fringefit(vis:str, fid:str, scannos:str, refant:str, ff_caltable:st
 
     if mpiclient is None:
         from casatasks import fringefit
+        from avica.casalogs import redirect_inprocess
+        redirect_inprocess()            # log to the pipeline run log (#58)
         eval(fringefit_cmd)
     else:
         res             =   mpiclient.push_command_request(fringefit_cmd, block=False)

@@ -26,7 +26,7 @@ from .core import PipelineStepBase, StepResult, ColName, PipelineContext, WorkDi
 from .core import step_stage, InitVariables, RunValidation,  UpdateResults, UpdateSheet, CasaSetup
 from .core import ImportFITSIdi, MsTransform, PicardPayload, GenerateAndAppendAntab, PicardTask, PersistentMpiCasaRunner
 from .tasks.mstransform import task_mstransform_payload
-from .core import FlagData, FlagManager
+from .core import FlagData, FlagManager, casa_logfiles
 from .config import PHASESHIFT_PERL_SCRIPT
 
 log = logging.getLogger("avica.pipeline")
@@ -449,8 +449,7 @@ class FitsIdiToMS(PipelineStepBase):
         output_vis_for_lock_cleanup = []
 
         wds_ifolder_for_payload  =   []
-        casalogfile     =   f'{wd}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa")}'
-        errcasalogfile     =   f'{wd}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa")}'
+        casalogfile, errcasalogfile = casa_logfiles(wd, self.name, self.result.start_stamp)   # run-level log in casa.logs/ (#58)
 
 
         # ------------------------ w/o multiple frequency IDs
@@ -965,8 +964,7 @@ class AverageMS(PipelineStepBase):
                                     msg                 =   "executing casatask payload mstransform"
                                     log.info(msg)
                                     with step_stage(msg, chanbin=chanbin):
-                                        casalogfile     =   f'{wd_b}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa")}'
-                                        errcasalogfile     =   f'{wd_b}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa")}'
+                                        casalogfile, errcasalogfile = casa_logfiles(wd_b, self.name, self.result.start_stamp)   # run-level log in casa.logs/ (#58)
 
                                         task            =   MsTransform(vis=vis, outputvis=outvis, antenna=an_remove,
                                             scan=good_scans, field=",".join(map(str, allsources)),
@@ -1258,8 +1256,7 @@ class SnRating(PipelineStepBase):
                         log.info(msg)
 
                         with step_stage(msg):
-                            casalogfile         =   f'{wd_b}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa")}'
-                            errcasalogfile      =   f'{wd_b}/{get_logfilename(fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa")}'
+                            casalogfile, errcasalogfile = casa_logfiles(wd_b, self.name, self.result.start_stamp)   # run-level log in casa.logs/ (#58)
                             # AvicaSnRatinCMD(vis=str(vis_b), caltable_folder=str(caltable_folder),
                                                                         # n_refant=int(n_refant), n_calib=int(n_calib), n_scans=int(n_scan_snrting),
                                                                         # iter_scan_count=int(iter_scan_count),
@@ -1522,10 +1519,7 @@ class FinalSplitMs(PipelineStepBase):
                         scans = sorted(set(s for fld in allsources for s in cmsmd.scansforfield(fld)))
                     finally:
                         cmsmd.done()
-                    logfile = str(Path(wd_t) / get_logfilename(
-                        fnname=self.name, start_stamp=self.result.start_stamp, module_name="casa"))
-                    errfile = str(Path(wd_t) / get_logfilename(
-                        fnname=self.name, start_stamp=self.result.start_stamp, module_name="err-casa"))
+                    logfile, errfile = casa_logfiles(wd_t, self.name, self.result.start_stamp)   # run-level log in casa.logs/ (#58)
                     jobs[band] = MsTransform(
                         vis=str(vis_b), outputvis=str(outvis),
                         scan=",".join(map(str, scans)), field=",".join(map(str, allsources)),

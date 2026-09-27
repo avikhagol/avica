@@ -56,13 +56,23 @@ def task_mstransform_payload(jobs, casadir, mpi_cores=5):
                     result["status"] = "error"
                     result["err_msg"] += error
         # Keep diagnostics on disk even for failed submissions or worker startup.
+        # The runner itself appends its stderr to the run-level err file (#58),
+        # so it is added here only for files the runner does not write.
         stderr = runner.runner.get_stderr() if runner is not None else ""
+        runner_errf = getattr(runner, "errfile", "") if runner is not None else ""
+        stderr_written = {runner_errf} if runner_errf else set()
         for key, result in results.items():
             errf = jobs[key].cmd.errf
             if errf:
+                text = result["err_msg"]
+                if errf not in stderr_written:
+                    text += stderr
+                    stderr_written.add(errf)
+                if not text:
+                    continue
                 try:
                     with Path(errf).open("a") as stream:
-                        stream.write(result["err_msg"] + stderr)
+                        stream.write(text)
                 except OSError:
                     result["status"] = "error"
                     result["err_msg"] += traceback.format_exc()

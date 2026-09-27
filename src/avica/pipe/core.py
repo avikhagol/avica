@@ -1,5 +1,3 @@
-from turtle import st
-
 from avica.pipe.config import PHASESHIFT_PERL_SCRIPT, MPICASA_WORKER, VLBA_GAINS_KEY
 import subprocess
 import sys
@@ -48,7 +46,8 @@ import threading
 
 from avica.pipe.helpers import find_tsys, FileSize, tsys_exists, tsys_exists_in_fitsfiles, overlap_percentage, del_fl, parse_params, get_allfitsfiles
 from avica.pipe.helpers import uncalibrated_antennas
-from avica.pipe.helpers import get_targets_filenames, setup_workdir, add_O, get_logfilename, normalize_strlist
+from avica.pipe.helpers import get_targets_filenames, setup_workdir, add_O, get_logfilename, normalize_strlist, result_csv_path
+from avica import casalogs
 from avica.pipe.config import DEFAULT_PARAMS, CSV_POPULATED_STEPS, PipeConfig, _CASA_INPROCESS_MODULES,  setup_casa_path, get_added_casa_paths, get_added_casa_lib_dirs
 
 from copy import deepcopy
@@ -524,6 +523,7 @@ class PipelineContext:
     result_persisted: bool = False
     colnames: ColName | None = None
     logfolder:str ="avica.logs/"
+    casalogfolder:str ="casa.logs/"
 
     @classmethod
     def init_params(cls, params: dict):
@@ -548,6 +548,19 @@ def pipeline_context(params: dict):
         yield PipelineContext
     finally:
         PipelineContext.reset()
+
+def casa_logfiles(wd, step_name, start_stamp):
+    """
+    (logfile, errfile) for CASA tasks of a step. Inside a pipeline run this is
+    the single run-level pair in casa.logs/ (issue #58); outside a run (e.g. a
+    step called directly) it falls back to per-step files in `wd`.
+    """
+    run_log, run_err = casalogs.current_logfile(), casalogs.current_errfile()
+    if run_log:
+        return run_log, run_err
+    return (f'{wd}/{get_logfilename(fnname=step_name, start_stamp=start_stamp, module_name="casa")}',
+            f'{wd}/{get_logfilename(fnname=step_name, start_stamp=start_stamp, module_name="err-casa")}')
+
 
 class WorkDirMeta:
     def __init__(self, wd_ifolder):
@@ -794,6 +807,15 @@ class InitVariables(PipelineStepValidatorBase):
         PipelineContext.params['nfiles']        = len(allfitsfile)
         PipelineContext.params['lf']            = lf
 
+        # result CSV identifies target, project and workdir (issue #59):
+        #   <target_dir>/result__{target}__{project_code}__{workdir}.csv
+        wd_path                                 = Path(wd_ifolder).parent
+        PipelineContext.params['project_code']  = wd_path.parent.name
+        PipelineContext.params['workdir']       = wd_path.name
+        PipelineContext.params['result_csv_file'] = str(result_csv_path(
+            target_dir, PipelineContext.params['target'],
+            PipelineContext.params['project_code'], PipelineContext.params['workdir']))
+
         if Path(wd_ifolder).parent.exists():
             (Path(wd_ifolder).parent / "avica.meta").mkdir(exist_ok=True)
 
@@ -801,6 +823,7 @@ class InitVariables(PipelineStepValidatorBase):
         print("\tInput folder\t\t:", wd_ifolder)
         print("\tPrimary Value\t\t:", lf.primary_value)
         print("\tWorking Directory\t:", str(Path(wd_ifolder).parent))
+        print("\tResult CSV\t\t:", PipelineContext.params['result_csv_file'])
 
 
         return PipelineStepValidatorResult(success=[True], msg="init")
@@ -1111,6 +1134,15 @@ class AvicaPipelineCore:
         PipelineContext.params.update({**DEFAULT_PARAMS, **self.pipe_params})
         PipelineContext.params['init_params'] = self.pipe_params
 
+        # one CASA log (+ err file) for the whole run, in casa.logs/ (issue #58)
+        casa_logfile, casa_errfile  =   casalogs.start_run(
+            folder=PipelineContext.casalogfolder, stamp=datetime.now(),
+            header=f"target={self.pipe_params.get('target', '')} steps={','.join(self._steps.keys())}")
+        PipelineContext.params['casa_logfile'] = casa_logfile
+        PipelineContext.params['casa_errfile'] = casa_errfile
+        log.info(f"CASA log: {casa_logfile}")
+        log.info(f"CASA err: {casa_errfile}")
+
         # ~~~~~~~~~~~ cli messages ~~~~~~~~~~~~~~~~~~~~~~~~~~
         make_art()
         print("Following steps will be executed in the sequence:")
@@ -1268,6 +1300,12 @@ class AvicaPipelineCore:
         log.info("=" * 60)
         log.info(f"Pipeline finished — Total Success: {total_ok}  Failures: {total_fail}")
         log.info("=" * 60)
+
+        merged = casalogs.collect_stray_logs()
+        if merged:
+            log.info(f"merged {len(merged)} default-named CASA log(s) into {casa_logfile}")
+        casalogs.end_run()
+        print(f"    CASA log : {casa_logfile}\n")
 
         return self.allresults
 
@@ -2000,14 +2038,23 @@ class IterativeSubprocess:
         self._stderr_thread.join(timeout=5)
 
 class PersistentMpiCasaRunner:
-    def __init__(self, casadir: str, mpi_cores: int = 10, verbose:bool=False):
-        """Persistent CASA worker; one core selects serial execution."""
+    def __init__(self, casadir: str, mpi_cores: int = 10, verbose:bool=False,
+                 logfile: Optional[str] = None, errfile: Optional[str] = None):
+        """
+        Persistent CASA worker; one core selects serial execution.
+        `logfile` / `errfile` default to the pipeline run's CASA log and err
+        file in casa.logs/ (issue #58).
+        """
         if mpi_cores < 1:
             raise ValueError("mpi_cores must be a positive integer")
         self.verbose = verbose
-        cmd_list = [
-            f"{casadir}/bin/casa", "--nologger", "--nogui", "--agg",
-            "-c", f"{MPICASA_WORKER}"]
+        self.logfile = logfile or casalogs.current_logfile() or ""
+        self.errfile = errfile or casalogs.current_errfile() or ""
+        self._labels: Dict[Any, str] = {}
+        cmd_list = [f"{casadir}/bin/casa", "--nologger", "--nogui", "--agg"]
+        if self.logfile:
+            cmd_list += ["--logfile", str(Path(self.logfile).absolute())]
+        cmd_list += ["-c", f"{MPICASA_WORKER}"]
         if mpi_cores == 1:
             cmd_list.append("--serial")
         else:
@@ -2017,24 +2064,62 @@ class PersistentMpiCasaRunner:
 
     def run_task(self, task_name: str, args: dict, args_type:Dict[str, Any], block=False,
                  target_server:Optional[int]=None, logfile: str = "",
-                 run_on_master: bool = False):
+                 run_on_master: bool = False, label: str = ""):
+        if not label:
+            target = args.get("vis") or args.get("fitsidifile") or ""
+            if isinstance(target, (list, tuple)):
+                target = target[0] if target else ""
+            label = casalogs.task_marker(
+                step=PipelineContext.step_name, task=task_name,
+                detail=f"vis={Path(str(target)).name}" if target else "")
         payload = {
             "task_casa": task_name,
             "args": args,
             "args_type":args_type,
             "block": block,
             "target_server": target_server,
-            "logfile": logfile,
+            "logfile": logfile or self.logfile,
             "run_on_master": run_on_master,
+            "label": label,
         }
-        return self.runner.send_and_receive(payload)
+        response = self.runner.send_and_receive(payload)
+        ret = response.get("ret") if isinstance(response, dict) else None
+        if isinstance(ret, list) and ret and all(isinstance(i, int) for i in ret):
+            self._labels.update({i: label for i in ret})       # non-blocking: command ids
+        else:
+            self._record_failures(response, label)
+        return response
 
     def get_response(self, command_ids: Any, block: bool = True):
         payload = {
             "task_casa": "get_command_response",
             "parameters": {"command_ids": command_ids, "block": block}
         }
-        return self.runner.send_and_receive(payload)
+        response = self.runner.send_and_receive(payload)
+        self._record_failures(response)
+        return response
+
+    def _append_err(self, header: str, text: str):
+        if not self.errfile or not text.strip():
+            return
+        try:
+            Path(self.errfile).parent.mkdir(parents=True, exist_ok=True)
+            with open(self.errfile, "a", encoding="utf-8") as fh:
+                fh.write(f"{header}\n{text.rstrip()}\n")
+        except OSError:
+            pass
+
+    def _record_failures(self, response, label: str = ""):
+        """Write tracebacks of failed CASA tasks to the run's err file."""
+        if not isinstance(response, dict):
+            return
+        if response.get("status") == "error":
+            self._append_err(f"{label or casalogs.MARKER_PREFIX} worker error: {response.get('error', '')}",
+                             str(response.get("traceback") or ""))
+        for reply in response.get("ret") or []:
+            if isinstance(reply, dict) and not reply.get("successful", True):
+                lbl = self._labels.get(reply.get("id"), label) or casalogs.MARKER_PREFIX
+                self._append_err(f"{lbl} FAILED", str(reply.get("traceback") or reply))
 
     def close(self):
         try:
@@ -2042,6 +2127,8 @@ class PersistentMpiCasaRunner:
         except Exception:
             pass
         self.runner.close()
+        self._append_err(casalogs.task_marker(step=PipelineContext.step_name, task="casa worker stderr"),
+                         self.runner.get_stderr())
 
 
 

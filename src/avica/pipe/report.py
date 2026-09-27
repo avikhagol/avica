@@ -2,7 +2,9 @@
 Rendering of AVICA pipeline result CSVs.
 
 A result CSV is written incrementally by `append_step_result_csv()` in
-avica.pipe.core, one row per step attempt, with the column layout of
+avica.pipe.core, one row per step attempt, to
+`<target_dir>/result__{target}__{project_code}__{workdir}.csv`
+(see `avica.pipe.helpers.result_csv_name`), with the column layout of
 `StepResult`:
 
     name, success_count, failed_count, start_stamp, detail, desc, success, end_stamp

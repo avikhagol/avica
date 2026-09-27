@@ -38,9 +38,72 @@ X  = "\033[0m"
 rfc_filepath = f"{avicadir}/rfc_path.txt"
 
 
-def _result_csv_path(pipe_params):
-    target = f"{pipe_params['target']}_"
-    return Path(pipe_params["target_dir"]) / f"{target}result.csv"
+def _resolve_run_csv(pipe_params):
+    """
+    The result CSV that `pipe run` with these params will append to, or None
+    when its workdir does not exist yet.  The authoritative path is set again
+    by `InitVariables` once the workdir is known (issue #59).
+    Falls back to the pre-#59 `{target}_result.csv` when that is all there is.
+    """
+    from avica.pipe.config import DEFAULT_PARAMS
+    from avica.pipe.helpers import resolve_result_csv, legacy_result_csv_path
+
+    params = {**DEFAULT_PARAMS, **pipe_params}   # same layering as AvicaPipeline.execute()
+    target_dir = params["target_dir"]
+    target = params["target"]
+    try:
+        csvfile = resolve_result_csv(
+            target_dir, target,
+            fitsfilenames=params.get("fitsfilenames"),
+            folder_for_fits=params.get("folder_for_fits"),
+            picard_input_template=params.get("picard_input_template"),
+        )
+    except Exception as exc:
+        typer.echo(f"Warning: could not resolve the workdir for the result CSV: {exc}", err=True)
+        csvfile = None
+
+    if csvfile is not None and csvfile.exists():
+        return csvfile
+    legacy = legacy_result_csv_path(target_dir, target)
+    if legacy.exists():
+        typer.echo(f"Warning: using old-style result CSV {legacy}; "
+                   f"new results are written to result__{{target}}__{{project}}__{{workdir}}.csv", err=True)
+        return legacy
+    return csvfile
+
+
+def _select_result_csv(pipe_params, project_code=None, workdir=None):
+    """
+    Locate the result CSV for `pipe result`. With several matches, list them
+    and use the newest. Returns None when nothing matches.
+    """
+    from avica.pipe.helpers import find_result_csvs, legacy_result_csv_path
+
+    target_dir = pipe_params["target_dir"]
+    target = pipe_params["target"]
+    matches = find_result_csvs(target_dir, target, project_code=project_code, workdir=workdir)
+    if len(matches) > 1:
+        typer.echo(f"Found {len(matches)} result CSVs for target '{target}' (newest first):", err=True)
+        for path in matches:
+            typer.echo(f"  {path}", err=True)
+        typer.echo(f"Using the newest: {matches[0]}  (narrow with --project / --workdir, or pass --csvfile)", err=True)
+    if matches:
+        return matches[0]
+    if not project_code and not workdir:
+        legacy = legacy_result_csv_path(target_dir, target)
+        if legacy.exists():
+            typer.echo(f"Warning: using old-style result CSV {legacy}.", err=True)
+            return legacy
+    return None
+
+
+def _result_label(csvfile, target=""):
+    from avica.pipe.helpers import parse_result_csv_name
+
+    parsed = parse_result_csv_name(csvfile)
+    if parsed:
+        return f"{parsed['target']} ({parsed['project_code']}/{parsed['workdir']})"
+    return target or Path(csvfile).name.replace("_result.csv", "")
 
 
 def _is_successful_result(row):
@@ -400,8 +463,9 @@ def run_pipeline(
     #     configdata = PipeConfig(configfile=configfile)
     #     pipe_params.update(configdata.to_dict())
 
-    result_csvfile = _result_csv_path(pipe_params)
-    pipe_params["result_csv_file"] = str(result_csvfile)
+    # Known only once the workdir exists; InitVariables sets the final path.
+    result_csvfile = _resolve_run_csv(pipe_params) if (resume or resume_from) else None
+    pipe_params["result_csv_file"] = str(result_csvfile) if result_csvfile else None
 
     # print(DEFAULT_PARAMS['allfitsfile'])
     main_pipeline = AvicaPipeline(pipe_params=pipe_params)
@@ -413,12 +477,13 @@ def run_pipeline(
         except ValueError as exc:
             raise typer.BadParameter(str(exc), param_hint="--resume-from") from exc
     elif resume:
-        if not result_csvfile.exists():
-            typer.echo(f"No result CSV found at {result_csvfile}; running requested steps.")
+        if result_csvfile is None or not result_csvfile.exists():
+            typer.echo(f"No result CSV found for target '{pipe_params['target']}'; running requested steps.")
         else:
+            typer.echo(f"Resuming according to {result_csvfile}")
             resume_from = _infer_resume_step(result_csvfile, main_pipeline.step_names())
 
-        if result_csvfile.exists() and resume_from is None:
+        if result_csvfile is not None and result_csvfile.exists() and resume_from is None:
             typer.echo(f"All pipeline steps already completed according to {result_csvfile}.")
             return
         if resume_from:
@@ -439,6 +504,8 @@ def run_pipeline(
 def pipe_result(
     target: Annotated[str, typer.Option("--t", "--target", help="Selected field / source name")] = '',
     csvfile: Annotated[Optional[str], typer.Option("--csvfile", help="Path to a result CSV. Overrides the --target lookup.")] = None,
+    project: Annotated[Optional[str], typer.Option("--project", help="Project code, to pick among result CSVs of the same target.")] = None,
+    workdir: Annotated[Optional[str], typer.Option("--workdir", help="Workdir name (e.g. wd, wd_2), to pick among result CSVs of the same target.")] = None,
     configfile: Optional[str] = typer.Option("avica.inp", help="config file containing key=value"),
     default_configfile: Optional[str] = typer.Option("avica.inp", help="default config file name containing key=value"),
     history: Annotated[bool, typer.Option("--history", help="Show every recorded attempt of every step, instead of the latest.")] = False,
@@ -472,15 +539,16 @@ def pipe_result(
             target=target, configfile=configfile,
             default_configfile=default_configfile,
         )
-        result_csvfile = _result_csv_path(pipe_params)
+        result_csvfile = _select_result_csv(pipe_params, project_code=project, workdir=workdir)
 
-    if not Path(result_csvfile).exists():
-        typer.echo(f"No result CSV found at {result_csvfile}.", err=True)
+    if result_csvfile is None or not Path(result_csvfile).exists():
+        where = result_csvfile or Path(pipe_params['target_dir']) / f"result__{pipe_params['target']}__*.csv"
+        typer.echo(f"No result CSV found at {where}.", err=True)
         typer.echo("Run the pipeline first, or pass --csvfile.", err=True)
         raise typer.Exit(code=1)
 
     rows = read_result_csv(result_csvfile)
-    label = target or Path(result_csvfile).name.replace("_result.csv", "")
+    label = _result_label(result_csvfile, target)
 
     render_result(
         rows,

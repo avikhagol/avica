@@ -110,7 +110,9 @@ def pipeline_class(name, extra):
         CasaSetup=None, UpdateResults=None, UpdateSheet=None, StepResult=result,
         datetime=datetime, Path=Path, traceback=traceback, shutil=shutil,
         log=logging.getLogger(__name__), step_stage=lambda *a, **kw: nullcontext(),
-        task_mstransform_payload=Mock(), **extra)
+        task_mstransform_payload=Mock(),
+        casa_logfiles=lambda wd, step_name, start_stamp: (f"{wd}/casa.log", f"{wd}/err-casa.log"),
+        **extra)
     return load_definitions("steps.py", {name}, namespace)[name]
 
 
