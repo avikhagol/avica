@@ -1,0 +1,52 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install avica (builds the fitsidiutil extension)
+        env:
+          CMAKE_BUILD_PARALLEL_LEVEL: 4
+        run: |
+          uv venv
+          uv pip install ".[test]"
+
+      - name: Run test suite
+        run: uv run --no-sync pytest -q -p no:cacheprovider --no-showlocals --tb=short
+
+  # Single stable check to require in branch protection
+  all-tests-passed:
+    name: all-tests-passed
+    needs: [tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.tests.result }}" = "success"
