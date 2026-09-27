@@ -1,10 +1,17 @@
 # Changelog
 
-## [0.3.1.16]
+## [0.3.1.17]
+
+### Changed
+- Result CSV is now `<target_dir>/result__{target}__{project_code}__{workdir}.csv`, so results of different projects / workdirs of the same target no longer mix (#59). `avica pipe result` gains `--project` and `--workdir`; with several matches it lists them and shows the newest. Old `{target}_result.csv` files are still read.
+- All CASA logging of a pipeline run goes to one file, `casa.logs/casa__log-<stamp>.log`, next to `avica.logs/`, with a marker line before every CASA task; stderr and failed-task tracebacks go to `casa.logs/err-casa__log-<stamp>.log` (#58). Default-named `casa-*.log` / `ipython-*.log` created during the run are merged into it.
 
 ### Fixed
-- fixed data type conversion error for pipeline result view using polars.
+- Stray `from turtle import st` in `avica.pipe.core`, which broke the import on systems without tkinter.
+- fringefit tasks run through the persistent CASA worker now log to the run's CASA log instead of CASA's default log.
+- stray `\` causing crash in the ANTAB parser.
 
+[0.3.1.17] : https://github.com/avikhagol/avica/compare/v0.3.1.16...v0.3.1.17
 [0.3.1.16] : https://github.com/avikhagol/avica/compare/v0.3.1.15...v0.3.1.16
 [0.3.1.15] : https://github.com/avikhagol/avica/compare/v0.3.1.14...v0.3.1.15
 [0.3.1.14] : https://github.com/avikhagol/avica/compare/v0.3.1.13...v0.3.1.14

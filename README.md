@@ -198,7 +198,7 @@ Common options:
 
 #### Pipeline results
 
-After each step completes, AVICA appends a row to `reductions/<target>_result.csv`. Use `avica pipe result` to render that file:
+After each step completes, AVICA appends a row to `reductions/result__<target>__<project_code>__<workdir>.csv`, e.g. `result__J0102+5824__EY034__wd_1.csv`. The project code and workdir identify which working directory (`reductions/<project_code>/<workdir>/`) the results belong to. Use `avica pipe result` to render that file:
 
 ```bash
 avica pipe result --target <source-name>
@@ -211,6 +211,8 @@ Common options:
 | Option | Description |
 | --- | --- |
 | `--t`, `--target` | Target name; used to locate the result CSV. |
+| `--project` | Project code; picks among result CSVs of the same target. |
+| `--workdir` | Workdir name (`wd`, `wd_2`, ...); picks among result CSVs of the same target. |
 | `--oneline` | Single status line — good for scripts and CI. |
 | `--history` | Show every retry of every step, not just the latest. |
 | `--no-detail` | Suppress the full failure panels below the table. |
@@ -218,7 +220,27 @@ Common options:
 | `--csvfile` | Pass the CSV path directly, skipping config lookup. |
 | `--help` | Show the full command help. |
 
+If a target has result CSVs for several workdirs, they are listed and the newest one is shown; narrow the choice with `--project` / `--workdir`, or pass `--csvfile`. Result CSVs from older AVICA versions (`<target>_result.csv`) are still read when no new-style file exists.
+
 The default view collapses to the most recent attempt per step; `--history` shows all attempts. The footer prints the command to resume from the next incomplete step.
+
+#### Logs
+
+Each `avica pipe run` writes its logs next to each other in the directory it is started from:
+
+| Folder | Content |
+| --- | --- |
+| `avica.logs/` | AVICA pipeline log, crash snapshots |
+| `casa.logs/casa__log-<YYYYmmdd_HHMMSS>.log` | the single CASA log of that run (all steps, all bands) |
+| `casa.logs/err-casa__log-<YYYYmmdd_HHMMSS>.log` | CASA worker stderr and tracebacks of failed CASA tasks |
+
+Every CASA task is preceded by a marker line naming the step, task and visibility, so a run can be followed on the terminal:
+
+```bash
+grep -n '>>> avica' casa.logs/casa__log-*.log
+```
+
+A resumed run starts a new CASA log. rPicard keeps its own logs in its working directory.
 
 ### Manipulating FITS-IDI
 

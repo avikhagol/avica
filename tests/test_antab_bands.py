@@ -108,6 +108,14 @@ class AntabBandsTest(unittest.TestCase):
         self.assertEqual(''.join(g.text for g in groups), text)
         self.assertIn('080 03:00:00', groups[4].text)
 
+    def test_stray_slash_between_groups_is_tolerated(self):
+        text = '/\n' + station('KC') + '/\n  / ! doubled\n' + station('KT')
+        with self.assertLogs('avica.pipeline', level='WARNING'):
+            groups = antab_groups(text)
+        self.assertEqual([(g.kind, g.antenna) for g in groups],
+                         [('GAIN', 'KC')] * 4 + [('TSYS', 'KC')] + [('GAIN', 'KT')] * 4 + [('TSYS', 'KT')])
+        self.assertEqual(''.join(g.text for g in groups), text)
+
     def test_single_gain_per_antenna_keeps_plain_append_gc(self):
         antab = self.write('one.antab', gain('KC', 'ELEV', 18000, 26000, 0.1, [1.0]) + tsys('KC', ROWS))
         # the FITS file is not even opened on this path

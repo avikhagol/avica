@@ -10,6 +10,9 @@ try:
         if path is not None:
             t.open(path, nomodify=readonly)
         return t
+    # send this process's CASA log to the pipeline run log in casa.logs/ (#58)
+    from avica.casalogs import redirect_inprocess as _redirect_casalog
+    _redirect_casalog()
 except ImportError:
     from casacore.tables import table as ctable
     CTABLE_BACKEND = "casacore"       # array columns: (nrow, ...), e.g. DATA (nrow, nchan, ncorr)

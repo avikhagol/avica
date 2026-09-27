@@ -4,6 +4,25 @@ import traceback
 from contextlib import redirect_stdout
 
 
+def _use_logfile(logfile, label=""):
+    """Switch the CASA log only if needed, then post the task marker (#58)."""
+    from casatasks import casalog
+    if logfile and casalog.logfile() != logfile:
+        casalog.setlogfile(logfile)
+    if label:
+        casalog.post(label, "INFO", "avica")
+
+
+def _remote_log_prefix(logfile, label=""):
+    """Same as `_use_logfile`, as source code executed on an MPI server."""
+    code = "from casatasks import casalog; "
+    if logfile:
+        code += f"casalog.setlogfile({logfile!r}) if casalog.logfile() != {logfile!r} else None; "
+    if label:
+        code += f"casalog.post({label!r}, 'INFO', 'avica'); "
+    return code
+
+
 class SerialCommandClient:
     """Keep the MPI response protocol while executing tasks sequentially."""
 
@@ -63,6 +82,7 @@ def main():
             target_server=payload.get("target_server", 0)
             parameters=payload.get("parameters", args)
             logfile = payload.get("logfile", "")
+            label = payload.get("label", "")
             run_on_master = payload.get("run_on_master", False)
 
             if task_name == "get_command_response":
@@ -80,9 +100,8 @@ def main():
             elif task_name == "stop_services":
                 ret = client.stop_services()
             elif run_on_master:
-                if logfile:
-                    from casatasks import casalog
-                    casalog.setlogfile(logfile)
+                if logfile or label:
+                    _use_logfile(logfile, label)
                 try:
                     # This loop runs on rank 0. Internally parallel CASA tasks
                     # such as mstransform(createmms=True) must start here so
@@ -95,15 +114,14 @@ def main():
                     ret = [{"id": 0, "successful": False, "ret": None,
                             "traceback": traceback.format_exc()}]
             elif serial:
-                if logfile:
-                    from casatasks import casalog
-                    casalog.setlogfile(logfile)
+                if logfile or label:
+                    _use_logfile(logfile, label)
                 ret = client.run_task(task_name, parameters, block)
             else:
                 parts = [f"{k}={v!r}" for k, v in parameters.items()]
                 cmd_str = task_name + "(" + ", ".join(parts) + ")"
-                if logfile:
-                    cmd_str = f"from casatasks import casalog; casalog.setlogfile({logfile!r}); " + cmd_str
+                if logfile or label:
+                    cmd_str = _remote_log_prefix(logfile, label) + cmd_str
                 ret = client.push_command_request(cmd_str, block, target_server)
 
             print(json.dumps({"status": "success", "task": task_name, "ret": ret}), flush=True)

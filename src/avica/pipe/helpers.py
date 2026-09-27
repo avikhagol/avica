@@ -32,31 +32,51 @@ def get_targets_filenames(lf, filename_col, targetname_col):
 
 
 
-def get_wd_ifolder_multiplefits(fitsfiles, target_dir, ifolder):
-    """Reuse a complete input set, preferring preprocessed, newer workdirs."""
-    if not fitsfiles:
-        raise ValueError("No FITS filenames supplied")
+def _existing_project_wds(fitsfiles, target_dir, ifolder):
+    """All ``wd``/``wd_N`` folders that already hold any of `fitsfiles` (read-only)."""
     wds = set()
     for fitsfile in fitsfiles:
         wds.update(Path(iwd).parent.absolute() for iwd in
                    iwd_for_fitsfile(fitsfile, target_dir, ifolder=ifolder,
                                    create=False, allwds=True)[0])
-    wds = {wd for wd in wds if re.fullmatch(r'wd(?:_\d+)?', wd.name)}
+    return {wd for wd in wds if re.fullmatch(r'wd(?:_\d+)?', wd.name)}
+
+
+def select_existing_wd(fitsfiles, target_dir, ifolder):
+    """
+    Return the workdir that `setup_workdir` would reuse for `fitsfiles`, or None.
+
+    Never creates anything, so it is safe to call before the pipeline runs
+    (e.g. to locate the result CSV for ``--resume``).
+    """
+    if not fitsfiles:
+        raise ValueError("No FITS filenames supplied")
+    wds = _existing_project_wds(fitsfiles, target_dir, ifolder)
     expected_ffnames = {Path(f).name for f in fitsfiles}
     matching = []
     for wd in wds:
         rawf = wd / 'raw'
+        if not rawf.is_dir():
+            continue
         found_ffnames = {f.name for f in rawf.iterdir() if f.is_file()}
         if expected_ffnames.issubset(found_ffnames) and (wd / Path(ifolder).name).is_dir():
             matching.append(wd)
-    if matching:
-        wd = max(matching, key=lambda path: (
-            (path / 'avica.meta' / 'fitsfiles_used.avica').is_file(),
-            int(path.name[3:]) if path.name != 'wd' else 0,
-            str(path),
-        ))
+    if not matching:
+        return None
+    return max(matching, key=lambda path: (
+        (path / 'avica.meta' / 'fitsfiles_used.avica').is_file(),
+        int(path.name[3:]) if path.name != 'wd' else 0,
+        str(path),
+    ))
+
+
+def get_wd_ifolder_multiplefits(fitsfiles, target_dir, ifolder):
+    """Reuse a complete input set, preferring preprocessed, newer workdirs."""
+    wd = select_existing_wd(fitsfiles, target_dir, ifolder)
+    if wd is not None:
         return str(wd / Path(ifolder).name)
 
+    wds = _existing_project_wds(fitsfiles, target_dir, ifolder)
     if not wds:
         return None  # setup_workdir creates the initial directory.
     project_dir = sorted(wds)[0].parent
@@ -69,6 +89,100 @@ def get_wd_ifolder_multiplefits(fitsfiles, target_dir, ifolder):
     (wd / 'raw').mkdir()
     print(f"{wd_ifolder} created")
     return str(wd_ifolder)
+
+
+# ---------------------------------------------------------------------------
+#   result CSV naming  (issue #59)
+#   result__{target}__{project_code}__{workdir}.csv   inside `target_dir`
+# ---------------------------------------------------------------------------
+
+RESULT_CSV_PREFIX   = "result"
+RESULT_CSV_SEP      = "__"
+RESULT_CSV_SUFFIX   = ".csv"
+
+
+def safe_name_part(value) -> str:
+    """
+    Make `value` usable as one `__`-separated field of a file name: path
+    separators and whitespace become `-`, and runs of `_` are squeezed so a
+    field can never contain the `__` separator.
+    """
+    part = re.sub(r"[^\w.+-]+", "-", str(value if value is not None else "").strip())
+    part = re.sub(r"_{2,}", "_", part).strip("-_")
+    return part or "unknown"
+
+
+def result_csv_name(target, project_code, workdir) -> str:
+    fields = [RESULT_CSV_PREFIX] + [safe_name_part(v) for v in (target, project_code, workdir)]
+    return RESULT_CSV_SEP.join(fields) + RESULT_CSV_SUFFIX
+
+
+def result_csv_path(target_dir, target, project_code, workdir) -> Path:
+    return Path(target_dir) / result_csv_name(target, project_code, workdir)
+
+
+def parse_result_csv_name(name):
+    """
+    Inverse of `result_csv_name`. Returns ``{'target', 'project_code', 'workdir'}``
+    or None for names that do not follow the pattern.
+    """
+    name = Path(str(name)).name
+    if not name.endswith(RESULT_CSV_SUFFIX):
+        return None
+    fields = name[: -len(RESULT_CSV_SUFFIX)].split(RESULT_CSV_SEP)
+    if len(fields) != 4 or fields[0] != RESULT_CSV_PREFIX or not all(fields[1:]):
+        return None
+    return dict(target=fields[1], project_code=fields[2], workdir=fields[3])
+
+
+def legacy_result_csv_path(target_dir, target) -> Path:
+    """Pre-#59 name: `{target}_result.csv`."""
+    return Path(target_dir) / f"{target}_result.csv"
+
+
+def find_result_csvs(target_dir, target, project_code=None, workdir=None):
+    """
+    Result CSVs in `target_dir` for `target`, optionally narrowed by project
+    code and/or workdir name. Newest (by modification time) first.
+    """
+    want = dict(target=safe_name_part(target))
+    if project_code:
+        want['project_code'] = safe_name_part(project_code)
+    if workdir:
+        want['workdir'] = safe_name_part(workdir)
+    found = []
+    for path in Path(target_dir).glob(f"{RESULT_CSV_PREFIX}{RESULT_CSV_SEP}*{RESULT_CSV_SUFFIX}"):
+        parsed = parse_result_csv_name(path.name)
+        if parsed and all(parsed[k] == v for k, v in want.items()):
+            found.append(path)
+    return sorted(found, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def resolve_result_csv(target_dir, target, fitsfilenames, folder_for_fits, picard_input_template):
+    """
+    Work out, without creating anything, which result CSV a run with these
+    inputs will write to. Returns None when the workdir does not exist yet.
+    """
+    names = [Path(str(f).strip()).name for f in (fitsfilenames or []) if str(f).strip()]
+    if not names or not picard_input_template or not Path(picard_input_template).exists():
+        return None
+    if folder_for_fits in (None, "", "."):
+        folder_for_fits = str(Path.cwd())
+    allfitsfile = get_allfitsfiles(folder_for_fits=folder_for_fits)
+    sources = []
+    for name in names:
+        matches = list(dict.fromkeys(str(fp) for fp in allfitsfile if Path(fp).name == name))
+        if len(matches) != 1:
+            return None
+        sources.append(matches[0])
+    ifolder = search_input_template(picard_input_template, [])
+    if not ifolder:
+        return None
+    wd = select_existing_wd(sources, f"{str(Path(target_dir).absolute())}/", ifolder)
+    if wd is None:
+        return None
+    return result_csv_path(target_dir, target, wd.parent.name, wd.name)
+
 
 def search_input_template(picard_input_template, ifolder, depth=4):
         pattern = ""

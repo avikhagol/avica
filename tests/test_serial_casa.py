@@ -31,9 +31,13 @@ class SerialCasaTests(unittest.TestCase):
     def test_launcher_modes_and_invalid_counts(self):
         from typing import Any, Dict, Optional
         subprocess = Mock()
+        from pathlib import Path
+        from types import SimpleNamespace
+        from avica import casalogs
         ns = load_definitions("core.py", {"PersistentMpiCasaRunner"}, dict(
             Any=Any, Dict=Dict, Optional=Optional, MPICASA_WORKER="worker.py",
-            IterativeSubprocess=subprocess))
+            IterativeSubprocess=subprocess, Path=Path, casalogs=casalogs,
+            PipelineContext=SimpleNamespace(step_name="")))
         runner = ns["PersistentMpiCasaRunner"]
         for cores in (1, 2, 5):
             runner("/casa", cores)
