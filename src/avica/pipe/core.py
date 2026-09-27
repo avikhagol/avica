@@ -1,0 +1,2330 @@
+from avica.pipe.config import PHASESHIFT_PERL_SCRIPT, MPICASA_WORKER, VLBA_GAINS_KEY
+import subprocess
+import sys
+from pathlib import Path
+from typing import List, Any
+
+from avica.util import create_config, read_metafile, read_inputfile, save_metafile, latest_file
+from avica.util import rfc_ascii_to_df, parse_class_cat, compute_sep
+from avica.pipe.helpers import count_freqids
+from avica.fitsidiutil.io import FITSIDI, read_idi
+from avica.fitsidiutil.op import get_colname, dict_baseline
+from avica.fitsidiutil.obs import ListObs
+from avica.fitsidiutil.split import SplitData
+from avica.sources import check_band
+from avica.util import make_art
+
+
+from copy import deepcopy
+
+from astropy.time import Time
+from astropy import units as u
+from astropy.coordinates import SkyCoord
+import numpy as np
+from pandas import concat, DataFrame as df
+import polars as pl
+
+from collections import UserList
+from typing import NamedTuple
+from dataclasses import asdict
+
+
+from abc import ABC, abstractmethod
+from typing import List, Dict
+from dataclasses import dataclass, field
+from typing import Callable, Literal
+
+from typing import List, Any
+from typing import List, Dict, Any, Optional
+
+from .helpers import X, B, BC, c, Y, D, BY
+
+import urllib.request, urllib.error
+import json, subprocess, os
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
+
+from avica.pipe.helpers import find_tsys, FileSize, tsys_exists, tsys_exists_in_fitsfiles, overlap_percentage, del_fl, parse_params, get_allfitsfiles
+from avica.pipe.helpers import uncalibrated_antennas
+from avica.pipe.helpers import get_targets_filenames, setup_workdir, add_O, get_logfilename, normalize_strlist, result_csv_path
+from avica import casalogs
+from avica.pipe.config import DEFAULT_PARAMS, CSV_POPULATED_STEPS, PipeConfig, _CASA_INPROCESS_MODULES,  setup_casa_path, get_added_casa_paths, get_added_casa_lib_dirs
+
+from copy import deepcopy
+
+from contextlib import contextmanager
+
+import time, shutil
+import tempfile
+from datetime import datetime
+from collections import UserList
+import inspect
+import traceback
+import logging
+import warnings
+
+SERVER_PORT = 5030
+
+
+
+# ----      Class helpers     -------------------------------------------
+
+
+
+def catalog_search_from_fits(fitsfile, df_catalog, seplimit, thres_sep, source_name_col='Obsname',
+                             frame='icrs', include_not_found=False, verbose=False, outdir=''):
+
+    if source_name_col in df_catalog.columns:
+        df_catalog      =   df_catalog.drop_duplicates(subset=source_name_col, keep='first')
+
+    fo              =   FITSIDI(fitsfile, mode='r')
+    hdul            =   fo.read()
+    source_hdu      =   hdul['SOURCE']
+
+    target_names    =   np.array(source_hdu['SOURCE'])
+    idx_found       =   np.zeros(np.shape(target_names), dtype=bool)        # i.e not found
+
+    sid_colname     =   get_colname(source_hdu, ['ID_NO','ID_NO.', 'SOURCE_ID', 'SOURCE ID'])
+
+    sids            =   source_hdu[sid_colname]
+    # sids            =   hdu_astropy['SOURCE'].data[sid_colname]
+    ra              =   source_hdu['RAEPO']*u.deg
+    dec             =   source_hdu['DECEPO']*u.deg
+    target_coords   =   SkyCoord(ra,dec, frame=frame)
+    epoch           =   np.unique(source_hdu['EPOCH'])
+    # epoch           =   np.unique(hdu_astropy['SOURCE'].data['EPOCH'])
+
+    if not len(epoch)==1: raise ValueError(f'Multiple EQUINOX values are not supported yet : {epoch}')
+
+                                                            # searching by name first
+    match_res       =   df_catalog[df_catalog[source_name_col].isin(target_names)]
+
+    if not match_res.empty:
+        idx_found       =   np.isin(target_names, match_res[source_name_col].values)
+
+                                                            # since each row found corrosponds to the name match from fits
+    if source_name_col in match_res.columns:
+        match_res            =   match_res.rename(columns={source_name_col:'fits_target'})
+
+    if 'fits_target' in match_res.columns:
+        match_res['sep'] =   match_res.apply(lambda row: compute_sep(row, target_names, target_coords, frame), axis=1 )
+
+    if any(~idx_found):
+        if verbose:
+            print("  searching by coordinate for..."," ".join(target_names[~idx_found]))
+
+        df_catalog_valid                    =   df_catalog[df_catalog['coordinate'].notna()].reset_index(drop=True)
+        _cat_ra, _cat_dec                   =   df_catalog_valid['coordinate'].str.split(n=1, expand=True).values.T
+        catalog                             =   SkyCoord(_cat_ra, _cat_dec, unit=(u.hourangle, u.deg), frame=frame)
+
+        idxtarget, idxself, sep2d, dist3d   =   catalog.search_around_sky(target_coords[~idx_found], seplimit=seplimit*u.milliarcsecond)
+        df_coord_search                     =   df_catalog_valid.iloc[idxself].copy()
+        df_coord_search['sep']              =   sep2d.milliarcsecond
+
+                                                            # in order to keep consistency.
+        df_coord_search['fits_target']      =   target_names[~idx_found][idxtarget]
+
+        if not match_res.empty:
+            df_coord_search                 =   df_coord_search[match_res.columns]
+            df_coord_search.index =  df_coord_search.index + 10000
+
+        match_res = concat([match_res, df_coord_search])
+#         match_res = match_res.drop(columns=['RAh', 'RAm','RAs', 'DE-', 'DEd', 'DEm', 'DEs', 'Nobs', 'Nsca', 'Nses', 'Corr'],errors='ignore')
+        if 'coordinate' in match_res:
+            match_res.insert(2, 'coordinate', match_res.pop('coordinate'))
+        if 'sep' in match_res:
+            match_res.insert(0, 'sep', match_res.pop('sep'))
+
+
+        if verbose: print(len(idxtarget), "found by coordinate")
+        if verbose: print(sum(idx_found), "found by name")
+
+        unmatched_indices = np.where(~idx_found)[0]
+        idx_found[unmatched_indices[idxtarget]] = True
+
+
+    if verbose: print(len(target_names[idx_found]), "found of", len(target_names))
+    if verbose: print(len(target_names[~idx_found]), "not found")
+    if include_not_found and any(~idx_found):
+        unmatched_coords = target_coords[~idx_found]
+        unmatched_names  = target_names[~idx_found]
+        valid            = np.isfinite(unmatched_coords.ra.deg) & np.isfinite(unmatched_coords.dec.deg)
+        if not valid.all():
+            bad = unmatched_names[~valid]
+            warnings.warn(f"catalog_search_from_fits: NaN/inf coordinates found for sources {list(bad)}, skipping them", RuntimeWarning, stacklevel=2)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', message='invalid value encountered in do_format', category=RuntimeWarning)
+            coord_strings = unmatched_coords[valid].to_string('hmsdms', sep=':')
+        dic_df = {'coordinate': coord_strings,
+                  'fits_target': unmatched_names[valid],
+                  'sep': None}
+        new_rows = df(dic_df).dropna(axis=1, how='all')
+        if not new_rows.empty:
+            match_res = concat([match_res, new_rows])
+    return match_res
+
+def df_search_brightcalib_fromascii_catalogfile(fitsfile, rfc_filepath, class_filepath, scanlist_arr, targets=[],
+                              seplimit=5e3, thres_sep=1e4, crossmatch_sep=600, outfile='', nfilter_sources=20):
+    """
+    TODO: Increase seplimit for sources which were not found by the seplimit
+    class_filepath e.g '/data/avi/d/smile/smile_complete_table.txt'
+
+    """
+    hdul            =   read_idi(fitsfile)
+    hdu             =   hdul['SOURCE']
+
+
+    sid_colname =   get_colname(hdu, ['ID_NO', 'ID_NO.','SOURCE_ID', 'SOURCE ID'])
+    sids        =  hdu[sid_colname]
+    stargets    =  hdu['SOURCE']
+    dic_targets =  dict(zip(stargets, sids))
+
+    bandfreq    =   hdul['FREQUENCY']['BANDFREQ']
+    reffreq     =   hdul['FREQUENCY'].header['REF_FREQ']
+    bands       =   set([check_band(freq) for freq in (bandfreq + reffreq).flatten()/1e9])
+
+    cols_req    =   [f'Fm{band}' for band in bands]
+
+
+    df_rfc      =   rfc_ascii_to_df(rfc_filepath)
+    df_class    =   parse_class_cat(class_filepath)
+
+#     df_search_rfc = catalog_search_from_fits(ff, df_rfc, seplimit=150,
+#                                              thres_sep=5e2, include_not_found=True,
+#                                              source_name_col='Comnam', verbose=True)
+
+    coord_search_class = catalog_search_from_fits(fitsfile, df_class, seplimit=seplimit,
+                                                  thres_sep=thres_sep,
+                                                  include_not_found=True)
+
+    _rfc_ra, _rfc_dec       =   df_rfc['coordinate'].str.split(n=1, expand=True).values.T
+    rfc_catalog             =   SkyCoord(_rfc_ra, _rfc_dec, unit=(u.hourangle, u.deg), frame='icrs')
+    _cls_ra, _cls_dec       =   coord_search_class['coordinate'].str.split(n=1, expand=True).values.T
+    fits_sources            =   SkyCoord(_cls_ra, _cls_dec, unit=(u.hourangle, u.deg), frame='icrs')
+
+    idxtarget, idxself, sep2d, dist3d   =   rfc_catalog.search_around_sky(fits_sources,
+                                                                          seplimit=300*u.mas)
+
+    df_res_rfcsearch = df()
+
+                                                                                                            # We have searched for all the sources, now searching flux
+    df_rfc['fits_target'] = ''
+    df_rfc.loc[idxself, 'fits_target'] = coord_search_class.reset_index().iloc[idxtarget]['fits_target'].values         # reset_index because the index here is not same as the fits_source, as the later uses .values; so need to reindex
+    df_rfc['sid'] = df_rfc['fits_target'].map(dic_targets)
+
+    coord_search_class['sid'] = coord_search_class['fits_target'].map(dic_targets)
+
+    # checking which sources dont have any data in UV_DATA
+    df_rfc_filtered = df_rfc[df_rfc['sid'].isin(set(scanlist_arr))]
+
+    rfc_cols = set(df_rfc_filtered.columns)
+    valid_cols = [c for c in cols_req if c in rfc_cols]
+    if not valid_cols:
+        fallback_cols = sorted([c for c in rfc_cols if c.startswith('Fm')])
+        warnings.warn(
+            f"None of the derived flux columns {cols_req} found in the RFC catalog "
+            f"(available: {fallback_cols}).  Falling back to all Fm* columns.",
+            UserWarning,
+        )
+        valid_cols = fallback_cols
+    for col_req in valid_cols:
+        df_res_rfcsearch = concat([df_rfc_filtered.sort_values(by=col_req, ascending=False),
+                                    df_res_rfcsearch]).head(nfilter_sources)
+    # add targets
+    df_res_rfcsearch = concat([df_res_rfcsearch,
+                              coord_search_class[coord_search_class['fits_target'].isin(targets)][['coordinate', 'sep', 'fits_target', 'sid', 'GB6']]]
+                             )
+
+    df_res_rfcsearch = df_res_rfcsearch.drop_duplicates(['fits_target'])
+    df_res_rfcsearch = df_res_rfcsearch.dropna(subset=['sid'])
+    df_res_rfcsearch['sid'] = df_res_rfcsearch['sid'].astype('int')
+
+    # targets present in the FITS file are always kept, regardless of catalog match
+    included = set(df_res_rfcsearch['fits_target'])
+    forced = [{'fits_target': t, 'sid': int(dic_targets[t])}
+              for t in targets if t in dic_targets and t not in included]
+    if forced:
+        df_res_rfcsearch = concat([df_res_rfcsearch, df(forced)], ignore_index=True)
+
+    if outfile:
+        with open(outfile, 'w') as of:
+            of.write(df_res_rfcsearch.to_string())
+
+    return df_res_rfcsearch
+
+
+def split_by_catalog_search(fitsfilepath, outfitsfilepath, targets, scanlist_arr,
+                            calibrator_catalog_file, coord_inpfile, matched_coord_outfile, metafolder):
+
+    """
+    uses scanlist information to check if sources, dont have any data in UV_DATA.
+    searches for source information by coordinate from fits in the calibrator fille,
+
+    if provided uses true coordinates from coordinate file to make separation limits to calibrators,
+    also saves output file containing separation (in mas) between provided and observed file coordinate
+
+
+
+    """
+    if not Path(fitsfilepath).exists():
+        raise FileNotFoundError(f"{fitsfilepath}")
+    fo  =   FITSIDI(fitsfile=fitsfilepath)
+    hdul=   fo.read()
+    fo.close()
+
+    source_data = hdul['SOURCE']
+    nsources   = source_data.nrows
+
+    ntargets                        =   len(targets or [])
+    if ntargets <= 3:
+        nfiltersource               =   20
+    elif ntargets < 13:
+        nfiltersource               =   25
+    elif ntargets < 15:
+        nfiltersource               =   30
+    elif ntargets < 20:
+        nfiltersource               =   35
+    else:
+        nfiltersource               =   60          # max
+    # else:
+
+    #     if self.verbose:
+    #         print("Skipping source extraction, since multiple fitsfile usually belongs to old projects, which means the filesize wont be a problem.")                                        # TODO: [FUTURE] scoop sources when there are many sources in multiple input filtsfile as well.
+
+
+    if int(nsources)>nfiltersource:
+        sids = df_search_brightcalib_fromascii_catalogfile(fitsfilepath, calibrator_catalog_file, coord_inpfile, scanlist_arr,
+                                        targets, outfile=matched_coord_outfile, nfilter_sources=nfiltersource)['sid'].values
+        sids = [str(sid) for sid in sids]
+    else:
+        sids = None
+    if fitsfilepath!=outfitsfilepath:
+        Path(outfitsfilepath).unlink(missing_ok=True)
+        sp = SplitData(inpfits=fitsfilepath, outfits=outfitsfilepath)
+        sp.split(source_ids=sids)
+    else:
+        raise NameError(f"both input and output are same files: {fitsfilepath}")
+
+    if sids is not None:
+        sids_set = set(int(s) for s in sids)
+        updated_scanlist = [s for s in scanlist_arr if int(s) in sids_set]
+    else:
+        updated_scanlist = list(scanlist_arr)
+
+    return sids, updated_scanlist
+
+def split_in_freqid(fitsfiles, verbose=False):
+    workingfits                 =   deepcopy(fitsfiles)
+    split_result                =   {}
+    for fitsfile in fitsfiles:
+        freqids                     =   count_freqids(fitsfile)
+
+        split_result                =   {fitsfile:[]}
+
+        if freqids>1:
+            for i in range(freqids):
+                freqid              =   i+1
+                newfitsfile         =  str(Path(fitsfile).parent / f'{Path(fitsfile).stem}_freqid{freqid}') + Path(fitsfile).suffix
+
+                del_fl(Path(newfitsfile).parent, 0, Path(newfitsfile).name, rm=True)
+                if Path(newfitsfile).exists():
+                    Path(newfitsfile).unlink()
+
+                if verbose     :
+                    print(f"\nsplitting... FREQID=={freqid}")
+
+                sp      =   SplitData(inpfits=fitsfile, outfits=newfitsfile, verbose=verbose)
+                sp.split(source_ids=None, freqids=[freqid])
+
+                split_result[fitsfile].append(newfitsfile)
+                if fitsfile in workingfits:
+                    workingfits.remove(fitsfile)
+                workingfits.append(newfitsfile)
+
+    result = {"workingfits": workingfits, "split_result": split_result}
+    return result
+
+
+def python_type_to_str(value: Any) -> str:
+    if value is None:
+        return "str"
+    if isinstance(value, list):
+        inner = python_type_to_str(value[0]) if value else "str"
+        return f"List[{inner}]"
+    return {
+        str:   "str",
+        bool:  "bool",
+        int:   "int",
+        float: "float",
+    }.get(type(value), "str")
+
+
+def dic_from_inpfile(wd_ifolder, *args) -> List | None:
+    res_list = None
+    if Path(wd_ifolder).exists():
+        res_list = []
+        for inpfile in args:
+            dic_data, _, _ = read_inputfile(wd_ifolder, inpfile)
+            res_list.append(dic_data)
+    return res_list
+
+def update_ifolderdata_from_new_ifolder(old_ifolder, new_ifolder, *inpfilenames) -> List[dict] | None:
+
+    new_inp_list_ofdic = dic_from_inpfile(new_ifolder, *inpfilenames)
+    old_inp_list_ofdic = dic_from_inpfile(old_ifolder, *inpfilenames)
+
+    if old_inp_list_ofdic:
+        if new_inp_list_ofdic:
+            for i, oldinpdic in enumerate(old_inp_list_ofdic):
+                oldinpdic.update(new_inp_list_ofdic[i])
+                create_config(oldinpdic, out=f'{old_ifolder}/{inpfilenames[i]}')
+        return old_inp_list_ofdic
+    return None
+
+def merge_obs_data(base_dict, *new_dicts):
+        """provide time sorted dicts to create a merged dicts of listobs.
+
+        Args:
+            base_dict (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        for new_dict in new_dicts:
+            if base_dict:
+                base_dict['scanlist'].extend(new_dict['scanlist'])
+                current_offset = len(base_dict['listobs'])
+
+                for key, value in new_dict['listobs'].items():
+
+                    new_key = str(current_offset + int(key))
+                    base_dict['listobs'][new_key] = value
+                    base_dict['listobs'][new_key]['scan'] += current_offset
+                base_dict['sources'].update(new_dict['sources'])
+            else:
+                base_dict = new_dict
+        return base_dict
+
+#####################################################################
+# -------------         Classes         -----------------------------#
+#####################################################################
+
+
+# -------------------------------------                 Pipeline helpers
+
+
+
+
+
+
+# -------------------------------------                 Definitions / Abstraction
+
+
+@dataclass
+class StepResult:
+    name            :   str
+    success_count   :   int
+    failed_count    :   int
+
+    start_stamp     :   datetime
+    detail          :   Dict
+
+    desc                :   List[str]     =   field(default_factory=list)
+    success             :   List[bool]     =   field(default_factory=list)
+    end_stamp: datetime = field(default_factory=datetime.now)
+
+class ColName(NamedTuple):
+    working_col     :   str
+    comment_col     :   str
+    timestamp_col   :   str
+
+
+class RemoveRemovables:
+    def __init__(self, wd, removables: List[str]):
+        self.wd = wd
+        self.removables = removables
+
+    def rm(self):
+        count = 0
+        if len(self.removables) > 0:
+            for removable in self.removables:
+                count = del_fl(self.wd, count, removable, rm=True)
+        return count
+
+class AvicaResult(UserList[StepResult]):
+
+    def to_polars(self) -> pl.DataFrame:
+        if not self.data:
+            return pl.DataFrame()
+
+        dicts = []
+        for r in self.data:
+            row = {}
+            for k, v in asdict(r).items():
+                if isinstance(v, (dict, list)):
+                    row[k] = json.dumps(v) if v else None
+                else:
+                    row[k] = v
+            dicts.append(row)
+
+        return pl.DataFrame(dicts, infer_schema_length=None)
+
+    def summary(self) -> pl.DataFrame:
+        df = self.to_polars()
+        if df.is_empty():
+            print("Empty results.")
+            return df
+
+        return df.with_columns([
+            pl.col("start_stamp").cast(pl.Datetime).dt.round("1ms"),
+            pl.col("end_stamp").cast(pl.Datetime).dt.round("1ms")
+        ])
+
+    def __repr__(self) -> str:
+        df = self.to_polars()
+        if df.is_empty():
+            return "AvicaResult(empty)"
+        return df.__repr__()
+
+
+def append_step_result_csv(result: StepResult, csvfile: str | Path | None) -> bool:
+    if not csvfile:
+        return False
+
+    csvpath = Path(csvfile)
+    csvpath.parent.mkdir(parents=True, exist_ok=True)
+    result_df = AvicaResult([result]).to_polars()
+
+    if csvpath.exists():
+        with open(csvpath, "ab") as f:
+            result_df.write_csv(f, include_header=False)
+    else:
+        result_df.write_csv(csvpath)
+
+    return True
+
+@contextmanager
+def step_stage(name: str, **context):
+    """Wraps a stage inside run(), logs entry and enriches any exception with context."""
+    log = logging.getLogger("avica.pipeline")
+    log.debug(f"[{name}] starting | {context}")
+    try:
+        yield
+    except Exception as exc:
+        ctx_str = " | ".join(f"{k}={v!r}" for k, v in context.items())
+        raise type(exc)(f"[stage: {name}] {exc} | context: {ctx_str}") from exc
+
+
+class PipelineContext:
+    params: Dict = {}
+    step_name: str = ""
+    validation_success: bool | None = None
+    result: StepResult | None = None
+    result_persisted: bool = False
+    colnames: ColName | None = None
+    logfolder:str ="avica.logs/"
+    casalogfolder:str ="casa.logs/"
+
+    @classmethod
+    def init_params(cls, params: dict):
+        cls.params.update(params)
+
+    @classmethod
+    def read_paramfile(cls, filepath: str):
+        paramfolder = Path(filepath).parent
+        paramfilename = Path(filepath).name
+        paramdict, _, _ = read_inputfile(paramfolder, paramfilename)
+        cls.params.update(paramdict)
+
+    @classmethod
+    def reset_params(cls):
+        cls.params.clear()
+
+@contextmanager
+def pipeline_context(params: dict):
+    PipelineContext.reset()
+    PipelineContext.params.update(params)
+    try:
+        yield PipelineContext
+    finally:
+        PipelineContext.reset()
+
+def casa_logfiles(wd, step_name, start_stamp):
+    """
+    (logfile, errfile) for CASA tasks of a step. Inside a pipeline run this is
+    the single run-level pair in casa.logs/ (issue #58); outside a run (e.g. a
+    step called directly) it falls back to per-step files in `wd`.
+    """
+    run_log, run_err = casalogs.current_logfile(), casalogs.current_errfile()
+    if run_log:
+        return run_log, run_err
+    return (f'{wd}/{get_logfilename(fnname=step_name, start_stamp=start_stamp, module_name="casa")}',
+            f'{wd}/{get_logfilename(fnname=step_name, start_stamp=start_stamp, module_name="err-casa")}')
+
+
+class WorkDirMeta:
+    def __init__(self, wd_ifolder):
+        self.wd_ifolder = wd_ifolder
+
+        # -----------------------------
+        self.wd         =   Path(self.wd_ifolder).parent.absolute()
+        self.metafolder =   str(self.wd / "avica.meta")
+        self.obs_dic     =   self.get_inp(inpfile="observation.inp")
+        self.ms_name    =   None
+        self.vis    =   None
+
+         # -------------- input wd_ifolder & fitsfiles used
+
+        self.ff_used : List[str] =   []
+        self.wd_used : List[str] =   []
+
+        # --------------- band | target
+
+        self.band: str = ""
+        self.target: str = ""
+
+        self.wd_b: str = ""
+        self.wd_b_target: str = ""
+        self.vis_b: str = ""
+        self.vis_b_target: str = ""
+
+        # --------------- metafile names
+        self.meta_av_wd_ff  : str =   "available_wd_ifolder.avica"
+        self.meta_used_ff :  str = "fitsfiles_used.avica"
+        self.meta_sources_snrating: str = "sources.avica"
+        self.meta_refants_snrating: str = "refants.avica"
+        self.msmeta_sources:str = 'msmeta_sources.avica'
+
+        self.listobs_filename : str = "listobs.json"
+
+        self.snrating_out: str = "snrating.out"
+        self.listobs_out:    str =   "listobs_fits.out"
+        self.match_coord_out: str = "class_search.out"
+
+        # --------------- metafile complete paths
+        self.wd_used : str = ""
+
+        self.metafile_available_wd_ff = f"{self.metafolder}/{self.meta_av_wd_ff}"
+        self.metafile_used_ff = f"{self.metafolder}/{self.meta_used_ff}"
+        self.metafile_msmeta_sources = f"{self.metafolder}/{self.msmeta_sources}"
+        self.metafile_sources_snrating  = f"{self.metafolder}/{self.meta_sources_snrating}"
+        self.metafile_refants_snrating  = f"{self.metafolder}/{self.meta_refants_snrating}"
+        self.metafile_listobs = f"{self.metafolder}/{self.listobs_filename}"
+        self.outfile_listobs_out    =   f"{self.metafolder}/{self.listobs_out}"
+        self.matched_coord_outfile  =   f"{self.metafolder}/{self.match_coord_out}"
+
+        # --------------- get used wd_ifolders and fitsfiles
+        if Path(self.metafile_available_wd_ff).exists():
+                dic_available_wd_ff = read_metafile(self.metafile_available_wd_ff)
+                if "input_folder" in dic_available_wd_ff:
+                    self.wd_used = dic_available_wd_ff['input_folder']
+
+        if Path(self.metafile_used_ff).exists():
+            dic_used_ff = read_metafile(self.metafile_used_ff)
+
+            if "filepath" in dic_used_ff:
+                self.ff_used = dic_used_ff['filepath']
+
+        if self.obs_dic:
+            if isinstance(self.obs_dic, list):
+                self.obs_dic = self.obs_dic[0]
+            self.ms_name    =   self.obs_dic['ms_name']
+            self.vis    =   str(self.wd / self.ms_name)
+
+
+    def to_new_WD(self, band, target, create=True) -> tuple[Path, Path]:
+        iwd                 =   Path(self.wd_ifolder).absolute()
+        wd_suffix           =   iwd.parent.absolute()
+        iwd_b_suffix        =   iwd
+
+        if band:
+            suffix              =   band if not target else f"{band}_{target}"
+
+            wd_suffix           =   iwd.parent / f'wd_{suffix}'
+            iwd_b_suffix        =  Path(f'{str(wd_suffix)}/{iwd.name}_{suffix}')
+
+        if create:
+            Path(iwd_b_suffix).mkdir(exist_ok=True, parents=True)
+        return wd_suffix, iwd_b_suffix
+
+
+    def get_inp(self, band="", target="", inpfile="observation.inp") -> dict:
+        """
+        Returns
+        (obs_dic, arr_dic, flag_dic, arr_finetune_dic, constants_dic)
+        """
+        _,wd_new_ifolder = self.to_new_WD(band=band, target=target, create=False)
+
+        result = dic_from_inpfile(str(wd_new_ifolder), inpfile)
+        result = result[0] if result else None
+        if result is None:
+            warnings.warn(f"problem reading : {str(wd_new_ifolder)}")
+        return result
+
+
+    def get_diclistobs(self):
+        dic_data = {}
+        if Path(self.metafile_listobs).exists():
+            dic_data = read_metafile(self.metafile_listobs)
+            if 'listobs' in dic_data:
+                for idx_str, obs_content in dic_data['listobs'].items():
+                    if 'scan' not in obs_content:
+                        obs_content['scan'] = int(idx_str) + 1
+                    if ('sid' in obs_content) and ('source_id' not in obs_content):
+                        obs_content['source_id'] = obs_content.pop('sid')
+        return dic_data
+
+
+    def to_dict(self):
+        return self.__dict__
+
+
+@dataclass
+class PipelineStepValidatorResult:
+    success : List[bool]
+    msg: str
+
+class PipelineStepValidatorBase(ABC):
+    name: str   =   "default"
+    run_after: bool =   False
+    run_once: bool  =   False
+    desc: str   =   ""
+    result :PipelineStepValidatorResult =  PipelineStepValidatorResult([False], "")
+
+    @abstractmethod
+    def run(self, **kwargs)->PipelineStepValidatorResult:
+        return self.result
+
+
+class PipelineStepBase(ABC):
+    """
+    _________________________________________________
+
+    - All the intialized arguments outside the step should be passed in initialized_config.
+        - this makes easy checking for missing requirements when .run() is called.
+    - Everything else goes as function arguments.
+
+    _________________________________________________
+
+    """
+
+    name                :   str
+    validate_by         :   List
+    description         :   str
+    colnames            :   ColName
+
+    metadata            :   Dict
+    output_printable    :   str
+
+    result              :   StepResult
+    initialized_config  :   Dict
+
+
+    @abstractmethod
+    def run(self, step_name: str, wd_ifolder:str, pipe_params:Dict,)->StepResult: ...
+
+
+# _________________________________________________________________________________________________________.
+
+#                   Main Pipeline Execution : data, validations in row/columns, main pipeline loop.
+# _________________________________________________________________________________________________________.
+
+
+class InitVariables(PipelineStepValidatorBase):
+    name = "init_variables"
+    run_after = False
+    run_once = False
+    desc = "Uses the provided parameters to initialize the variables"
+
+    def run(self, lf, target, targets, init_params):
+        if init_params:
+            PipelineContext.params.update(init_params)
+        parsed = parse_params(lf, PipelineContext.params)
+        PipelineContext.params.update(parsed)
+        # parsed = parse_params(lf, PipelineContext.params)
+        # PipelineContext.params.clear()
+        # PipelineContext.params.update(parsed)
+        primary_value = PipelineContext.params['primary_value']
+        if str(primary_value)[0] == '0':
+            try:
+                int(primary_value)
+                primary_value = add_O(primary_value)
+            except ValueError:
+                pass
+
+        lf.primary_colname  = PipelineContext.params['primary_colname']
+        lf.primary_value    = primary_value                              # sheet lookups now use correct value
+        PipelineContext.params['primary_value'] = primary_value
+        target_dir     = PipelineContext.params['target_dir']
+        lf.primary_colname = PipelineContext.params['primary_colname']
+        lf.primary_value   = PipelineContext.params['primary_value']
+        folder_for_fits    = PipelineContext.params['folder_for_fits']
+        if folder_for_fits and "." == folder_for_fits:
+            folder_for_fits = str(Path().cwd())
+        PipelineContext.params['folder_for_fits'] = folder_for_fits
+
+        filename_col       = PipelineContext.params['filename_col']
+        targetname_col     = PipelineContext.params['targetname_col']
+        picard_input_template         = PipelineContext.params['picard_input_template']
+
+        allfitsfile                          = get_allfitsfiles(folder_for_fits=folder_for_fits)
+
+
+
+        primary_target, alltargets, fitsfilenames   = get_targets_filenames(lf, filename_col, targetname_col) if lf.is_googlesheet else target, targets, init_params.get('fitsfilenames')
+
+        if isinstance(fitsfilenames, str):
+            fitsfilenames = fitsfilenames.split(",")
+
+        wd_ifolder, filepaths                       = setup_workdir(lf, f"{str(Path(target_dir).absolute())}/", fitsfilenames, allfitsfile, picard_input_template=picard_input_template)
+        # Configured dirs come first and are kept: the derived ones only add to them.
+        configured_artifact_dirs = normalize_strlist(PipelineContext.params.get('artifact_dirs'))
+        PipelineContext.params['artifact_dirs'] = list(dict.fromkeys(
+            [str(Path(d).resolve()) for d in configured_artifact_dirs] +
+            [str(Path(folder_for_fits).resolve())] +
+            [str(Path(fp).resolve().parent) for fp in allfitsfile
+             if any(Path(str(name).strip()).name == Path(fp).name for name in fitsfilenames)]
+        ))
+        if not filepaths:
+            return PipelineStepValidatorResult(success=[False], msg="no fitsfiles found")
+
+        PipelineContext.params['multifreqid']   = any(count_freqids(f) > 1 for f in filepaths)
+        PipelineContext.params['targets']       = alltargets or [target]
+
+        # if str(PipelineContext.params['target'])[0] == '0':
+        #     try:
+        #         int(PipelineContext.params['target'])
+        #         PipelineContext.params['target'] = add_O(target)
+        #     except ValueError:
+        #         pass
+        PipelineContext.params['target']        = primary_target if primary_target else lf.primary_value
+
+        PipelineContext.params['allfitsfile']   = allfitsfile
+        PipelineContext.params['fitsfilenames'] = fitsfilenames
+        PipelineContext.params['fitsfiles']     = filepaths
+        PipelineContext.params['fitsfile']      = filepaths[0] if filepaths else None
+        PipelineContext.params['wd_ifolder']    = str(wd_ifolder)
+        PipelineContext.params['nfiles']        = len(allfitsfile)
+        PipelineContext.params['lf']            = lf
+
+        # result CSV identifies target, project and workdir (issue #59):
+        #   <target_dir>/result__{target}__{project_code}__{workdir}.csv
+        wd_path                                 = Path(wd_ifolder).parent
+        PipelineContext.params['project_code']  = wd_path.parent.name
+        PipelineContext.params['workdir']       = wd_path.name
+        PipelineContext.params['result_csv_file'] = str(result_csv_path(
+            target_dir, PipelineContext.params['target'],
+            PipelineContext.params['project_code'], PipelineContext.params['workdir']))
+
+        if Path(wd_ifolder).parent.exists():
+            (Path(wd_ifolder).parent / "avica.meta").mkdir(exist_ok=True)
+
+
+        print("\tInput folder\t\t:", wd_ifolder)
+        print("\tPrimary Value\t\t:", lf.primary_value)
+        print("\tWorking Directory\t:", str(Path(wd_ifolder).parent))
+        print("\tResult CSV\t\t:", PipelineContext.params['result_csv_file'])
+
+
+        return PipelineStepValidatorResult(success=[True], msg="init")
+
+class CasaSetup(PipelineStepValidatorBase):
+    name = "casadir_setup"
+    run_after = False
+    desc = "If use_casadir_pythonpath is True, adds the casadir to PATH"
+
+    def check_casa_import(self) -> bool:
+        try:
+            for mod in _CASA_INPROCESS_MODULES:
+                __import__(mod)
+            return True
+        except ImportError:
+            return False
+
+    def run(self, lf, casadir, use_casadir_pythonpath):
+        if use_casadir_pythonpath:
+            setup_casa_path(casadir=casadir)
+        return PipelineStepValidatorResult(success=[self.check_casa_import()], msg="")
+
+class ColValidation(PipelineStepValidatorBase):
+    name = "col_validations"
+    run_after = False
+    desc = "Executes the step column-wise validation"
+    def run(self, lf, working_col, first_col, skip_cols=True):
+        lf.working_col = PipelineContext.step_name or first_col
+        lf.working_cols = [
+            col for col in lf.df_sheet.columns
+            if not str(col).lower().startswith(('comment', 'timestamp'))
+        ]
+
+        if first_col in lf.working_cols:
+            idx_zero = lf.working_cols.index(first_col)
+        elif working_col and working_col in lf.working_cols:
+            idx_zero = lf.working_cols.index(working_col)
+        else:
+            idx_zero = 0    # fallback — start from beginning
+            print(f"Warning: neither first_col={first_col!r} nor working_col={working_col!r} found in columns, starting from 0")
+        lf.working_cols      = lf.working_cols[idx_zero:]
+        working_col_idx      = lf.working_cols.index(lf.working_col)
+
+        PipelineContext.params['lf']               = lf
+        PipelineContext.params['next_working_cols'] = (
+            lf.working_cols[working_col_idx:]
+            if not PipelineContext.params['working_col_only']
+            else [working_col]
+        )
+        PipelineContext.validation_success = True
+
+        next_empty_cols = [
+            col for col in PipelineContext.params['next_working_cols']
+            if not lf.get_value(col)
+        ]
+        PipelineContext.params['empty_cols']       = next_empty_cols
+        skippable_cols = [
+            col for col in PipelineContext.params['next_working_cols']
+            if col not in next_empty_cols
+        ]
+        PipelineContext.params['empty_cols_count'] = len(next_empty_cols)
+
+        if not PipelineContext.params['empty_cols']:
+            skippable_cols = PipelineContext.params['next_working_cols']
+            print("skipping all")
+
+        PipelineContext.params['skippable_cols'] = skippable_cols
+
+        if skippable_cols and skip_cols:
+            PipelineContext.validation_success = (
+                False if PipelineContext.step_name in skippable_cols else True
+            )
+            with open("alfrd.skip", "w") as alfrd_skip:
+                alfrd_skip.write(";".join(skippable_cols))
+
+
+class RowValidation(PipelineStepValidatorBase):
+    name    = "row_validations"
+    run_after = False
+    desc    = "Uses parameters derived by iterating each row in a given sheet"
+
+    def run(self, fitsfile):
+        lf      = PipelineContext.params['lf']
+        target  = PipelineContext.params['target']
+        fitsfile_name = PipelineContext.params['fitsfile_name']
+
+        size = FileSize(fitsfile)
+
+        size_validation = size.GB <= PipelineContext.params['size_limit']
+        tsys_validation = True
+        col_validations = not lf.get_value()
+        prev_col        = (lf.get_previous_working_col()
+                           if PipelineContext.params['do_pcol_validation'] else False)
+        pcol_validation = (
+            (lf.get_value(prev_col))
+            and all(v not in lf.get_value(prev_col) for v in ['err', 'manual', 'fail'])
+            if prev_col else True
+        )
+
+        row_validated = size_validation and tsys_validation and col_validations and pcol_validation
+
+
+
+        PipelineContext.validation_success       = row_validated
+        PipelineContext.params['target']         = target
+        PipelineContext.params['row_validated']  = row_validated
+        PipelineContext.params['fitsfile_name']  = fitsfile_name
+        PipelineContext.params['fitsfile']       = fitsfile
+
+        return PipelineStepValidatorResult(success=row_validated, msg="")
+
+class RunValidation(PipelineStepValidatorBase):
+    name      = "run_validations"
+    run_after = False
+
+    def run(self, working_col, first_col, skip_cols=True):
+        lf       = PipelineContext.params['lf']
+        fitsfile = PipelineContext.params['fitsfile']
+        ColValidation().run(lf, working_col, first_col, skip_cols)
+        if PipelineContext.validation_success:
+            RowValidation().run(fitsfile)
+
+        return PipelineStepValidatorResult(success=[PipelineContext.validation_success], msg="")
+
+class UpdateResults(PipelineStepValidatorBase):
+    name = "update_results"
+    run_after=True
+
+    def run(self,lf, count, failed, fitsfile_name, result_csv_file=None):
+        lf.put_value(time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()), "last_update", count)
+
+        # lf.update_sheet(PipelineContext.result.success_count, PipelineContext.result.failed_count)
+
+        if PipelineContext.validation_success is None:
+            if failed > 0:
+                PipelineContext.validation_success = False
+
+        if PipelineContext.validation_success is False:
+            with open("alfrd.failed", "w") as f:
+                f.write(f"{PipelineContext.step_name};{fitsfile_name}")
+
+        success      = PipelineContext.result.success_count
+        failed     = PipelineContext.result.failed_count
+        PipelineContext.params['registered'] = lf.register = (success, failed)
+        PipelineContext.params['lf']           =   lf
+        PipelineContext.result_persisted = append_step_result_csv(PipelineContext.result, result_csv_file)
+        return PipelineStepValidatorResult(success=[PipelineContext.validation_success], msg="")
+
+class UpdateSheet(PipelineStepValidatorBase):
+    name = "update_sheet"
+    run_after=True
+    run_once=False
+
+    def run(self,lf, count, failed, fitsfile_name, csv_file=None):
+
+        success     =   PipelineContext.result.success_count
+        failed      =   PipelineContext.result.failed_count
+        colnames    =   PipelineContext.colnames
+
+        # -----
+
+        if not (failed - PipelineContext.params['registered'][1]):                # means success/skipped
+            with open('alfrd.last', 'w') as alfrd_last:
+                PipelineContext.validation_success = True
+                alfrd_last.write(f"{lf.working_col};{fitsfile_name}")
+        else:
+            print("failed")
+            with open('alfrd.failed', 'w') as alfrd_failed:
+                PipelineContext.validation_success = False
+                alfrd_failed.write(f"{lf.working_col};{fitsfile_name}")
+
+        csvfile = csv_file or lf.csv_file
+        lf.update_sheet(count, failed, by_cell=True, comment_col=colnames.comment_col, csvfile=csvfile)
+
+        print("Files Found\t:", PipelineContext.params['nfiles'])
+        print("Failed Cells\t:", failed)
+        return PipelineStepValidatorResult(success=[PipelineContext.validation_success], msg="")
+
+class AvicaPipelineCore:
+
+    def __init__(self, pipe_params, steps, provided_pipe_params=None):
+        self.lf                    = None
+        self._steps: Dict[str, PipelineStepBase]    = {}
+        self.steps                                  = steps
+        self.pipe_params                            = pipe_params
+        self.provided_pipe_params                   = dict(
+            pipe_params if provided_pipe_params is None else provided_pipe_params
+        )
+        self.allresults                             = AvicaResult()
+
+        self.register_steps()
+
+    def register_steps(self):
+        for cls in self.steps:
+            instance               = cls()
+            self._steps[instance.name] = instance
+
+    def get_kwargs(self, step):
+        sig = inspect.signature(step.run)
+        kwargs = {}
+
+        for name, param in sig.parameters.items():
+            if name != 'self':
+                step_param_name = f"{step.name}.{name}" if hasattr(step, "name") else name
+                if step_param_name in self.provided_pipe_params:
+                    val = PipelineContext.params.get(
+                        step_param_name, self.provided_pipe_params[step_param_name]
+                    )
+                elif name in self.provided_pipe_params:
+                    val = PipelineContext.params.get(name, self.provided_pipe_params[name])
+                else:
+                    val = PipelineContext.params.get(
+                        step_param_name,
+                        PipelineContext.params.get(
+                            name,
+                            self.pipe_params.get(step_param_name, self.pipe_params.get(name)),
+                        ),
+                    )
+                if val is None and param.default is not inspect.Parameter.empty:
+                    val = param.default
+                kwargs[name] = val
+        return kwargs
+
+    def get_config_requirements(self, *steps_to_check):
+        complete_pipeline_params = {}
+        for step_name in steps_to_check:
+            step_av = self._steps[step_name]
+            complete_pipeline_params[step_name]=self.get_kwargs(step_av)
+        return complete_pipeline_params
+
+
+    def check_config_requirements(self, step):
+        param_dict = self.get_config_requirements(step)
+        allparam_names  = list(param_dict[step].keys())
+        ParamStatus = NamedTuple('ParamStatus', [
+            ('name', str),
+            ('input_name', str),
+            ('has_default', bool),
+            ('in_input_config', bool),
+            ('in_context', bool),
+            ('value', Any),
+        ])
+
+        _report = {}
+
+        def check_param(param_name):
+            step_param_name = f"{step}.{param_name}"
+            if step_param_name in self.provided_pipe_params:
+                input_param_name = step_param_name
+                in_input_config = True
+            elif param_name in self.provided_pipe_params:
+                input_param_name = param_name
+                in_input_config = True
+            else:
+                input_param_name = step_param_name if step_param_name in self.pipe_params else param_name
+                in_input_config = False
+            _report[param_name] =   ParamStatus(
+                                        name=param_name,
+                                        input_name=input_param_name,
+                                        has_default = param_name in param_dict[step] and param_dict[step][param_name] is not None,
+                                        in_input_config = in_input_config,
+                                        in_context = param_name in PipelineContext.params,
+                                        value = param_dict[step].get(param_name, None),
+                                        )
+            return _report[param_name]
+
+        for param_name in allparam_names:
+            _report[param_name] = check_param(param_name)
+
+            if "." in param_name and str(step) in param_name:
+                sanitized_param_name = param_name.replace(f"{str(step)}.", "")      # remove step prefix from param name step_name.param_name
+                _report[sanitized_param_name] = check_param(sanitized_param_name)
+
+        return _report
+
+    def filter_steps(self,*keys):
+        if len(keys):
+            self._steps = {k: v for k, v in self._steps.items() if k in keys}
+        # if not len(list(self._steps.keys())):
+        #     raise SystemExit(f"no steps found.")
+        return self
+
+
+    def execute(self, loglevel="INFO") -> AvicaResult:
+
+        # ~~~~~~~~~~~ initialize ~~~~~~~~~~~~~~~~~~~~~~~~~~
+        Path(PipelineContext.logfolder).mkdir(exist_ok=True)
+        log                     =   logging.getLogger("avica.pipeline")
+        numeric_level           =   getattr(logging, loglevel.upper(), None)
+        if not isinstance(numeric_level, int):
+            raise ValueError('Invalid log level: %s' % loglevel)
+        logfile                 =   f'{PipelineContext.logfolder}/{get_logfilename(fnname="avica",module_name="")}'
+        log.setLevel(numeric_level)
+        if not log.handlers:
+            fh = logging.FileHandler(logfile, encoding="utf-8")
+            fh.setLevel(numeric_level)
+            fh.setFormatter(logging.Formatter(
+                "%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S"
+            ))
+            log.addHandler(fh)
+            log.propagate = False
+        # PipelineContext.params = DEFAULT_PARAMS
+
+        PipelineContext.params.clear()
+        # loaded_config = load_config_yaml(self.pipe_params.get('config_file'))
+        # PipeConfig
+        PipelineContext.params.update({**DEFAULT_PARAMS, **self.pipe_params})
+        PipelineContext.params['init_params'] = self.pipe_params
+
+        # one CASA log (+ err file) for the whole run, in casa.logs/ (issue #58)
+        casa_logfile, casa_errfile  =   casalogs.start_run(
+            folder=PipelineContext.casalogfolder, stamp=datetime.now(),
+            header=f"target={self.pipe_params.get('target', '')} steps={','.join(self._steps.keys())}")
+        PipelineContext.params['casa_logfile'] = casa_logfile
+        PipelineContext.params['casa_errfile'] = casa_errfile
+        log.info(f"CASA log: {casa_logfile}")
+        log.info(f"CASA err: {casa_errfile}")
+
+        # ~~~~~~~~~~~ cli messages ~~~~~~~~~~~~~~~~~~~~~~~~~~
+        make_art()
+        print("Following steps will be executed in the sequence:")
+        print(f"  {BC} - " + "\n   - ".join(self._steps.keys()) + f"{X}\n")
+
+        log.info("=" * 60)
+        log.info("Pipeline started")
+        log.info(f"Steps to run: {[s.name for s in self._steps.values()]}")
+        log.info("=" * 60)
+        first_step = next(iter(self._steps.values()))
+        if hasattr(first_step, 'colnames'):
+            PipelineContext.params['first_col'] = first_step.colnames.working_col
+
+        PipelineContext.validation_success  = True
+
+        # ~~~~~~~~~~~ iterate by steps ~~~~~~~~~~~~~~~~~~~~~~~~~~
+        for step_name, step in self._steps.items():
+            if PipelineContext.validation_success:
+                exc=None
+                PipelineContext.result_persisted = False
+                step_start = datetime.now()
+                log.info(f"[{step_name}] Starting  {step_start}")
+
+                if not hasattr(step, "colnames"):
+                    warnings.warn(f"{step_name} is missing colnames!")
+                else:
+                    PipelineContext.params['working_col'] = step.colnames.working_col
+
+                step_validators = step.validate_by
+                validate_before = [v() for v in step_validators if not v.run_after]
+                validate_after  = [v() for v in step_validators if v.run_after]
+
+                result = StepResult(
+                    name          = step_name,
+                    success_count = 0,
+                    detail        = "",
+                    failed_count  = 0,
+                    start_stamp   = step_start,
+                    success       = [False],
+                )
+
+
+                try:
+                    PipelineContext.step_name = step_name
+
+                    # ~~~~~~~~~~ pre-processing ~~~~~~~~~~~~~~~~~
+                    if validate_before:
+                        print(f"\n>  {B}Pre-processing{X} ({step_name})")
+                        print("  " + "─" * 65)
+                        for step_validator in validate_before:
+                            msg_info = f"executing validator step: {step_validator.name} "
+                            log.info(msg_info)
+                            print(f" • {step_validator.name}")
+                            with step_stage(msg_info, step_validator=step_validator):
+                                validator_kwargs = self.get_kwargs(step=step_validator)
+                                res = step_validator.run(**validator_kwargs)
+                                PipelineContext.validation_success = any(res.success)
+                    if hasattr(step, 'colnames'):
+                        PipelineContext.params['working_col'] = step.colnames.working_col
+
+                    # ~~~~~~~~~~ main-step ~~~~~~~~~~~~~~~~~~~~~~~
+                    if PipelineContext.validation_success:
+                        print(f"\n>  {B}Processing{X}: {BC}{step_name}{X}")
+                        print("  " + "─" * 65)
+                        pipe_kwargs = self.get_kwargs(step=step)
+                        for name, status in self.check_config_requirements(step=step_name).items():
+                                if not any([status.has_default, status.in_input_config, status.in_context]):
+                                    print(f"  {B}! {D}{name:<15}·{X} {Y}missing{X}")
+                        result      = step.run(**pipe_kwargs)
+                        result.end_stamp    =   datetime.now()
+                        PipelineContext.validation_success  = any(result.success)
+                        if pipe_kwargs.get('lf') is not None:
+                            PipelineContext.params['lf'] = pipe_kwargs.get('lf')
+
+                        PipelineContext.result              = result
+                        PipelineContext.colnames            = step.colnames
+
+                    # ~~~~~~~~~~ post-processing ~~~~~~~~~~~~~~~~~~
+                    if PipelineContext.validation_success and validate_after:
+                        print(f"\n>  {B}Post-processing{X} ({step_name})")
+                        print("  " + "─" * 65)
+
+                        for step_validator in validate_after:
+                            msg_info = f"executing validator step: {step_validator.name} "
+                            log.info(msg_info)
+                            with step_stage(msg_info, step_validator=step_validator):
+                                validator_kwargs = self.get_kwargs(step=step_validator)
+                                res = step_validator.run(**validator_kwargs)
+                                PipelineContext.validation_success = any(res.success)
+
+                    # ~~~~~~~~~~~ validation-message ~~~~~~~~~~~~~~~~
+                    if PipelineContext.validation_success:
+                        print(f"{B} finished : {BC}{step_name}{X}")
+                    else:
+                        print(f"{B} skipped  : {BC}{step_name}{X}")
+
+                except Exception as exc:
+
+                    result = StepResult(
+                        name          = step_name,
+                        success_count = 0,
+                        failed_count  = 1,
+                        start_stamp   = step_start,
+                        end_stamp     = datetime.now(),
+                        detail        = {},
+                        desc          = [f"Unhandled exception: {exc}"],
+                        success       = [False],
+                    )
+                    formatted_exc = traceback.format_exc()
+                    end_stamp = datetime.now()
+
+                    print(f"\n  {Y}CRITICAL ERROR{X}")
+                    print(f"  {'─' * 65}")
+                    print(f"  {BY}Type:{X} {type(exc).__name__}")
+                    print(f"  {BY}Info:{X} {str(exc)}\n")
+                    print(f"  {Y}{str(formatted_exc)}{X}")
+                    crash_file = f"{PipelineContext.logfolder}/avica_crash_{step.name}.json"
+                    print(f"  {B}Snapshot:{X} Context saved to {BC}{crash_file}{X}")
+                    print(f"  {'─' * 65}\n")
+
+                    snapshot = {k: str(v) for k, v in PipelineContext.params.items()}
+                    snapshot["_exception"] = formatted_exc
+                    with open(crash_file, "w") as f:
+                        json.dump(snapshot, f, indent=2)
+
+                    log.error(f"[{step.name}] params snapshot written to {crash_file}")
+                    log.exception(f"[{step.name}] Unhandled exception — {exc}")
+
+                    result.end_stamp = end_stamp
+                    PipelineContext.validation_success = False
+                    PipelineContext.result_persisted = False
+
+                self.allresults.append(result)
+                if not PipelineContext.result_persisted:
+                    csvfile = PipelineContext.params.get('result_csv_file')
+                    PipelineContext.result_persisted = append_step_result_csv(result, csvfile)
+
+                elapsed = (result.end_stamp - result.start_stamp).total_seconds()
+                status  = "OK" if result.success_count != 0 else "FAILED"
+                log.info(
+                    f"[{step.name}] {status} | "
+                    f"✓ {result.success_count}  ✗ {result.failed_count} | "
+                    f"{elapsed:.1f}s"
+                )
+                for line in result.desc:
+                    log.info(f"  · {line}")
+
+        # ~~~~~~~ pipeline-summary ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        total_ok   = sum(r.success_count for r in self.allresults)
+        total_fail = sum(r.failed_count  for r in self.allresults)
+        print(f"\n    {'─' * 63}")
+        print(f"    {B}Pipeline finished{X} — {BC}✓ {total_ok}{X}  ✗ {total_fail}")
+        print(f"    {'─' * 63}\n")
+
+        log.info("=" * 60)
+        log.info(f"Pipeline finished — Total Success: {total_ok}  Failures: {total_fail}")
+        log.info("=" * 60)
+
+        merged = casalogs.collect_stray_logs()
+        if merged:
+            log.info(f"merged {len(merged)} default-named CASA log(s) into {casa_logfile}")
+        casalogs.end_run()
+        print(f"    CASA log : {casa_logfile}\n")
+
+        return self.allresults
+
+
+
+# ___________________________________________       Main Pipeline execution ends.
+
+# ------------------------------------------------------------------------------------------------------------------------
+
+
+# _________________________________________________________________________________________________.
+#
+#                       To create CASA task payload metadata and inputs
+# __________________________________________________________________________________________________.
+
+
+
+@dataclass
+class PicardCMD:
+    picard_input_template:        str
+    input_template: str
+    logfile:        str
+    errfile:        str
+    args:           Dict[str, Any]
+    args_type:      Dict[str, str]
+    mpi_cores:      int             = 10
+    verbose:        bool            = False
+
+@dataclass
+class CasaTaskCMD:
+    casadir: str
+    task_casa: str
+    logfile: str
+    errf: str
+    args: Dict[str, Any]
+    args_type: Dict[str, str]
+    mpi_cores: int = 0
+
+@dataclass
+class CasaStep:
+    meta: Dict[str, Any]
+    cmd: CasaTaskCMD
+
+@dataclass
+class CasaConfigGen:
+    tasks_list: List[CasaStep] = field(default_factory=list)
+
+    def to_dict(self):
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]):
+        steps = []
+        for item in data.get("tasks_list", []):
+            cmd_obj = CasaTaskCMD(**item["cmd"])
+            step_obj = CasaStep(meta=item["meta"], cmd=cmd_obj)
+            steps.append(step_obj)
+
+        return cls(tasks_list=steps)
+
+@dataclass
+class CasaTask:
+    """
+    """
+    def to_args(self):
+        return asdict(self)
+
+    def task_meta(self) -> str:
+        return {'name':self.__class__.__name__}
+
+    def parse_to_step(self, task_name:str, logfile:str, errf:str, casadir:str, mpi_cores:int=5) -> CasaStep:
+        task_cmd            =   CasaTaskCMD(
+                                    args= self.to_args(),
+                                    casadir=casadir,
+                                    task_casa=task_name, logfile=logfile, errf=errf, mpi_cores=mpi_cores, args_type={})
+        for key, argv in task_cmd.args.items():
+            task_cmd.args_type[key] = python_type_to_str(argv)
+
+        cmd                 =   CasaStep(meta=self.task_meta(),cmd=task_cmd)
+        return cmd
+
+
+# _____________________________________________________________________             fitsidiutil related core class
+
+def antab_spws(values):
+    """Zero-based spectral windows in INDEX/INDEX2 (cf. update_map)."""
+    spws = set()
+    for keyname in ('INDEX', 'INDEX2'):
+        index = values.get(keyname)
+        if index is None:
+            continue
+        if not isinstance(index, (list, tuple)):
+            index = [index]
+        for labels in index:
+            for label in str(labels).split('|'):
+                if not label or label[0] == 'X':
+                    continue
+                rng = label[1:].split(':')
+                if len(rng) == 1:
+                    rng.append(rng[0])
+                try:
+                    lo, hi = int(rng[0]) - 1, int(rng[1]) - 1
+                except ValueError:
+                    continue
+                spws.update(range(lo, hi + 1))
+    return spws
+
+
+def antab_spw_count(values):
+    return len(antab_spws(values))
+
+
+class GenerateAndAppendAntab:
+    def __init__(self, fitsfiles, metafolder, verbose, wd, valid_perc=5, artifact_dirs=None,
+                 use_local_antab=True, local_antab_require_full_array=False):
+
+        self.fitsfiles                  =   fitsfiles
+        self.metafolder                 =   metafolder
+        self.verbose                    =   verbose
+        self.wd                         =   wd
+        self.valid_perc                 =   valid_perc
+        self.workingfits                =   deepcopy(fitsfiles)
+
+        self.success                    =   None
+        self.desc                       =   ""
+
+        self.tsysfiles                  =   set()
+        if isinstance(artifact_dirs, (str, Path)):
+            artifact_dirs = [artifact_dirs]
+        self.artifact_dirs = list(dict.fromkeys(
+            Path(p).resolve() for p in [*(artifact_dirs or []), Path(wd) / 'raw']
+        ))
+        self.use_local_antab = use_local_antab
+        self.local_antab_require_full_array = local_antab_require_full_array
+        self.calibration_sources = []
+        self.calibration_decisions = []
+        self._layout_cache = {}
+
+    def _fits_layout(self, fitsfile):
+        """Antenna names and band count of a working file, read once and cached."""
+        key = str(fitsfile)
+        if key not in self._layout_cache:
+            annames, n_band = set(), None
+            try:
+                hdul = read_idi(fitsfile)
+                for table in ('ANTENNA', 'ARRAY_GEOMETRY'):
+                    try:
+                        annames = {str(a).strip().upper() for a in hdul[table]['ANNAME']}
+                    except Exception:
+                        continue
+                    if annames:
+                        break
+                n_band = next((int(hdu.header['NO_BAND']) for hdu in hdul
+                               if 'NO_BAND' in hdu.header), None)
+            except Exception as exc:
+                warnings.warn(f"Could not read antenna/band layout from {fitsfile}: {exc}",
+                              RuntimeWarning)
+            self._layout_cache[key] = (annames, n_band)
+        return self._layout_cache[key]
+
+    def _warn_antab_mismatch(self, candidate, tsys, fitsfile):
+        """Report antenna and IF disagreement; IF differences remain warnings."""
+        log = logging.getLogger("avica.pipeline")
+        annames, n_band = self._fits_layout(fitsfile)
+        antab_ans = {an for an in tsys if an not in ('start_time', 'end_time')}
+        name = Path(fitsfile).name
+
+        def _warn(msg):
+            print(f"  {Y}WARNING:{X} {msg}")
+            log.warning(msg)
+
+        if annames and antab_ans:
+            unknown = sorted(antab_ans - annames)
+            uncovered = sorted(annames - antab_ans)
+            if unknown:
+                _warn(f"ANTAB {candidate}: antenna(s) {', '.join(unknown)} are not in {name}")
+            if uncovered:
+                _warn(f"ANTAB {candidate}: no TSYS for {', '.join(uncovered)} of {name}")
+
+        if n_band:
+            odd = {an: sorted(antab_spws(tsys[an])) for an in sorted(antab_ans)
+                   if antab_spws(tsys[an]) != set(range(n_band))}
+            if odd:
+                detail = ', '.join(f"{an}={n}" for an, n in odd.items())
+                _warn(f"ANTAB {candidate}: INDEX differs from {name} (NO_BAND={n_band}); "
+                      f"zero-based IFs: {detail}. Missing or incorrectly mapped values may result.")
+
+    def _find_local_antab(self, fitsfile, need=None):
+        """Rank compatible candidates by time, station coverage, then IF agreement.
+
+        `need` (antenna names) restricts the choice to candidates that calibrate at
+        least one of them; used when the file already has partial calibration.
+        """
+        from avica.fitsidiutil import parse_antab
+        log = logging.getLogger("avica.pipeline")
+        _, _, _, start, end = tsys_exists(fitsfile, self.valid_perc)
+        if start is None or end is None:
+            return None
+        candidates = set()
+        for directory in self.artifact_dirs:
+            if directory.is_dir():
+                candidates.update(p.resolve() for p in directory.iterdir()
+                                  if p.is_file() and p.suffix.lower() == '.antab')
+        matches = []
+        annames, n_band = self._fits_layout(fitsfile)
+        for candidate in sorted(candidates):
+            decision = dict(fitsfile=str(fitsfile), source=str(candidate), status='rejected')
+            self.calibration_decisions.append(decision)
+            try:
+                parsed = parse_antab(candidate, fitsfile)
+                tsys = parsed['tsys_dic']
+                ants = {an for an, values in tsys.items()
+                        if an not in ('start_time', 'end_time') and values.get('data')}
+                matched = ants & annames
+                missing = annames - ants
+                compatible = {an for an in matched
+                              if n_band and antab_spws(tsys[an]) == set(range(n_band))}
+                decision.update(matched_antennas=sorted(matched), missing_antennas=sorted(missing),
+                                unknown_antennas=sorted(ants - annames),
+                                if_compatible=(len(compatible) == len(matched)) if n_band else None,
+                                if_layouts={an: sorted(antab_spws(tsys[an])) for an in sorted(matched)})
+                if not annames:
+                    raise ValueError('FITS antenna layout unavailable; cannot establish compatibility')
+                if not matched:
+                    raise ValueError('no matching antennas')
+                if need:
+                    fills = (matched | {an.upper() for an in parsed['gain_dic']}) & set(need)
+                    decision['fills_antennas'] = sorted(fills)
+                    if not fills:
+                        decision['reason'] = 'calibrates none of the uncalibrated antennas ' + ', '.join(sorted(need))
+                        continue
+                # Only relevant stations may establish observation-time coverage.
+                times = [Time(row[0]).mjd for an in matched for row in tsys[an]['data']]
+                first, last = min(times), max(times)
+                # Judged like in-file TSYS is (tsys_exists): the ANTAB has to cover
+                # more than valid_perc of the UV data, not merely touch it.
+                perc = overlap_percentage(first, last, start.mjd, end.mjd)
+                decision['time_coverage_percent'] = float(perc)
+                decision['antenna_coverage_percent'] = 100 * len(matched) / len(annames)
+                if not (perc > self.valid_perc
+                        or (start.mjd == end.mjd and first <= start.mjd <= last)):
+                    decision['reason'] = 'insufficient observation-time overlap'
+                    continue
+                self._warn_antab_mismatch(candidate, tsys, fitsfile)
+                if missing and self.local_antab_require_full_array:
+                    raise ValueError('missing TSYS antennas: ' + ', '.join(sorted(missing)) +
+                                     '; set local_antab_require_full_array=False to allow partial calibration')
+                decision.update(status='eligible', reason='compatible antennas and observation time')
+                matches.append(((float(perc), len(matched), len(compatible)), candidate, decision))
+            except Exception as exc:
+                decision['reason'] = str(exc)
+                log.warning("Skipping ANTAB %s for %s: %s", candidate, fitsfile, exc)
+                warnings.warn(f"Skipping ANTAB {candidate}: {exc}", RuntimeWarning)
+        if not matches:
+            return None
+        matches.sort(key=lambda m: m[0], reverse=True)
+        best = [m for m in matches if m[0] == matches[0][0]]
+        if len(best) > 1:
+            for _, _, decision in best:
+                decision.update(status='ambiguous', reason='equally suitable candidates')
+            raise ValueError(f"Ambiguous ANTAB files for {fitsfile}: " +
+                             ', '.join(str(m[1]) for m in best))
+        best[0][2].update(status='selected', reason='highest time, antenna and IF coverage rank')
+        return best[0][1]
+
+    @staticmethod
+    def _preserve_calibration(original, staged, has_gain):
+        from avica.fitsidiutil.calibration import preserve_calibration
+        preserve_calibration(original, staged, has_gain)
+
+    def _append_antab_file(self, antabfile, fitsfiles):
+        """Stage every append before replacing any working FITS file."""
+        from avica.fitsidiutil import parse_antab
+        from avica.fitsidiutil.op import normalize_antab_keyin
+        from avica.external.jive import append_tsys as TsysData, append_gc as GCData
+        from avica.fitsidiutil.antab_bands import band_gain_curve, write_gain_curve
+
+        staged = []
+        prepared_antab = Path(antabfile)
+        prepared_cleanup = None
+        try:
+            original = prepared_antab.read_text()
+            normalized = normalize_antab_keyin(original, source=antabfile)
+            if normalized != original:
+                with tempfile.NamedTemporaryFile(dir=self.wd, prefix=prepared_antab.stem + '.',
+                                                 suffix='.antab', mode='w', delete=False) as stream:
+                    stream.write(normalized)
+                    prepared_cleanup = Path(stream.name)
+                prepared_antab = prepared_cleanup
+            for ff in fitsfiles:
+                parsed = parse_antab(prepared_antab, ff)
+                with tempfile.NamedTemporaryFile(dir=Path(ff).parent,
+                                                 prefix=Path(ff).name + '.', suffix='.tmp',
+                                                 delete=False) as stream:
+                    tmp = Path(stream.name)
+                staged.append((tmp, Path(ff)))
+                shutil.copy2(ff, tmp)
+                TsysData.append_tsys(antabfile=str(prepared_antab), idifiles=str(tmp), replace=True)
+                if parsed['gain_dic']:
+                    # One GAIN line per band (e.g. KVN): append_gc would copy every line to all IFs.
+                    band_gc = band_gain_curve(prepared_antab, ff, GCData.append_gc, workdir=self.wd)
+                    if band_gc is None:
+                        GCData.append_gc(antabfile=str(prepared_antab), idifile=str(tmp), replace=True)
+                    else:
+                        write_gain_curve(tmp, band_gc)
+                else:
+                    warnings.warn(f"ANTAB {antabfile} has no gain entries; preserving existing gain curves",
+                                  RuntimeWarning)
+                self._preserve_calibration(ff, tmp, bool(parsed['gain_dic']))
+            for tmp, ff in staged:
+                os.replace(tmp, ff)
+        finally:
+            for tmp, _ in staged:
+                tmp.unlink(missing_ok=True)
+            if prepared_cleanup is not None:
+                prepared_cleanup.unlink(missing_ok=True)
+
+    def find_and_attach_antab(self, fitsfile, fitsfiles, antabfile, attach_all, verbose=False):
+        from avica.fitsidiutil import ANTAB, get_dateobs, parse_antab
+
+        # Select separately for each split/working file: a candidate need not cover
+        # every file in the group, and must remain reusable across frequency IDs.
+        missing = []
+        local_groups = {}
+        for ff in fitsfiles:
+            local = self._find_local_antab(ff) if self.use_local_antab else None
+            if local is None:
+                self.calibration_decisions.append(dict(
+                    fitsfile=str(ff), status='vlba_fallback',
+                    reason='no compatible local ANTAB' if self.use_local_antab else 'local ANTAB disabled'))
+                missing.append(ff)
+                continue
+            local_groups.setdefault(local, []).append(ff)
+        for local, selected in local_groups.items():
+            if verbose:
+                print(f"Using local ANTAB {local} for {selected}")
+            self._append_antab_file(local, selected)
+            self.calibration_sources.extend(
+                {'fitsfile': str(ff), 'source': str(local), 'kind': 'local_antab'}
+                for ff in selected)
+        if not missing:
+            return
+        fitsfiles = missing
+        if fitsfile not in missing:
+            fitsfile = missing[0]
+
+        ans_found                       =   set()
+        dic_gf                          =   {}
+        found_gf                        =   ''
+        gain_missing                    =   []
+        bsize                           =   float(FileSize('/dev/null').B)
+
+
+        if self.verbose: print("finding tsys...")
+        _, failed, rawfs            =   find_tsys(f"{self.wd}/raw", fitsfile, 0, 0)
+        if not rawfs:
+            self.success, self.desc =   False, "Downloading failed!"
+            print(self.desc)
+        else:
+            for i,gf in enumerate(rawfs):
+                if ('.tsys' not in gf):
+                    print("using", gf)
+                    for gzippable_format in ['.Z', '.gz']:
+                        if gzippable_format in gf:
+                            subprocess.run(['gzip', '-df', gf])
+                            gf          =   gf.replace(gzippable_format,'')
+                    if attach_all or (gf not in self.tsysfiles):
+                        try:
+                            an              =   ANTAB(fitsfile, gf)
+                            anfile          =   f'{antabfile}.{i}'
+                            allans, _tsys_head, gain_missing    = an.gen_antab(anfile, vlbagainfile=VLBA_GAINS_KEY)
+                            if bsize<float(FileSize(gf).B):
+                                found_gf    =   gf
+                                bsize       =   float(FileSize(gf).B)
+                            if allans:  dic_gf[gf]=allans,gain_missing,anfile
+                            ans_found.update(allans)
+                        except Exception as e:
+                            print(gf, e)
+                            traceback.print_exc()
+                else:
+                    print("not using", gf)
+            for _file in dic_gf.keys():
+                # if found_gf!=_file:
+                #         del_fl(_file, rm=True)
+                # else:
+                #     found_gf = ''
+
+                if _file and Path(dic_gf[_file][-1]).exists():
+                    if Path(antabfile).exists() : Path(antabfile).unlink()
+                    Path(dic_gf[_file][2]).rename(antabfile)
+                    alldobs = [get_dateobs(ff) for ff in fitsfiles]
+                    dict_res = parse_antab(antabfile=antabfile, fitsfile=fitsfiles[0])
+                    # print(dict_res.keys())
+                    antab_start_time    = dict_res["tsys_dic"]['start_time']
+                    antab_end_time      = dict_res["tsys_dic"]['end_time']
+
+
+                    if any(antab_start_time.date() <= dobs.date() <= antab_end_time.date() for dobs in alldobs):
+                        self._append_antab_file(antabfile, fitsfiles)
+                        self.calibration_sources.extend(
+                            {'fitsfile': str(ff), 'source': str(_file), 'kind': 'vlba'}
+                            for ff in fitsfiles)
+                        self.tsysfiles.add(_file)
+
+    def attach_antab(self, only_first=True, attach_all=False):
+        """
+
+        """
+        antabfile                       =   Path(self.wd) / 'gc_dpfu_fromidi.ANTAB'
+        self.success, self.desc         =   False, "Failed"
+        tsys_found_in_files             =   []
+        for i, fitsfile in enumerate(self.workingfits):
+            antabfile                   =   Path(self.wd) / f'gc_dpfu_fromidi.ANTAB.{i}'
+            del_fl(Path(self.wd), fl=f'gc_dpfu_fromidi.ANTAB.{i}', rm=True)
+            tsys_found, _, _ , _, _     =   tsys_exists(fitsfile)
+            tsys_found_in_files.append(tsys_found)
+            if not tsys_found:
+                if self.verbose: print("TSYS not found! Searching in other fitsfile")
+
+                fitsfiles_toattach_antab = self.workingfits if not attach_all else [fitsfile]
+                if not tsys_exists_in_fitsfiles(fitsfile, fitsfiles_toattach_antab, self.valid_perc):
+                    if self.verbose: print("TSYS not found in other fitsfiles")
+                    if len(fitsfiles_toattach_antab)>1:
+                        self.sort_by_time()
+                        print("SORTED by time : ", self.workingfits)
+                    self.find_and_attach_antab(fitsfile=fitsfile, antabfile=antabfile, fitsfiles=fitsfiles_toattach_antab,
+                                               attach_all=attach_all, verbose=self.verbose) # changed fitsfile = self.workingfits[0] to fitsfile = fitsfile
+                    if only_first:   break
+                else:
+                    if self.verbose: print("TSYS exists in another fitsfile!")
+            elif self.use_local_antab:
+                self.attach_partial_antab(fitsfile)
+        if len(tsys_found_in_files) and (not all(tsys_found_in_files)) and self.verbose:
+            print("Attaching TSYS finished!")
+
+    def attach_partial_antab(self, fitsfile):
+        """TSYS exists but not for every antenna, or gain curves are missing: use a local
+        ANTAB that calibrates at least one of those antennas. Never downloads (the
+        archive fallback is only for files without any TSYS)."""
+        log = logging.getLogger("avica.pipeline")
+        try:
+            missing = uncalibrated_antennas(fitsfile, self.valid_perc)
+        except Exception as exc:          # unusual layouts keep the previous behaviour (no attach)
+            log.warning("could not check per-antenna calibration of %s: %s", fitsfile, exc)
+            return None
+        need = sorted(set(missing['tsys']) | set(missing['gain']))
+        if not need:
+            return None
+        msg = (f"partial calibration in {Path(fitsfile).name}: no TSYS for "
+               f"{', '.join(missing['tsys']) or '-'}; no gain curve for {', '.join(missing['gain']) or '-'}")
+        print(f"  {Y}WARNING:{X} {msg}")
+        log.warning(msg)
+        unresolved = dict(fitsfile=str(fitsfile), status='partial_unresolved', missing_tsys=missing['tsys'],
+                          missing_gain=missing['gain'])
+        # Files like this passed preprocessing before; a failure here is reported, not raised.
+        try:
+            local = self._find_local_antab(fitsfile, need=need)
+            if local is None:
+                self.calibration_decisions.append(dict(unresolved, reason='no local ANTAB calibrates these antennas'))
+                log.warning("no local ANTAB in %s calibrates %s", [str(d) for d in self.artifact_dirs], ', '.join(need))
+                return None
+            if self.verbose:
+                print(f"Using local ANTAB {local} for {fitsfile}")
+            self._append_antab_file(local, [fitsfile])
+        except Exception as exc:
+            self.calibration_decisions.append(dict(unresolved, reason=str(exc)))
+            log.error("attaching a local ANTAB to %s failed, file left unchanged: %s", fitsfile, exc)
+            print(f"  {Y}ERROR:{X} attaching a local ANTAB to {Path(fitsfile).name} failed, file left unchanged: {exc}")
+            return None
+        self.calibration_sources.append({'fitsfile': str(fitsfile), 'source': str(local), 'kind': 'local_antab'})
+        return local
+
+    def sort_by_time(self, reverse=False):
+        starttime = []
+        valid_fits = []
+
+        for fitsfile in self.workingfits:
+            success, _, _, starttime_uvd, _ = tsys_exists(fitsfile, self.valid_perc)
+            if starttime_uvd:
+                starttime.append(starttime_uvd.mjd)
+                valid_fits.append(fitsfile)
+            else:
+                print("UV data not found..", fitsfile)
+
+        self.workingfits = [x for _, x in sorted(zip(starttime, valid_fits), reverse=reverse)]
+        return self.workingfits
+
+    def sort_by_tsys(self):
+        perc_ffs = []
+        allsuccess = []
+        for i, fitsfile in enumerate(self.workingfits):
+            success, starttime_tsys, lasttime_tsys, starttime_uvd, lasttime_uvd = tsys_exists(fitsfile, self.valid_perc)
+            if success:
+                perc_ffs.append(overlap_percentage(starttime_tsys.mjd, lasttime_tsys.mjd, starttime_uvd.mjd, lasttime_uvd.mjd))
+            else:
+                perc_ffs.append(0.0)
+            allsuccess.append(success or tsys_exists_in_fitsfiles(fitsfile, self.workingfits, self.valid_perc))
+        self.workingfits = [x for _, x in sorted(zip(perc_ffs, self.workingfits), reverse=True)]
+        allsuccess = [x for _, x in sorted(zip(perc_ffs, allsuccess), reverse=True)]
+        return allsuccess
+
+    def validate(self):
+        """
+        tsys_exists_in_fitsfiles(fitsfile, self.fitsfiles)
+        gc_exists_in_fitsfiles(fitsfile, self.fitsfiles)
+        other things are already checked
+        """
+
+        self.success = all(self.sort_by_tsys())
+
+        if self.success:
+            self.desc = "TSYS found"
+        else:
+            self.desc = "TSYS not found!"
+
+        return self.success
+
+
+#
+
+# __________________________________________________________________________________.
+#
+#                                                CASA Tasks
+#
+# __________________________________________________________________________________.
+
+
+#  ----------------------      Fits to MS (importfitsidi)
+
+@dataclass
+class ImportFITSIdi(CasaTask):
+    vis:              str  = ""
+    fitsidifile:      List[str] = field(default_factory=list)
+    constobsid:       bool  = True
+    scanreindexgap_s: float = 15.0
+
+
+    def to_step(self, logfile:str, errf:str, casadir:str, mpi_cores:int=5):
+        task_cmd                 =   self.parse_to_step(task_name="importfitsidi", logfile=logfile, errf=errf, casadir=casadir, mpi_cores=mpi_cores)
+        return task_cmd
+
+#  ----------------------      FringeFit (fringefit)
+@dataclass
+class FringeFit(CasaTask):
+    vis:str                 =   ""
+    caltable:str            =   ""
+    field:str               =   ""
+    spw:str                 =   ""
+    selectdata:bool         =   True
+    timerange:str           =   ""
+    antenna:str             =   ""
+    scan:str                =   ""
+    observation:str         =   ""
+    msselect:str            =   ""
+    solint:str              =   'inf'
+    combine:str             =   "spw"
+    refant:str              =   ""
+    minsnr:str              =   ""
+    zerorates:bool          =   False
+    globalsolve:bool        =   False
+    append:bool             =   False
+    docallib:bool           =   False
+    callib:str              =   ""
+    gaintable:List | str    =   ""
+    gainfield:List | str    =   ""
+    interp:str              =   ""
+    corrdepflags:bool       =   True
+    concatspws:bool         =   True
+    corrcomb:str            =   "none"
+    parang:bool             =   True
+
+
+    def to_step(self, logfile:str, casadir:str, errf:str, mpi_cores:int=5):
+        task_cmd                 =   self.parse_to_step(task_name="fringefit", logfile=logfile, errf=errf, casadir=casadir, mpi_cores=mpi_cores)
+        return task_cmd
+
+
+#  ----------------------      Average MS / Split MS  (mstransform)
+
+@dataclass
+class MsTransform(CasaTask):
+    vis:str             =   ""
+    outputvis:str       =   ""
+    datacolumn:str      =   "data"
+    field:str           =   ""
+    spw:str             =   ""
+    antenna:str         =   ""
+    scan:str            =   ""
+    correlation:str     =   ""
+    chanaverage:bool    =   False
+    chanbin:int|List[int]    =   1
+    timeaverage:bool    =   False
+    timebin:str         =   "0s"
+    hanning:bool        =   False
+    reindex:bool        =   True
+    keepflags:bool      =   True
+    createmms:bool      =   True
+
+
+    def to_step(self, logfile:str, casadir:str, errf:str, mpi_cores:int=5):
+        task_cmd                 =   self.parse_to_step(task_name="mstransform", logfile=logfile, errf=errf, casadir=casadir, mpi_cores=mpi_cores)
+        return task_cmd
+
+#  ----------------------      Flag Data
+
+
+@dataclass
+class FlagData(CasaTask):
+    vis:str             =   ""
+    mode:str            =   "manual"
+    inpfile:str         =   ""
+    action:str          =   "apply"
+    flagbackup:bool     =   True
+    savepars:bool       =   False
+    datacolumn:str      =   "data"
+    field:str           =   ""
+    spw:str             =   ""
+    antenna:str         =   ""
+    scan:str            =   ""
+    reason:str          =   "any"
+
+    def to_step(self, logfile:str, casadir:str, errf:str, mpi_cores:int=5):
+        task_cmd                 =   self.parse_to_step(task_name="flagdata", logfile=logfile, errf=errf, casadir=casadir, mpi_cores=mpi_cores)
+        return task_cmd
+
+
+@dataclass
+class FlagManager(CasaTask):
+    vis:str             =   ""
+    mode:str            =   "save"
+    versionname:str     =   ""
+    comment:str         =   ""
+    merge:str           =   "replace"
+
+    def to_step(self, logfile:str, casadir:str, errf:str, mpi_cores:int=5):
+        task_cmd                 =   self.parse_to_step(task_name="flagmanager", logfile=logfile, errf=errf, casadir=casadir, mpi_cores=mpi_cores)
+        return task_cmd
+
+
+
+# __________________________________________________________________________________.
+#
+#                                               Payload Handler
+# __________________________________________________________________________________.
+
+
+
+class IterativeSubprocess:
+    def __init__(self, cmd_list, clean_env=True, verbose=True):
+        self.verbose = verbose
+        self._stderr_lines = []
+        self._stderr_lock = threading.Lock()
+
+        env_found = {
+            k: v for k, v in os.environ.items()
+            if k not in {"PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV"} or not clean_env
+        }
+        self.process = subprocess.Popen(
+            cmd_list, env=env_found,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, bufsize=1
+        )
+        self._stderr_thread = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._stderr_thread.start()
+
+        try:
+            self._wait_for_ready()  # block here until worker signals ready
+        except Exception:
+            self.process.terminate()
+            self.process.wait()
+            self._stderr_thread.join(timeout=5)
+            raise
+
+    def _wait_for_ready(self, timeout=120):
+        """Read stdout lines until we see the ready signal, discarding startup noise."""
+        import time
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.process.poll() is not None:
+                raise RuntimeError(f"Worker died during startup.\n{self.get_stderr()}")
+            line = self.process.stdout.readline()
+            if not line:
+                continue
+            if self.verbose:
+                print(f"[startup] {line}", end="", flush=True)
+            try:
+                msg = json.loads(line.strip())
+                if msg.get("status") == "ready":
+                    return
+            except json.JSONDecodeError:
+                pass  # discard startup noise
+        raise TimeoutError(f"Worker did not become ready within {timeout}s.\n{self.get_stderr()}")
+
+    def _drain_stderr(self):
+        for line in self.process.stderr:
+            with self._stderr_lock:
+                self._stderr_lines.append(line)
+            if self.verbose:
+                print(f"[mpicasa stderr] {line}", end="", flush=True)
+
+    def get_stderr(self):
+        with self._stderr_lock:
+            return "".join(self._stderr_lines)
+
+    def send_and_receive(self, inp_data: dict) -> dict:
+        if self.process.poll() is not None:
+            raise RuntimeError(f"Subprocess terminated.\nstderr:\n{self.get_stderr()[-2000:]}")
+
+        self.process.stdin.write(json.dumps(inp_data) + "\n")
+        self.process.stdin.flush()
+
+        # loop until we get a JSON line — discards any stray stdout noise
+        while True:
+            line = self.process.stdout.readline()
+            if not line:
+                return {"error": "Received empty response from subprocess"}
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                return json.loads(line)
+            except json.JSONDecodeError:
+                if self.verbose:
+                    print(f"[non-JSON stdout, skipping] {line}", flush=True)
+
+    def close(self):
+        if self.process.poll() is None:
+            self.process.stdin.close()
+            self.process.wait()
+        self._stderr_thread.join(timeout=5)
+
+class PersistentMpiCasaRunner:
+    def __init__(self, casadir: str, mpi_cores: int = 10, verbose:bool=False,
+                 logfile: Optional[str] = None, errfile: Optional[str] = None):
+        """
+        Persistent CASA worker; one core selects serial execution.
+        `logfile` / `errfile` default to the pipeline run's CASA log and err
+        file in casa.logs/ (issue #58).
+        """
+        if mpi_cores < 1:
+            raise ValueError("mpi_cores must be a positive integer")
+        self.verbose = verbose
+        self.logfile = logfile or casalogs.current_logfile() or ""
+        self.errfile = errfile or casalogs.current_errfile() or ""
+        self._labels: Dict[Any, str] = {}
+        cmd_list = [f"{casadir}/bin/casa", "--nologger", "--nogui", "--agg"]
+        if self.logfile:
+            cmd_list += ["--logfile", str(Path(self.logfile).absolute())]
+        cmd_list += ["-c", f"{MPICASA_WORKER}"]
+        if mpi_cores == 1:
+            cmd_list.append("--serial")
+        else:
+            cmd_list = [f"{casadir}/bin/mpicasa", "-n", str(mpi_cores),
+                        "--oversubscribe"] + cmd_list
+        self.runner = IterativeSubprocess(cmd_list=cmd_list, clean_env=True, verbose=verbose)
+
+    def run_task(self, task_name: str, args: dict, args_type:Dict[str, Any], block=False,
+                 target_server:Optional[int]=None, logfile: str = "",
+                 run_on_master: bool = False, label: str = ""):
+        if not label:
+            target = args.get("vis") or args.get("fitsidifile") or ""
+            if isinstance(target, (list, tuple)):
+                target = target[0] if target else ""
+            label = casalogs.task_marker(
+                step=PipelineContext.step_name, task=task_name,
+                detail=f"vis={Path(str(target)).name}" if target else "")
+        payload = {
+            "task_casa": task_name,
+            "args": args,
+            "args_type":args_type,
+            "block": block,
+            "target_server": target_server,
+            "logfile": logfile or self.logfile,
+            "run_on_master": run_on_master,
+            "label": label,
+        }
+        response = self.runner.send_and_receive(payload)
+        ret = response.get("ret") if isinstance(response, dict) else None
+        if isinstance(ret, list) and ret and all(isinstance(i, int) for i in ret):
+            self._labels.update({i: label for i in ret})       # non-blocking: command ids
+        else:
+            self._record_failures(response, label)
+        return response
+
+    def get_response(self, command_ids: Any, block: bool = True):
+        payload = {
+            "task_casa": "get_command_response",
+            "parameters": {"command_ids": command_ids, "block": block}
+        }
+        response = self.runner.send_and_receive(payload)
+        self._record_failures(response)
+        return response
+
+    def _append_err(self, header: str, text: str):
+        if not self.errfile or not text.strip():
+            return
+        try:
+            Path(self.errfile).parent.mkdir(parents=True, exist_ok=True)
+            with open(self.errfile, "a", encoding="utf-8") as fh:
+                fh.write(f"{header}\n{text.rstrip()}\n")
+        except OSError:
+            pass
+
+    def _record_failures(self, response, label: str = ""):
+        """Write tracebacks of failed CASA tasks to the run's err file."""
+        if not isinstance(response, dict):
+            return
+        if response.get("status") == "error":
+            self._append_err(f"{label or casalogs.MARKER_PREFIX} worker error: {response.get('error', '')}",
+                             str(response.get("traceback") or ""))
+        for reply in response.get("ret") or []:
+            if isinstance(reply, dict) and not reply.get("successful", True):
+                lbl = self._labels.get(reply.get("id"), label) or casalogs.MARKER_PREFIX
+                self._append_err(f"{lbl} FAILED", str(reply.get("traceback") or reply))
+
+    def close(self):
+        try:
+            self.runner.send_and_receive({"task_casa": "stop_services", "parameters": {}})
+        except Exception:
+            pass
+        self.runner.close()
+        self._append_err(casalogs.task_marker(step=PipelineContext.step_name, task="casa worker stderr"),
+                         self.runner.get_stderr())
+
+
+
+def run_subprocess(cmd_list: List[str], inp_data: dict, mode: str = "stdin", clean_env:bool=True, verbose:bool=True) -> dict:
+
+    env_found = {
+        k: v for k, v in os.environ.items()
+        if k not in {"PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", } or not clean_env
+    }
+    if mode == "stdin":
+        stdin_input = json.dumps(inp_data)
+        full_cmd    = cmd_list
+    else:
+        stdin_input = None
+        full_cmd    = cmd_list + [str(a) for a in inp_data.get("args", [])]
+
+    process = subprocess.Popen(
+        full_cmd,
+        env    = env_found,
+        stdin  = subprocess.PIPE if mode == "stdin" else None,
+        stdout = subprocess.PIPE,
+        stderr = subprocess.PIPE,
+        text   = True,
+    )
+    if stdin_input:
+        process.stdin.write(stdin_input)
+        process.stdin.close()
+    stderr_lines = []
+    def read_stderr():
+        for line in iter(process.stderr.readline, ""):
+            stderr_lines.append(line)
+
+    stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+    stderr_thread.start()
+
+    stdout_lines = []
+    for line in iter(process.stdout.readline, ""):
+        if verbose:
+            print(line, end="", flush=True)
+        stdout_lines.append(line)
+
+    process.wait()
+    stderr_thread.join()
+
+    success = process.returncode == 0
+
+    for line in reversed(stdout_lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+    return {"raw": "".join(stdout_lines)}
+
+class SubprocessPayload:
+    cmd_list: List[str] =   []
+    mode: str =   "stdin"
+    clean_env:bool = True
+
+    def __init__(self,inp_data: dict,cmd_list: List[str] = None,host: str = "localhost",port: int = SERVER_PORT):
+        self.inp_data = inp_data
+        self.cmd_list   = cmd_list or self.__class__.cmd_list
+
+    def run(self)->dict:
+        return run_subprocess(cmd_list=self.cmd_list, inp_data=self.inp_data, mode=self.mode, clean_env=self.clean_env)
+
+@dataclass
+class PicardTask:
+    input:      str
+    n:          int = 10
+
+    def to_args(self) -> List[str]:
+        if self.n < 1:
+            raise ValueError("mpi_cores must be a positive integer")
+        # rPICARD's launcher uses -n 2 to select plain CASA.
+        return ["-n", str(2 if self.n == 1 else self.n), "--input", self.input]
+
+
+
+@dataclass
+class PicardStepParser:
+    casadir:    str
+    logfile:    str
+    errf:       str
+
+    def parse(self, task: PicardTask) -> CasaStep:
+        cmd = CasaTaskCMD(
+            args        = asdict(task),
+            args_type   = {k: python_type_to_str(v) for k, v in asdict(task).items()},
+            casadir     = self.casadir,
+            task_casa   = "picard",
+            logfile     = self.logfile,
+            errf        = self.errf,
+            mpi_cores   = 0,            # picard handles its own parallelism via -n
+        )
+        return CasaStep(meta={'name': 'picard', 'runner': 'picard'}, cmd=cmd)
+
+
+class PicardPayload(SubprocessPayload):
+    mode = "args"
+
+    def __init__(self, task: PicardTask):
+        super().__init__(
+            inp_data = asdict(task),
+            cmd_list = ["picard"] + task.to_args(),
+        )
+
+# --------------------------------------------- For future.
+
+
+# def http_handler(cmd_list: List[str], mode: str = "stdin"):
+#     """
+
+#     Args:
+#         cmd_list (List[str]):   list of command args
+#         mode (str, optional):   mode='args args list appended to cmd_list. Defaults to "stdin".
+#                                 mode='stdin' JSON config piped to process stdin.
+
+
+#     """
+#     class Handler(BaseHTTPRequestHandler):
+#         def do_POST(self):
+#             length      =   int(self.headers["Content-Length"])
+#             payload     =   json.loads(self.rfile.read(length))
+
+#             if mode == "stdin":
+#                 full_cmd    =   cmd_list
+#                 stdin_input =   json.dumps(payload)
+
+#             elif mode == "args":
+#                 extra_args  =   payload.get("args", [])
+#                 full_cmd    =   cmd_list + [str(a) for a in extra_args]
+#                 stdin_input =   None
+
+#             process = subprocess.Popen(
+#                 full_cmd,
+#                 env         =   CLEAN_ENV,
+#                 stdin       =   subprocess.PIPE if mode == "stdin" else None,
+#                 stdout      =   subprocess.PIPE,
+#                 stderr      =   subprocess.PIPE,
+#                 text        =   True,
+#             )
+
+#             stdout_raw, stderr = process.communicate(input=stdin_input)
+#             success = process.returncode == 0
+
+#             try:
+#                 script_result = json.loads(stdout_raw)
+#             except json.JSONDecodeError:
+#                 script_result = {"raw": stdout_raw}
+
+#             body    =   json.dumps({"success":       success,
+#                                 "script_result": script_result,
+#                                 "stderr":        stderr,}
+#                               ).encode()
+
+#             self.send_response(200)
+#             self.send_header("Content-Type", "application/json")
+#             self.end_headers()
+#             self.wfile.write(body)
+
+#         def log_message(self, format, *args):
+#             pass
+
+#     return Handler
+
+# class ServerPayload:
+#     cmd_list: List[str] =   []
+#     mode: str =   "stdin"
+
+#     def __init__(self,inp_data: dict,cmd_list: List[str] = None,host: str = "localhost",port: int = SERVER_PORT):
+#         self.inp_data = inp_data
+#         self.host     = host
+#         self.port     = port
+
+#     def __enter__(self):
+#         handler_cls  = http_handler(self.cmd_list, mode=self.__class__.mode)
+#         self._server = HTTPServer((self.host, self.port), handler_cls)
+#         self._thread = threading.Thread(target=self._server.handle_request)
+#         self._thread.start()
+#         return self
+
+#     def run(self) -> dict:
+#         data    =   json.dumps(self.inp_data).encode()
+#         req     =   urllib.request.Request(f"http://{self.host}:{self.port}/run", data=data, headers={"Content-Type": "application/json"})
+#         with urllib.request.urlopen(req) as resp:
+#             result  =   json.loads(resp.read())
+
+#         if not result["success"]:
+#             print("STDERR:", result["stderr"], flush=True)
+
+#         return result["script_result"]
+
+#     def __exit__(self, *args):
+#         self._thread.join()
+#         self._server.server_close()

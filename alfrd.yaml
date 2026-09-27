@@ -1,0 +1,180 @@
+version: 1
+name: avica-tests-0.3
+description: AVICA 0.3 reductions in this folder, read by ALFRD without importing AVICA.
+
+# Naming
+#   ALFRD project      = this manifest (name above). It holds many targets.
+#   AVICA project code = observation code from the FITS files, i.e. the
+#                        <target_dir>/<CODE>/ folders (BV019, RDV41, ...).
+primary_key: TARGET_NAME
+
+# Studio template: AVICA-only views (avica: block, `avica pipe config --summary`,
+# rPicard inputs, project-code folders) and the default step definitions from
+# alfrd/web/assets/templates/avica.yaml. Anything below overrides the template.
+template: avica
+
+# Project settings (editable in the Studio → Project settings).
+project_settings:
+  # Older field names → names used now. Applied to workflow steps, result CSV
+  # rows and folder/file names while reading. "prefix*" rewrites a prefix.
+  field_aliases:
+    vasco_avg: avica_avg
+    vascometa_ms: avicameta_ms
+    vasco_snr: avica_snr
+    vasco_fill_input: avica_fill_input
+    vasco_split_ms: avica_split_ms
+    vasco.meta: avica.meta
+    vasco.inp: avica.inp
+    "vasco*": "avica*"
+
+avica:
+  config: avica.inp                                # key = value, <step>.<param> allowed
+  config_summary: [avica, pipe, config, --summary] # resolves target_dir, picard_input_template(_update), ...
+  config_summary_cache: avica.summary.json         # written by `alfrd avica summary`
+  target_dir: reductions/                          # fallback when no summary is cached
+  logs: avica.logs                                 # avica__log-*.log, avica_crash_<step>.json
+
+  # Layout patterns. Placeholders: {target_dir}, {project_code}, {n} (integer),
+  # {band} (X, S2, ...), {target}. A list means "any of".
+  workdir:
+    - "{target_dir}/{project_code}/wd"
+    - "{target_dir}/{project_code}/wd_{n}"
+  band_dir:                                        # relative to the work dir
+    - "wd_{band}"
+    - "wd_{band}_{target}"
+  meta_dir: avica.meta                             # relative to the work dir
+  input_templates:                                 # relative to the work dir
+    - "input_template"
+    - "input_template_{n}"
+    - "wd_{band}_{target}/input_template_{band}_{target}"
+
+# Overview → "MS Storage Path" column ({workdir} = a folder matching avica.workdir).
+overview:
+  ms_path:
+    - "{workdir}/wd_{band}_{target}/VLBI_{band}.ms"
+    - "{workdir}/wd_{band}/VLBI_{band}.ms"
+    - "{workdir}/VLBI.ms"
+
+dataset_columns:
+  - name: TARGET_NAME
+    type: string
+    required: true
+    description: Source/target name, from <target_dir>/<TARGET>_result.csv.
+  - name: PROJECT_CODE
+    type: string
+    required: false
+    description: AVICA project code(s) the target was reduced under (e.g. RDV41).
+  - name: FILENAMES
+    type: string
+    required: false
+    description: FITS-IDI files used for the target.
+
+# Workflow stages (canvas bands). Remove to use the template's stages.
+stages:
+  - {id: ingest, title: Ingestion & Format Conversion}
+  - {id: reduce, title: Astrometry & Reduction}
+  - {id: meta, title: Meta Synthesis & Quality Control}
+  - {id: calib, title: Calibration Setup & Execution}
+
+workflows:
+  - name: avica
+    description: AVICA step status from per-target result CSV files.
+    # A step can be a plain id (template defaults) or a mapping that overrides
+    # label, category, stage, description, icon, metadata and logs.
+    steps:
+      - id: preprocess_fitsidi
+        stage: ingest
+        category: Preprocessing
+        label: FITS-IDI data ingestion
+        # Metadata health: files in {meta_dir} (= {workdir}/avica.meta) this step writes.
+        metadata:
+          - {file: fitsfiles_used.avica, label: FITS files used, require: [filepath]}
+          - {file: listobs.json, label: listobs (scans), require: [listobs]}
+          - {file: listobs_fits.out, label: listobs (FITS)}
+      - fits_to_ms
+      - phaseshift
+      - id: avica_avg
+        # Step logs: a list per step, shown in Workflow → Logs and the Logs view.
+        logs:
+          - "{workdir}/wd_{band}/avica_avg_*log*"
+      - avicameta_ms
+      - avica_snr
+      - avica_fill_input
+      - avica_split_ms
+      - rpicard
+
+artifacts:
+  - name: result_csv
+    path_pattern: "{target_dir}/{target}_result.csv"
+    description: Per-target AVICA step execution history.
+    media_type: text/csv
+    kind: table
+    viewer: table
+  - name: avica_meta
+    path_pattern: "{workdir}/avica.meta"
+    description: AVICA metadata folder (*.avica JSON sidecars, listobs.json, snrating_*.out).
+    kind: directory
+    viewer: avica_meta
+  - name: picard_input_template
+    path_pattern: "{workdir}/input_template/*.inp"
+    description: rPicard input templates copied into the work dir.
+    media_type: text/plain
+    kind: text
+    viewer: inp
+  - name: target_input_template
+    path_pattern: "{workdir}/wd_{band}_{target}/input_template_{band}_{target}/*.inp"
+    description: Per-band, per-target rPicard inputs actually used by rpicard.
+    media_type: text/plain
+    kind: text
+    viewer: inp
+  - name: picard_input_template_update
+    path_pattern: "{picard_input_template_update}/*.inp"
+    description: Overrides merged into the rPicard inputs (supersede template keys).
+    media_type: text/plain
+    kind: text
+    viewer: inp
+  # Logs view groups: every artifact with kind: log (or show_in_logs: true).
+  - name: avica_logs
+    path_pattern: "avica.logs/avica__log-*.log"
+    description: AVICA run logs
+    media_type: text/plain
+    kind: log
+    viewer: text
+  - name: crash_snapshots
+    path_pattern: "avica.logs/avica_crash_*.json"
+    description: Last crash snapshot per step
+    media_type: application/json
+    kind: json
+    viewer: json
+    show_in_logs: true
+  - name: casa_logs
+    path_pattern: "{workdir}/wd_{band}_{target}/*_casa_log-*.log"
+    description: CASA logs written per step
+    media_type: text/plain
+    kind: log
+    viewer: text
+  - name: casa_root_logs
+    path_pattern: "casa-*.log"
+    description: CASA logs next to alfrd.yaml
+    kind: log
+  - name: measurement_sets
+    path_pattern: "{workdir}/**/*.ms"
+    description: CASA measurement sets produced by AVICA.
+    kind: directory
+  - name: calibrated_uvfits
+    path_pattern: "{workdir}/wd_{band}_{target}/*_calibrated.uvf"
+    description: Calibrated UVFITS products produced by rPicard.
+    media_type: application/fits
+    kind: file
+
+schema:
+  - name: avica_result_csv
+    definitions:
+      - name
+      - success_count
+      - failed_count
+      - start_stamp
+      - detail
+      - desc
+      - success
+      - end_stamp

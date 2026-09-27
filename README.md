@@ -1,87 +1,267 @@
-# vasco
-VASCO: VLBI and SMILE source based CASA Optimizations
+![PyPI - Downloads](https://img.shields.io/pypi/dm/avica?cacheSeconds=3600)
+[![Read the Docs](https://readthedocs.org/projects/avica/badge/?version=latest)](https://avica.readthedocs.io/en/latest/)
+![GitHub Release](https://img.shields.io/github/v/release/avikhagol/avica?cacheSeconds=3600)
+![GitHub Last Commit](https://img.shields.io/github/last-commit/avikhagol/avica?cacheSeconds=3600)
 
-> submitted to A&A
+# AVICA: Automated VLBI pipeline in CASA
+
+**Accepted for publication in Astronomy & Astrophysics journal.**
+
+[![asciicast](https://asciinema.org/a/1016974.svg)](https://asciinema.org/a/1016974)
+
+Complete demo: [avikhagol.github.io/avica-demos](https://avikhagol.github.io/avica-demos)
+
+## Contents
+
+- [Installation](#installation)
+  - [Recommended installation](#recommended-installation)
+  - [Manual installation](#manual-installation)
+  - [Full installation script](#full-installation-script)
+- [Usage](#usage)
+  - [Pipeline](#pipeline)
+  - [Manipulating FITS-IDI](#manipulating-fits-idi)
+  - [Configuration](#configuration)
+    - [Parameter summary](#parameter-summary)
+    - [Cleaning up intermediate data](#cleaning-up-intermediate-data)
+- [Attribution](#attribution)
+- [Acknowledgement](#acknowledgement)
 
 
-# Installation
+## Installation
 
+Requirements:
+
+- Ubuntu 18.04+, Debian 10+, or RHEL/CentOS 8+
+- Python >= 3.9
+
+The `avica` package is publicly available on [PyPI](https://pypi.org/project/avica/).
+Use [uv](https://docs.astral.sh/uv/getting-started/installation/#standalone-installer) or [pipx](https://pipx.pypa.io/stable/how-to/install-pipx/) for an isolated command-line installation.
+
+
+### Recommended installation
+
+Using `uv`:
 
 ```bash
-
-pip install vasco
+uv tool install avica --python 3.10
 ```
 
-## Manual
+Using `pipx`:
 
-```
-git clone --recurse-submodules https://github.com/avikhagol/vasco.git
-```
-
-# Usage
-
-
-## Pipeline
-
-```
-Usage: vasco pipe run [OPTIONS] [STPS]...                                                                                                                                                                                                                                                                                    
-                                                                                                                                                                                                                                                                                                                              
- _______________________                                                                                                                                                                                                                                                                                                      
-                                                                                                                                                                                                                                                                                                                              
- pipeline steps:
- 
- -  preprocess_fitsidi
- -  fits_to_ms
- -  phaseshift
- -  vasco_avg
- -  vascometa_ms
- -  vasco_snr
- -  vasco_fill_input
- -  vasco_split_ms
- -  rpicard
- 
- ________________________                                                     
- 
-      
-╭─ Arguments ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│   stps      [STPS]...  steps for execution [default: preprocess_fitsidi, fits_to_ms, vasco_avg, vascometa_ms, vasco_snr, vasco_fill_input, vasco_split_ms, rpicard]                                                                                                                                                        │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --f,--fitsfilenames        TEXT  fitsfile names comma separated                                                                                                                                                                                                                                                            │
-│ --t,--target               TEXT  Selected field / sourc name                                                                                                                                                                                                                                                               │
-│ --configfile               TEXT  config file containing key=value [default: vasco.inp]                                                                                                                                                                                                                                     │
-│ --help                           Show this message and exit.                                                                                                                                                                                                                                                               │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-
-
+```bash
+pipx install avica
 ```
 
-## Manipulating FITS-IDI
+Using `pip`:
 
-To check known FITS-IDI issues run the following:
-
+```bash
+pip install avica
 ```
- Usage: vasco fitsidi_check [OPTIONS] [FITSFILENAMES]... COMMAND [ARGS]...                                                                                                                                                                                                                                                         
-                                                                                                                                                                                                                                                                                                                              
- validate and fix, known FITS-IDI problems                                                                                                                                                                                                                                                                                    
-                                                                                                                                                                                                                                                                                                                              
-╭─ Arguments ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│   fitsfilenames      [FITSFILENAMES]...                                                                                                                                                                                                                                                                                    │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ --fix     --no-fix       [default: no-fix]                                                                                                                                                                                                                                                                                 │
-│ --desc    --no-desc      [default: no-desc]                                                                                                                                                                                                                                                                                │
-│ --help                   Show this message and exit.                                                                                                                                                                                                                                                                       │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
+If you install with `pip`, use a virtual environment unless you already manage Python packages another way.
 
+### Manual installation
+
+Clone the repository and install it locally:
+
+```bash
+git clone https://github.com/avikhagol/avica.git
+cd avica/
+pip install .
 ```
 
 
-#### Example
+### Full installation script
+
+Run [`install.sh`](install.sh) as your normal user. The quickest way is to fetch
+and run it in one step:
+
+```bash
+curl -LsSf https://avikhagol.github.io/avica/install.sh | bash
+source "$HOME/.local/share/avica-stack/env.sh"
+```
+
+> requires `rsync`, `git`
+
+The script installs AVICA using uv. If `picard` is already on PATH, it reuses that
+installation and skips all CASA/rPICARD downloads and plotting/data setup.
+Otherwise, it installs rPICARD, jiveplot (with `python-pgplot==1.6.1`), and monolithic CASA.
+
+For a new rPICARD installation, set `CASA_PATH` to an existing CASA installation
+directory (containing `bin/casa` and `bin/mpicasa`) or an archive URL:
+
+```bash
+CASA_PATH=/path/to/casa bash install.sh
+```
+
+Using the one-liner, place the variable after the pipe so it reaches `bash`,
+not `curl`:
+
+```bash
+curl -LsSf https://avikhagol.github.io/avica/install.sh | CASA_PATH=/path/to/casa bash
+```
+
+If unset, the script prompts for the location. Press Enter to download:
+
+```text
+ftp://ftp.mpifr-bonn.mpg.de/outgoing/mjanssen/casa-6.7.5-18-py3.12.el8.tar.xz
+```
+
+Without an interactive terminal, the same default is used. `CASA_DIR` and
+`CASA_URL` are also accepted, after `CASA_PATH` in that order.
+Set `AVICA_INSTALL_DIR` to change the default `~/.local/share/avica-stack`
+directory, or `PICARD_REF` to select the branch/tag of a new rPICARD clone.
+Choose a CASA version that matches the selected rPICARD version.
+
+When setting up rPICARD, the downloaded or supplied CASA directory is also saved
+in AVICA's global configuration using `avica pipe config --global casadir=...`.
+
+The script adds an environment file to `~/.bashrc`. It configures AVICA's CASA
+and input-template paths when it can identify them, preserving other settings
+and backing up an existing `~/.avica/avica.inp`. For an existing `picard` command,
+it reads the adjacent rPICARD `your_casapath.txt` when available; otherwise,
+existing AVICA settings are left unchanged.
+
+Run `bash install.sh --help` (or `curl -LsSf https://avikhagol.github.io/avica/install.sh | bash -s -- --help`
+for the one-liner) for the environment options. The previous apt and
+dependency-check options have been removed.
+
+## Usage
+
+The pipeline calibration steps rely on [rPicard](https://bitbucket.org/M_Janssen/picard/src/master/). Follow the rPicard setup instructions first. After rPicard is configured, AVICA only needs a minimal configuration file to get started; see [Configuration](#configuration).
+
+### Pipeline
+
+Run the default pipeline:
+
+```bash
+avica pipe run --fitsfilenames <file1.uvfits,file2.uvfits> --target <source-name>
+```
+
+The default pipeline executes these steps:
+
+- `preprocess_fitsidi`
+- `fits_to_ms`
+- `phaseshift`
+- `avica_avg`
+- `avicameta_ms`
+- `avica_snr`
+- `avica_fill_input`
+- `avica_split_ms`
+- `rpicard`
+
+You can pass one or more step names to run only part of the pipeline:
+
+```bash
+avica pipe run preprocess_fitsidi fits_to_ms --fitsfilenames <file.uvfits>
+```
+
+During `fits_to_ms`, AVICA also discovers station flag files in `artifact_dirs`,
+`folder_for_fits`, the input FITS directories, and `<workdir>/raw`. AIPS UVFLG
+files using `ANT_NAME` (such as EVN `.flag` files) are converted and added after the existing FITS-IDI/MS flags. 
+
+```ini
+apply_flag_from_artifacts = True
+artifact_flag_extensions = .fg;.uvflag;.uvflg;.uvfg;.flag;.flg;.uvflags;.uvflgs;.uvfgs;.flags;.flgs
+artifact_flagfiles = []
+```
+
+Extensions are case-insensitive. A nonempty `artifact_flagfiles` list overrides
+automatic discovery and accepts arbitrary filenames. Set
+`apply_flag_from_artifacts=False` to disable this pass independently of
+`apply_flag_from_idi`. Existing measurement sets are flagged only when
+`apply_flag_to_existing_vis=True`.
+
+Supported UVFLG fields are `ANT_NAME`, `TIMERANG`, `OPCODE='FLAG'`, `REASON`,
+`TIMEOFF`, `DTIMRANG`, `BIF`/`EIF`, and `BCHAN`/`ECHAN`. TIMEOFF and DTIMRANG are
+in seconds and retain their nonzero settings between entries, following
+[AIPS UVFLG INTEXT semantics](https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?UVFLG).
+Malformed files and records with unsupported selectors, invalid IF/channel
+ranges, absent antennas, or unrelated times are reported and skipped.
+
+Generated commands are saved as `<MS>.artifact_flags.flagcmd`; its `.json`
+sidecar records input files, row counts, skipped records and application status.
+Each application saves uniquely named `before_artifact_flags_*` and
+`after_artifact_flags_*` versions using CASA flagmanager. If application fails,
+the step reports failure and the before-version remains available for restoration.
+Source flag files are read in place and are not copied into rPICARD directories.
+
+Common options:
+
+| Option | Description |
+| --- | --- |
+| `--f`, `--fitsfilenames` | Comma-separated FITS-IDI file names. |
+| `--t`, `--target` | Selected field or source name. |
+| `--configfile` | Configuration file containing `key=value` entries. Defaults to `avica.inp`. |
+| `--help` | Show the full command help. |
+
+
+#### Pipeline results
+
+After each step completes, AVICA appends a row to `reductions/result__<target>__<project_code>__<workdir>.csv`, e.g. `result__J0102+5824__EY034__wd_1.csv`. The project code and workdir identify which working directory (`reductions/<project_code>/<workdir>/`) the results belong to. Use `avica pipe result` to render that file:
+
+```bash
+avica pipe result --target <source-name>
+```
+
+This prints a progress ladder — one row per step — with status, success/fail counts, duration, and a condensed note for any failures. Full failure traces appear in panels below the table.
+
+Common options:
+
+| Option | Description |
+| --- | --- |
+| `--t`, `--target` | Target name; used to locate the result CSV. |
+| `--project` | Project code; picks among result CSVs of the same target. |
+| `--workdir` | Workdir name (`wd`, `wd_2`, ...); picks among result CSVs of the same target. |
+| `--oneline` | Single status line — good for scripts and CI. |
+| `--history` | Show every retry of every step, not just the latest. |
+| `--no-detail` | Suppress the full failure panels below the table. |
+| `--check` | Exit non-zero when any step has not fully succeeded. |
+| `--csvfile` | Pass the CSV path directly, skipping config lookup. |
+| `--help` | Show the full command help. |
+
+If a target has result CSVs for several workdirs, they are listed and the newest one is shown; narrow the choice with `--project` / `--workdir`, or pass `--csvfile`. Result CSVs from older AVICA versions (`<target>_result.csv`) are still read when no new-style file exists.
+
+The default view collapses to the most recent attempt per step; `--history` shows all attempts. The footer prints the command to resume from the next incomplete step.
+
+#### Logs
+
+Each `avica pipe run` writes its logs next to each other in the directory it is started from:
+
+| Folder | Content |
+| --- | --- |
+| `avica.logs/` | AVICA pipeline log, crash snapshots |
+| `casa.logs/casa__log-<YYYYmmdd_HHMMSS>.log` | the single CASA log of that run (all steps, all bands) |
+| `casa.logs/err-casa__log-<YYYYmmdd_HHMMSS>.log` | CASA worker stderr and tracebacks of failed CASA tasks |
+
+Every CASA task is preceded by a marker line naming the step, task and visibility, so a run can be followed on the terminal:
+
+```bash
+grep -n '>>> avica' casa.logs/casa__log-*.log
+```
+
+A resumed run starts a new CASA log. rPicard keeps its own logs in its working directory.
+
+### Manipulating FITS-IDI
+
+Check FITS-IDI files for known issues:
+
+```bash
+avica fitsidi_check <file.uvfits>
+```
+
+Useful options:
+
+| Option | Description |
+| --- | --- |
+| `--fix`, `--no-fix` | Apply available fixes. Defaults to `--no-fix`. |
+| `--desc`, `--no-desc` | Show issue descriptions. Defaults to `--no-desc`. |
+| `--help` | Show the full command help. |
+
+Example output:
 
 ```
-vasco fitsidi_check VLBA_VSN005412_file3.uvfits
+avica fitsidi_check VLBA_VSN005412_file3.uvfits
 +--------------------+---------+-------+-------+----------------+----------+
 | hdu                | fixable | total | fixed | problem_code   | affected |
 +==========================================================================+
@@ -96,29 +276,96 @@ vasco fitsidi_check VLBA_VSN005412_file3.uvfits
 | GAIN_CURVE         | 0       | 8     | 0     | []             | []       |
 | SYSTEM_TEMPERATURE | 0       | 8     | 0     | []             | []       |
 +--------------------+---------+-------+-------+----------------+----------+
-
 ```
 
+List observation information:
 
-To get the information on the observation run the following:
-
-```
-vasco listobs [FITSFILENAMES]... 
-```
-
-
-# Development
-After you clone the repo
 ```bash
-
-$ cd vasco
-$ pip install -e .[dev]
+avica listobs <file.uvfits>
 ```
 
-# Attribution
+### Configuration
 
-When using VASCO, please add a link to this repository in a footnote.
+[![asciicast](https://asciinema.org/a/mBmNuDbzI1S2dpqN.svg)](https://asciinema.org/a/mBmNuDbzI1S2dpqN)
 
-# Acknowledgement
+The pipeline configuration is a `key=value` file. By default, AVICA looks for `avica.inp` in the current directory. See the [example configuration](src/avica/pipe/avica_example.inp) for a minimal setup.
 
-"VASCO was developed within the "Search for Milli-Lenses" (SMILE) project. SMILE has received funding from the European Research Council (ERC) under the HORIZON ERC Grants 2021 programme (grant agreement No. 101040021).
+Pass a custom configuration file with `--configfile`:
+
+```bash
+avica pipe run --configfile <path/to/config/file>
+```
+
+If `--configfile` is not provided, AVICA uses `avica.inp` by default.
+
+To store defaults persistently, merge an existing file into `~/.avica/avica.inp`:
+
+```bash
+avica pipe config --default --inpfile <path/to/avica.inp>
+```
+
+You can also set default values directly:
+
+```bash
+avica pipe config --default key=value key2=value2 key3=value3
+```
+
+To set global defaults in AVICA's installed directory, use `--global` in the same way:
+
+```bash
+avica pipe config --global --inpfile <path/to/avica.inp>
+avica pipe config --global key=value key2=value2 key3=value3
+```
+
+Each of these commands only touches one file: `--default` writes to
+`~/.avica/avica.inp`, `--global` writes to the installed `avica.inp`, and plain
+`avica pipe config` writes to the local `avica.inp` (or `--outfile`). Only the
+keys you give it are changed; everything else already in that file — other
+settings, comments, `# str`/`# int` notes — stays as it was. A backup of the
+old file is saved as `avica.inp.bak`.
+
+To supersede the rPicard `input_template` files (`array.inp`, `observation.inp`, `array_finetune.inp`, `flagging.inp`, `constants.inp`) used by the `rpicard` step, point `picard_input_template_update` at a folder containing the parameters you want to fix:
+
+```text
+picard_input_template_update   =   "path/to/folder/with/fixed/inp/files"
+```
+
+#### Parameter summary
+
+Use `--summary` to print a report of every pipeline parameter, its resolved value, and where that value came from (`global`, `user`, `inpfile`, `cli`, built-in `default`, or runtime `context`). The `/core` and `/step` suffixes distinguish general parameters from step-specific overrides:
+
+```bash
+avica pipe config --summary --inpfile <path/to/avica.inp>
+```
+
+The summary overlays the installed global `avica.inp`, then `~/.avica/avica.inp`, then the local `avica.inp` (or an explicit `--inpfile`), with command-line `key=value` overrides applied last. Later layers override matching keys and preserve other settings. `--no-inpfile` skips automatic local-file discovery; an explicit `--inpfile` is still used. Summaries do not write configuration files.
+
+#### Cleaning up intermediate data
+
+Each pipeline step can remove its own intermediate files (temporary files, superseded Measurement Sets, etc.) once it finishes. This is controlled by:
+
+| Option | Description |
+| --- | --- |
+| `delete_removables` | Master switch; must be `True` for any cleanup to happen. Defaults to `False`. |
+| `removables` | List of glob patterns (relative to the step's working directory) to delete. Can be set globally or per step as `<step_name>.removables`. |
+| `rm_pre` / `<step_name>.rm_pre` | If `True`, delete the matching files *before* the step runs instead of after. |
+| `rm_only` | Only perform the deletion and skip running the step itself. |
+
+Several steps ship with sensible defaults, e.g.:
+
+```text
+delete_removables            =   True
+preprocess_fitsidi.removables    =   ["raw/*.tmp"]
+rpicard.removables               =   ["wd_[SLKQXPD]/VLBI_*.ms"]
+fits_to_ms.removables            =   ["*.old"]
+```
+
+Deletion is always confined to the step's working directory; patterns that resolve outside it are ignored.
+
+## Attribution
+
+When using AVICA, please add a link to this repository in a footnote.
+
+## Acknowledgement
+
+AVICA was developed within the "Search for Milli-Lenses" (SMILE) project. SMILE has received funding from the European Research Council (ERC) under the HORIZON ERC Grants 2021 programme (grant agreement No. 101040021).

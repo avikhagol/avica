@@ -1,0 +1,80 @@
+# required
+# assumes `folder_for_fits` is a folder containing all the raw visibility fits files.
+# `casadir` is the path to the monolithic CASA installation used for running CASA tasks.
+
+folder_for_fits           =   /path/to/source/folder/with/raw/visibility/fitsfiles
+casadir                  =  "path/to/monolithic-casa/casa-6.x.x-xx-py3.xx.xxx/"
+
+# optional-1
+# `picard_input_template` is a template for the picard input file, see https://bitbucket.org/M_Janssen/picard/src/master/input_template/.
+# assumes `target_dir` is a folder where the pipeline output will be saved.
+# `accor_solint` is the number of solint partitions to use.
+
+target_dir                =   "reductions"
+picard_input_template     =   "path/to/rpicard"
+accor_solint              =   4
+# Ready-to-use .antab files are picked up before falling back to the VLBA archive.
+# `artifact_dirs` are searched in addition to `folder_for_fits` and <workdir>/raw;
+# leave it empty to search only those. The extension match is case-insensitive.
+# A candidate is used when it covers more than `valid_perc` (5%) of the file's UV
+# data -- the same threshold applied to TSYS already in the file. Candidates must
+# match at least one FITS antenna; missing stations only produce a warning.
+# Malformed/unrelated candidates are skipped. Ranking uses time coverage, antenna
+# coverage, then IF agreement; equally suitable files raise an ambiguity error.
+# IF disagreement only warns (it never rejects a candidate).
+# Partial arrays are accepted by default; existing calibration for other antennas and
+# TSYS times outside the appended span is preserved.
+# Set `use_local_antab = False` to ignore local .antab files entirely.
+artifact_dirs             =   []
+use_local_antab           =   True
+# Set True only when every FITS antenna must have TSYS in the ANTAB.
+local_antab_require_full_array = False
+# Configure MPI independently for each pipeline step. Set a CASA step to 1
+# for serial execution. rPICARD also retains its upstream convention for 2.
+fits_to_ms.mpi_cores      =   5
+avica_avg.mpi_cores       =   5
+avica_snr.mpi_cores       =   5
+avica_split_ms.mpi_cores  =   10
+rpicard.mpi_cores         =   10
+# "auto": split single-pol bands (e.g. KVN K=LCP, Q=RCP) with only the live
+# correlation, so CASA bandpass does not fail on a dead RR; "off" keeps all.
+avica_avg.drop_dead_pol   =   auto
+hi_freq_ref               =   11
+snr_threshold_phref       =   7
+flux_threshold_phref      =   0.15
+min_channel_flagging      =   32
+n_calib                   =  5
+n_refant                  =  4
+minsnr                    =  3.2
+
+sci_solints               =   auto
+solint_max_scan_partitions=   8
+apply_flag_from_idi       =   True
+# Add AIPS UVFLG station files from artifact_dirs, folder_for_fits and raw.
+# All matching files are combined; missing stations only skip their own rows.
+# Existing MSs are touched only when apply_flag_to_existing_vis=True.
+apply_flag_from_artifacts =   True
+artifact_flag_extensions =   .fg;.uvflag;.uvflg;.uvfg;.flag;.flg;.uvflags;.uvflgs;.uvfgs;.flags;.flgs
+# Optional explicit file list overrides discovery, including unusual extensions.
+artifact_flagfiles        =   []
+size_limit                =   2000.0
+
+# configure google sheet
+sheet_url                 =   None
+worksheet                 =   None
+
+# configure below if using CSV or google sheet to save all the result in a common sheet.
+primary_colname           =   TARGET_NAME
+primary_value             =   None
+filename_col              =   FILENAMES
+targetname_col            =   TARGET_NAME
+
+# optional-2 sheet configurations
+working_col               =   None
+working_col_only          =   False
+do_pcol_validation        =   False
+
+# experimental
+use_casadir_pythonpath    =   False
+separation_thres          =   850.0
+source_extract_multi_fitsfiles    =   False

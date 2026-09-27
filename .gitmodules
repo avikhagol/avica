@@ -1,3 +1,3 @@
-[submodule "src/vasco/external"]
-	path = src/vasco/external
+[submodule "src/avica/external"]
+	path = src/avica/external
 	url = https://github.com/jive-vlbi/casa-vlbi.git

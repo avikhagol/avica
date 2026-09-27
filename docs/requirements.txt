@@ -1,4 +1,5 @@
 sphinx-book-theme
 jupyter-sphinx
-astropy
-numpy
+# astropy
+# numpy
+sphinxcontrib-asciinema

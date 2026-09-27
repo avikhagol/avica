@@ -1,10 +1,10 @@
 Plotting
 ===================
 
-vasco.diag 
+avica.diag
 ----------------------
 
-.. automodule:: vasco.diag
+.. automodule:: avica.diag
    :members:
    :undoc-members:
    :show-inheritance:

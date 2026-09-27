@@ -1,15 +1,18 @@
 Measurement Set
 ===================
 
-vasco.ms
+avica.ms
 ^^^^^^^^
 
-.. automodule:: vasco.ms.tables
-   :members:
-   :no-undoc-members:
-   :show-inheritance:
+avica.ms.meta.BandInfoMS.check_bands_ms
+----------------------------------------
 
-.. automodule:: vasco.ms.fringefit
+.. autofunction:: avica.ms.meta.BandInfoMS.check_bands_ms
+
+avica.ms.fringefit
+^^^^^^^^^^^^^^^^^^^
+
+.. automodule:: avica.ms.fringefit
    :members:
    :no-undoc-members:
    :show-inheritance:

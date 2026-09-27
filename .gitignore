@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 *.ms/
 *.ms
+.serena
 table.f*_TSM1
 casa*log_*
 diag*/
@@ -132,6 +133,14 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-src/vasco/fits/
-src/vasco/fitsio/
-src/vasco/idifits/
+src/avica/fits/
+src/avica/fitsio/
+src/avica/idifits/
+docs/source/_static/avica_demo.gif
+docs/source/_static/vasco_demo.gif
+src/avica/fitsioutil/__init__.py
+uv.lock
+reduction/
+avica.logs/
+casa.logs/
+Claude outputs/

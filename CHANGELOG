@@ -1,91 +1,27 @@
 # Changelog
 
-## [Unreleased]
-
-### Added
-- `vasco.idifits.ANTAB.gen_antab` if GAIN_CURVE is available try finding gain values from the table.
-
-### Fixed
+## [0.3.1.17]
 
 ### Changed
-- `vasco.ms.polars` merged into `vasco.ms.table`
-
-### Removed
-- removed `vasco.ms.polars`
-
-
-## [0.2.0]
-
-Improvements for reading RFC and class catalogue. Moving towards casacore for reading tables. Prefer Polars over Pandas.
-
-### Added
-
-- `vasco.core` library for casacore based operations. Calculates Visibility summary using `get_vis_summary`.
-- `vasco.ms.read_df_vis` using polars to read the visibility data - not ready for use.
-- `vasco.util.parse_class_cat` to read the CLASS table for the SMILE sample.
-- `vasco.ms.find_phasecenter_inms` to identify the separation from the phasecenter coordinate for the field comparing from the output class catalogue search file and fitsfile, uses msfile to use the field ID corrosponding to the field name in the final dictionary.
-- `vasco.fitsio.catalog_search_from_fits` can search coordinates using `df_catalog` which can be made using `vasco.util.rfc_ascii_to_df` and `vasco.util.parse_class_cat` implemented in `vasco.fitsio.df_search_brightcalib_rfc`.
-- `vasco.fits` contains few functions to create multiple rows in a table corrosponding the the `FREQID` column in `FREQUENCY` table when the values are missing. It can also flatten two duplicate but incremented `FREQID` entries in the `FREQUENCY` table when all other columns are identical.
+- Result CSV is now `<target_dir>/result__{target}__{project_code}__{workdir}.csv`, so results of different projects / workdirs of the same target no longer mix (#59). `avica pipe result` gains `--project` and `--workdir`; with several matches it lists them and shows the newest. Old `{target}_result.csv` files are still read.
+- All CASA logging of a pipeline run goes to one file, `casa.logs/casa__log-<stamp>.log`, next to `avica.logs/`, with a marker line before every CASA task; stderr and failed-task tracebacks go to `casa.logs/err-casa__log-<stamp>.log` (#58). Default-named `casa-*.log` / `ipython-*.log` created during the run are merged into it.
 
 ### Fixed
+- Stray `from turtle import st` in `avica.pipe.core`, which broke the import on systems without tkinter.
+- fringefit tasks run through the persistent CASA worker now log to the run's CASA log instead of CASA's default log.
+- stray `\` causing crash in the ANTAB parser.
 
-- frame `icrs` is preferred over `fk5` by default.
-
-### Changed
-
-- switched from pandas to polars
-
-### Removed
-
-- dropping `dask` from `vasco[all]` in the setup file.
-
-
-## [0.1.5]
-
-### Added
-
-- CHANGELOG, CONTRIBUTING
-- Ability to get apparanat sampling for MS data with multiple band
-- CLI has ANTAB generation option
-
-### Fixed
-
-- using proper time conversion for timestamp (#2)
-- bug in ambiguous timestamp for ANTAB data handled
-
-### Changed
-
-- `save_fig` also takes dpi
-- Improvements in `apparant_sampling` code
-
-### Removed
-
-
-## [0.1.2] - 2025-03-10
-
-### Added
-
-- casatools, casatasks, dask[distributed] will be installed with `vasco[all]`
-- `apparant_sampling` method in `vasco.ms.fringefit`
-- takes first `n_calib` after the SNR rating.
-- `creat_df_fromrfcfile`, `search_rfc_catalog` method in `vasco.util` for parsing RFC catalog files and performing search using dataframe.
-
-### Fixed
-
-- For robust selection the default value for flux_thres(used as snr thres) to 7.0 for VASCO SNR rating.
-
-### Changed
-
-- Lowered default value for flux_thres(used as snr thres) to 7.0 for VASCO SNR rating.
-- few name changes e.g., _label -> _axs in `vasco.diag` (#68b3a1c0)
-- new methods added to `vasco.ms.fringefit`
-- `flag_d` in `vasco.ms` is now `flag=True` by default.
-
-
-### Removed
-
-- Redunant naming conventins within methods.
-
-
-[unreleased]: https://gitlab.ia.forth.gr/smile/vasco/compare/v0.1.5...HEAD
-[0.1.2] : https://gitlab.ia.forth.gr/smile/vasco/compare/v0.1.2...v0.1.5
+[0.3.1.17] : https://github.com/avikhagol/avica/compare/v0.3.1.16...v0.3.1.17
+[0.3.1.16] : https://github.com/avikhagol/avica/compare/v0.3.1.15...v0.3.1.16
+[0.3.1.15] : https://github.com/avikhagol/avica/compare/v0.3.1.14...v0.3.1.15
+[0.3.1.14] : https://github.com/avikhagol/avica/compare/v0.3.1.13...v0.3.1.14
+[0.3.1.13] : https://github.com/avikhagol/avica/compare/v0.3.1.12...v0.3.1.13
+[0.3.1.12] : https://github.com/avikhagol/avica/compare/v0.3.1.11...v0.3.1.12
+[0.3.1.11] : https://github.com/avikhagol/avica/compare/v0.3.1.10...v0.3.1.11
+[0.3.1.10] : https://github.com/avikhagol/avica/compare/v0.3.1.9...v0.3.1.10
+[0.3.1.9] : https://github.com/avikhagol/avica/compare/v0.3.1.8...v0.3.1.9
+[0.3.1.8] : https://github.com/avikhagol/avica/compare/v0.3.1.7...v0.3.1.8
+[0.3.1.7] : https://github.com/avikhagol/avica/compare/v0.3.1.6...v0.3.1.7
+[0.3.1.6] : https://github.com/avikhagol/avica/compare/v0.3.1.5...v0.3.1.6
+[0.3.1.5] : https://github.com/avikhagol/avica/compare/v0.3.1.4...v0.3.1.5
+[0.3.1.4] : https://github.com/avikhagol/avica/compare/v0.3.1.3...v0.3.1.4
