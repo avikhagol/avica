@@ -504,6 +504,7 @@ DEFAULT_PARAMS: dict = {
     "apply_flag_from_idi"       :   True,
     "apply_flag_from_artifacts" :   True,
     "source_extract_multi_fitsfiles"    :   False,
+    "force_reset"                :   False,
     "delete_removables"         :   False,
     "removables"                :   [],
     "rm_only"                   :   False,

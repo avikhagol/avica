@@ -48,6 +48,41 @@ def _rm_only_result(result, removed_count):
     result.end_stamp = datetime.now()
     return result
 
+
+def _should_restore_raw_fits(force_reset, targets):
+    force_reset_enabled = (str(force_reset).strip().lower() in
+                           {'1', 'true', 'yes', 'on'})
+    return force_reset_enabled or len(_normalize_strlist(targets)) == 1
+
+
+def _restore_modified_raw_fits(fitsfiles, origin_fitsfiles):
+    """Restore changed workdir FITS files using a constant-time stat check."""
+    restored = []
+    origins = [Path(path) for path in origin_fitsfiles]
+    for fitsfile in map(Path, fitsfiles):
+        named_origins = [path for path in origins
+                         if path.name == fitsfile.name and path.exists()]
+        if not named_origins:
+            raise FileNotFoundError(f"No origin found for raw FITS {fitsfile.name}")
+        candidates = [path for path in named_origins
+                      if path.resolve() != fitsfile.resolve()]
+        if not candidates:
+            # A new workdir initially contains a symlink to the origin. It is
+            # already pristine and deliberately has the same resolved path.
+            continue
+        if len(candidates) > 1:
+            raise ValueError(f"Ambiguous origin for {fitsfile.name}: {candidates}")
+
+        origin = candidates[0]
+        origin_stat = origin.stat()
+        local_stat = fitsfile.stat()
+        unchanged = (origin_stat.st_size == local_stat.st_size
+                     and origin_stat.st_mtime_ns == local_stat.st_mtime_ns)
+        if not unchanged:
+            shutil.copy2(origin, fitsfile)
+            restored.append(str(fitsfile))
+    return restored
+
 class PreProcessFitsIdi(PipelineStepBase):
     """
         _______________________________________________________
@@ -78,7 +113,8 @@ class PreProcessFitsIdi(PipelineStepBase):
 
     def run(self, lf, fitsfiles, target, wd_ifolder, source_extract_multi_fitsfiles=False,
         removables=[], rm_only=False, rm_pre=False, delete_removables=False, artifact_dirs=[],
-        use_local_antab=True, local_antab_require_full_array=False, verbose=False):
+        use_local_antab=True, local_antab_require_full_array=False, force_reset=False,
+        verbose=False):
         self.result.start_stamp   = datetime.now()
         from avica.fitsidiutil.validation import fitsidi_check
         from avica.fitsidiutil.obs import ObservationSummary
@@ -99,6 +135,17 @@ class PreProcessFitsIdi(PipelineStepBase):
 
         targets         =   PipelineContext.params.get('targets', [])
         target          =   PipelineContext.params.get('target', target)
+
+        if _should_restore_raw_fits(force_reset, targets):
+            with step_stage("checking raw FITS against origin", fitsfiles=fitsfiles):
+                restored = _restore_modified_raw_fits(
+                    fitsfiles, PipelineContext.params.get('allfitsfile', []))
+                for restored_file in restored:
+                    msg = f"restored modified raw FITS from origin: {restored_file}"
+                    print(msg)
+                    log.info(msg)
+                    self.result.desc.append(msg)
+
         tmpfitsfiles        =   deepcopy(fitsfiles)
 
         rfc_catalog_file        =   PipelineContext.params['rfc_catalogfile']
@@ -407,7 +454,7 @@ class FitsIdiToMS(PipelineStepBase):
         self.result.desc.append(f"applied {nflags} {flag_source} flag rows to {Path(vis).name}")
         return True
 
-    def run(self, lf, casadir, wd_ifolder, apply_flag_from_idi=True, mpi_cores=5, flag_source="ms",
+    def run(self, lf, casadir, wd_ifolder, target="", apply_flag_from_idi=True, mpi_cores=5, flag_source="ms",
         removables=[], rm_only=False, rm_pre=False, delete_removables=False,
         apply_flag_to_existing_vis=False, apply_flag_from_artifacts=True, artifact_dirs=None,
         artifact_flag_extensions='.fg;.uvflag;.uvflg;.uvfg;.flag;.flg;.uvflags;.uvflgs;.uvfgs;.flags;.flgs',
@@ -451,12 +498,27 @@ class FitsIdiToMS(PipelineStepBase):
         wds_ifolder_for_payload  =   []
         casalogfile, errcasalogfile = casa_logfiles(wd, self.name, self.result.start_stamp)   # run-level log in casa.logs/ (#58)
 
+        def remove_stale_vis(existing_vis):
+            existing_vis = Path(existing_vis)
+            if (existing_vis.exists() and target
+                    and not check_target_in_ms(str(existing_vis), target)):
+                msg_reimport = (
+                    f"reimporting {existing_vis.name}: target {target} "
+                    "has no MAIN-table rows")
+                log.warning(msg_reimport)
+                self.result.desc.append(msg_reimport)
+                del_fl(wd, fl=existing_vis.name, rm=True)
+                del_fl(wd, fl=f"{existing_vis.name}.flagversions", rm=True)
+                return True
+            return False
+
 
         # ------------------------ w/o multiple frequency IDs
         msg                             =   "setting up casatask"
         log.info(msg)
         with step_stage(msg, vis=str(vis)):
             if not multifreqid:
+                remove_stale_vis(vis)
                 if not Path(str(vis)).exists():
                     task            =   ImportFITSIdi(vis=vis, fitsidifile=fitsfiles)
                     step             =   task.to_step(logfile=casalogfile, errf=errcasalogfile, casadir=casadir)
@@ -490,6 +552,7 @@ class FitsIdiToMS(PipelineStepBase):
                         vis_freqid      =   f"{wd}/{params_freqid['ms_name']}"
                         ff_freqid       =   [fitsfilefreqid[i]]
 
+                        remove_stale_vis(vis_freqid)
                         if not Path(vis_freqid).exists():
                             task            =   ImportFITSIdi(vis=vis_freqid, fitsidifile=ff_freqid)
                             step             =   task.to_step(logfile=casalogfile, errf=errcasalogfile, casadir=casadir)
@@ -505,6 +568,7 @@ class FitsIdiToMS(PipelineStepBase):
 
                     #  ------- w/o freqid
                     if otherfitsfile:
+                        remove_stale_vis(vis)
                         if not Path(vis).exists():
                             task            =   ImportFITSIdi(vis=vis, fitsidifile=otherfitsfile)
                             step             =   task.to_step(logfile=casalogfile, errf=errcasalogfile, casadir=casadir)
