@@ -1,18 +1,40 @@
-Pipeline Library
-===================
+Pipeline library
+================
 
-avica.pipe
-^^^^^^^^^^
+Pipeline orchestration, configuration, step implementations, and result
+reporting.
 
-.. automodule:: avica.pipe
-   :members:
-   :no-undoc-members:
-   :show-inheritance:
+Pipeline entry point
+--------------------
 
-avica.pipe.steps
-^^^^^^^^^^^^^^^^
+.. automodule:: avica.pipe.main
+
+Configuration
+-------------
+
+.. automodule:: avica.pipe.config
+
+Core types and task wrappers
+----------------------------
+
+.. automodule:: avica.pipe.core
+
+Pipeline steps
+--------------
 
 .. automodule:: avica.pipe.steps
-   :members:
-   :no-undoc-members:
-   :show-inheritance:
+
+Helpers
+-------
+
+.. automodule:: avica.pipe.helpers
+
+Artifact flags
+--------------
+
+.. automodule:: avica.pipe.artifact_flags
+
+Reports
+-------
+
+.. automodule:: avica.pipe.report

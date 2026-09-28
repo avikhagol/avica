@@ -1,18 +1,35 @@
-Measurement Set
-===================
+Measurement Sets
+================
 
-avica.ms
-^^^^^^^^
+Tools for reading, inspecting, selecting, and fringe-fitting CASA Measurement
+Sets.
 
-avica.ms.meta.BandInfoMS.check_bands_ms
-----------------------------------------
+Public interface
+----------------
 
-.. autofunction:: avica.ms.meta.BandInfoMS.check_bands_ms
+.. automodule:: avica.ms
 
-avica.ms.fringefit
-^^^^^^^^^^^^^^^^^^^
+Metadata
+--------
+
+.. automodule:: avica.ms.meta
+
+Tables
+------
+
+.. automodule:: avica.ms.tables
+
+Fringe fitting
+--------------
 
 .. automodule:: avica.ms.fringefit
-   :members:
-   :no-undoc-members:
-   :show-inheritance:
+
+CASA compatibility
+------------------
+
+.. automodule:: avica.ms.compat
+
+MPI client
+----------
+
+.. automodule:: avica.ms.mpiclient

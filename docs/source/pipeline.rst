@@ -20,7 +20,7 @@ Flowchart
       <img src="_static/images/pipeline-workflow.svg" alt="Pipeline Flowchart" />
    </object>
 
-    The pipeline worflow. The workflow is managed by <a href="#" >ALFRD</a>.
+    The pipeline worflow. The workflow is managed by <a href="https://github.com/avikhagol/alfrd" >ALFRD</a>.
 
 Pre-process FITSIDI
 -------------------
