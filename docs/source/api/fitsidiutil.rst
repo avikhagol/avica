@@ -17,31 +17,7 @@ Public interface
    avica.fitsidiutil.op.ANTAB
    avica.fitsidiutil.op.get_dateobs
    avica.fitsidiutil.op.parse_antab
-
-Input and output
-----------------
-
-.. automodule:: avica.fitsidiutil.io
-
-Observation summaries
----------------------
-
-.. automodule:: avica.fitsidiutil.obs
-
-Operations
-----------
-
-.. automodule:: avica.fitsidiutil.op
-
-Splitting
----------
-
-.. automodule:: avica.fitsidiutil.split
-
-Validation
-----------
-
-.. automodule:: avica.fitsidiutil.validation
+   avica.fitsidiutil.validation.fitsidi_check
 
 Calibration tables and ANTAB bands
 ----------------------------------
