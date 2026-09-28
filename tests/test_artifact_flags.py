@@ -212,6 +212,79 @@ class ArtifactFlagApplicationTest(unittest.TestCase):
             self.assertEqual(apply.call_count, count)
             self.assertEqual(runner.call_count, count)
 
+    def test_existing_ms_without_current_target_is_reimported(self):
+        self.vis.mkdir()
+        meta = SimpleNamespace(ff_used=[str(self.ff)], wd=self.root, metafolder=self.root,
+                               vis=str(self.vis), metafile_available_wd_ff=self.root/'used.json')
+
+        def remove(_wd, _count=0, fl='', rm=False):
+            if rm and fl == self.vis.name and self.vis.exists():
+                self.vis.rmdir()
+            return 1
+
+        def submit(task_name, args, **kwargs):
+            Path(args['vis']).mkdir()
+            return {'status': 'success', 'ret': 1}
+
+        with patch('avica.pipe.steps.WorkDirMeta', return_value=meta), \
+             patch('avica.pipe.steps.check_target_in_ms', return_value=False), \
+             patch('avica.pipe.steps.del_fl', side_effect=remove), \
+             patch('avica.pipe.steps.PersistentMpiCasaRunner') as runner:
+            runner.return_value.run_task.side_effect = submit
+            runner.return_value.get_response.return_value = {
+                'status': 'success', 'ret': [{'successful': True}]}
+            result = self.step.run(
+                None, '', str(self.root/'input_template'), target='1451+094',
+                apply_flag_from_idi=False, apply_flag_from_artifacts=False,
+            )
+
+        self.assertTrue(self.vis.exists())
+        self.assertEqual(result.success, [True])
+        self.assertIn('target 1451+094 has no MAIN-table rows', result.desc[0])
+        runner.return_value.run_task.assert_called_once()
+
+    def test_existing_multifrequency_ms_without_current_target_are_reimported(self):
+        inputs = [str(self.root/'a_freqid1.fits'), str(self.root/'a_freqid2.fits')]
+        outputs = [self.root/'band1.ms', self.root/'band2.ms']
+        for output in outputs:
+            output.mkdir()
+        meta = SimpleNamespace(ff_used=inputs, wd=self.root, metafolder=self.root,
+                               vis=str(self.root/'unused.ms'),
+                               metafile_available_wd_ff=self.root/'used.json')
+
+        def remove(wd, _count=0, fl='', rm=False):
+            candidate = Path(wd)/fl
+            if rm and candidate.is_dir():
+                candidate.rmdir()
+            return 1
+
+        def submit(task_name, args, **kwargs):
+            Path(args['vis']).mkdir()
+            return {'status': 'success', 'ret': 1}
+
+        with patch('avica.pipe.steps.WorkDirMeta', return_value=meta), \
+             patch('avica.pipe.steps.check_target_in_ms', return_value=False) as check, \
+             patch('avica.pipe.steps.del_fl', side_effect=remove), \
+             patch('avica.pipe.steps.read_inputfile', side_effect=[
+                 ({'ms_name': 'band1.ms'}, [], ''),
+                 ({'ms_name': 'band2.ms'}, [], ''),
+             ]), \
+             patch('avica.pipe.steps.PersistentMpiCasaRunner') as runner:
+            runner.return_value.run_task.side_effect = submit
+            runner.return_value.get_response.return_value = {
+                'status': 'success', 'ret': [{'successful': True}]}
+            result = self.step.run(
+                None, '', str(self.root/'input_template'), target='1451+094',
+                apply_flag_from_idi=False, apply_flag_from_artifacts=False,
+            )
+
+        self.assertTrue(all(output.exists() for output in outputs))
+        self.assertEqual(check.call_count, 2)
+        self.assertEqual(runner.return_value.run_task.call_count, 2)
+        self.assertEqual(result.success, [True, True])
+        self.assertEqual(sum('target 1451+094 has no MAIN-table rows' in desc
+                             for desc in result.desc), 2)
+
     def test_new_and_split_outputs_receive_their_corresponding_fits(self):
         for split in (False, True):
             with self.subTest(split=split):

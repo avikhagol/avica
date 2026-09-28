@@ -1870,16 +1870,17 @@ def check_target_in_ms(vis, target):
     found = False
 
     if Path(vis).exists():
-        msmd.open(vis)
-
-        alls = msmd.fieldnames()
-        if target in alls:
-            try:
+        try:
+            msmd.open(vis)
+            alls = msmd.fieldnames()
+            if target in alls:
                 if len(msmd.scansforfield(target)):
                     found = True
-            except Exception:
-                traceback.print_exc()
-                found=False
+        except Exception:
+            traceback.print_exc()
+            found = False
+        finally:
+            msmd.done()
 
     return found
 
