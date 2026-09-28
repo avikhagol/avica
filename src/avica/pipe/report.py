@@ -1,29 +1,29 @@
 """
 Rendering of AVICA pipeline result CSVs.
 
-A result CSV is written incrementally by `append_step_result_csv()` in
-avica.pipe.core, one row per step attempt, to
-`<target_dir>/result__{target}__{project_code}__{workdir}.csv`
-(see `avica.pipe.helpers.result_csv_name`), with the column layout of
-`StepResult`:
+A result CSV is written incrementally by
+:func:`avica.pipe.core.append_step_result_csv`, one row per step attempt, to
+``<target_dir>/result__{target}__{project_code}__{workdir}.csv``
+(see :func:`avica.pipe.helpers.result_csv_name`), with the column layout of
+:class:`avica.pipe.core.StepResult`::
 
     name, success_count, failed_count, start_stamp, detail, desc, success, end_stamp
 
 The file is APPEND-ONLY: re-running a step appends a further row, so a step
-name may appear several times.  `latest_per_step()` collapses to the most
-recent attempt; `render_history()` shows every attempt.
+name may appear several times.  :func:`latest_per_step` collapses to the most
+recent attempt; :func:`render_history` shows every attempt.
 
 Four layouts are provided:
 
-    render_ladder()   one row per pipeline step in canonical order, with a
-                      status tally and the command needed to resume
-    render_detail()   full `desc` text in panels, for steps that did not
-                      fully succeed
-    render_history()  every attempt of every step, grouped by step
-    render_oneline()  a single compact status line, for scripts and CI
+* :func:`render_ladder`: one row per pipeline step in canonical order, with a
+  status tally and the command needed to resume.
+* :func:`render_detail`: full ``desc`` text in panels for steps that did not
+  fully succeed.
+* :func:`render_history`: every attempt of every step, grouped by step.
+* :func:`render_oneline`: a single compact status line for scripts and CI.
 
-`render_result()` composes them according to the flags passed by
-`avica pipe result`.
+:func:`render_result` composes them according to the flags passed by
+``avica pipe result``.
 
 Reading uses the standard-library csv module so that inspecting a result file
 never requires the heavier pipeline imports.

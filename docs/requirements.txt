@@ -1,5 +1,3 @@
-sphinx-book-theme
-jupyter-sphinx
-# astropy
-# numpy
-sphinxcontrib-asciinema
+sphinx>=6,<7
+sphinx-book-theme>=1,<2
+sphinxcontrib-asciinema>=0.4,<1

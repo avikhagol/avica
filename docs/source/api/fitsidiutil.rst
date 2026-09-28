@@ -1,62 +1,51 @@
-FITS-IDI Utility
-================
+FITS-IDI utilities
+==================
 
+Reading, inspecting, validating, splitting, and updating FITS-IDI files.
 
-.. fitsidiutil
-.. -------------
+Public interface
+----------------
 
-.. avica.fitsidiutil
-.. ~~~~~~~~~~~~~~~~~~~~~~~~~
-.. .. automodule:: avica.fitsidiutil
-..    :members:
+.. autosummary::
 
-Read/Write
--------------
+   avica.fitsidiutil.io.FITSIDI
+   avica.fitsidiutil.io.read_idi
+   avica.fitsidiutil.obs.ObservationSummary
+   avica.fitsidiutil.split.SplitData
+   avica.fitsidiutil.validation.FITSIDIValidator
+   avica.fitsidiutil.validation.fitsidi_check
+   avica.fitsidiutil.op.ANTAB
+   avica.fitsidiutil.op.get_dateobs
+   avica.fitsidiutil.op.parse_antab
 
-avica.fitsidiutil.read_idi
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Input and output
+----------------
 
-.. autofunction:: avica.fitsidiutil.read_idi
+.. automodule:: avica.fitsidiutil.io
 
+Observation summaries
+---------------------
 
-avica.fitsidiutil.io.FITSIDI
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autoclass:: avica.fitsidiutil.io.FITSIDI
-
-
-avica.fitsidiutil.io.FITSIDI.quickread
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autofunction:: avica.fitsidiutil.io.FITSIDI.quickread
-
-
-avica.fitsidiutil.io.FITSIDI.iter_read
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. autofunction:: avica.fitsidiutil.io.FITSIDI.iter_read
-
-
-
-
-
-avica.fitsidiutil.split
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. index:: avica.fitsidiutil.split
-
-.. automodule:: avica.fitsidiutil.split
-   :members:
-   :no-undoc-members:
-   :show-inheritance:
-
-
-
+.. automodule:: avica.fitsidiutil.obs
 
 Operations
--------------
+----------
 
-avica.fitsidiutil.op.find_refant
-~~~~~~~~~~~~~~~~~~~~~~~~~
+.. automodule:: avica.fitsidiutil.op
 
-.. autofunction:: avica.fitsidiutil.op.find_refant
+Splitting
+---------
+
+.. automodule:: avica.fitsidiutil.split
+
+Validation
+----------
+
+.. automodule:: avica.fitsidiutil.validation
+
+Calibration tables and ANTAB bands
+----------------------------------
+
+.. automodule:: avica.fitsidiutil.calibration
+
+.. automodule:: avica.fitsidiutil.antab_bands

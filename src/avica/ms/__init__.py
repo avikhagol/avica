@@ -1115,18 +1115,14 @@ def get_sourcenames(msmd):
     return sourcenames
 
 def coordinate_for_sources(vis, sourcenames):
-    """
-    Input
+    """Return source coordinates from a Measurement Set.
 
-    :vis:       (str)   ms filepath
+    Args:
+        vis (str): Measurement Set path.
+        sourcenames (dict): Source names to include.
 
-    Returns
-
-                (dictionary)
-
-    key         :   value
-    SOURCE_NAME : (ra,dec)
-                    scalar tuple in radians
+    Returns:
+        dict: Mapping from source name to an ``(ra, dec)`` tuple in radians.
     """
     c = {}
     tb = ctable(f"{vis}/FIELD", readonly=True, ack=False)
@@ -1139,21 +1135,14 @@ def coordinate_for_sources(vis, sourcenames):
     return c
 
 def check_bands_ms(msmd):
-    """
-    Returns
-    ---
+    """Group Measurement Set spectral windows by observing band.
 
-    (dict)
-    key
-    {
-    'BAND':
-        {'reffreqs': [reffreqs], 'spws':[spws]}
-    }
+    Args:
+        msmd: Open CASA Measurement Set metadata tool.
 
-    'BAND'   = (str) "C", "X", "S"
-    reffreqs = (list)   (float) (Hz)
-    spws     = (list)   (int)
-
+    Returns:
+        dict: Band names (for example ``"C"``, ``"X"``, or ``"S"``)
+        mapped to reference frequencies in Hz and spectral-window IDs.
     """
     spws = set()
     spwsforfields = msmd.spwsforfields()

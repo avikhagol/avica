@@ -14,6 +14,7 @@ class BandInfoMS:
     and reference frequencies, structured as follows:
 
     .. code-block:: python
+
         BandInfoMS(vis, min_expt=1.5).check_bands_ms
         {
             "<band>": {

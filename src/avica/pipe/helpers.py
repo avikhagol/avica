@@ -991,6 +991,7 @@ def split_and_stack_multiple_cols(dfsheet, cols):
     Only for columns containing values = [f"{band}: float]
 
     Splits and stacks multiple columns in a DataFrame.
+
     Params:
         dfsheet (pd.DataFrame): The input DataFrame.
         cols (list): List of column names to process.
