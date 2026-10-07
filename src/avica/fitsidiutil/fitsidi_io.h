@@ -110,7 +110,7 @@ public:
 
 
 struct RowData {                //  used by listobs to read time, source, nrows
-    double time_start;
+    double time_start;          //  days since ref_date (DATE + TIME - ref_date)
     double time_end;
     int source;
     long nrows;
@@ -979,7 +979,8 @@ class ReadIO {
             py::object sids_arg = py::none(),
             std::string sourceColName = "SOURCE",
             std::string inttimColName = "INTTIM",
-            std::string freqidColName = "FREQID")
+            std::string freqidColName = "FREQID",
+            double ref_date = NAN)                                                                  // JD at 0h of the reference day; NaN uses the first row's DATE
             {
             std::vector<long int> sids_vec;
             bool filter_by_sids = false;
@@ -1006,6 +1007,7 @@ class ReadIO {
             int current_freqid = -1;
             double current_inttime = 0.0;
             char timeColName[] = "TIME";
+            char dateColName[] = "DATE";
 
             char frequencyHduName[] = "FREQUENCY";
             fits_movnam_hdu(fptr, BINARY_TBL, frequencyHduName, 0, &status);
@@ -1080,8 +1082,9 @@ class ReadIO {
 
 
                     // std::cout << "Processing HDU: " << hdu_name << " (HDU #" << hdu_num << "), nrows: " << nrows << std::endl;
-                    int colnum_time, colnum_source, colnum_inttim, colnum_freqid;
+                    int colnum_date, colnum_time, colnum_source, colnum_inttim, colnum_freqid;
 
+                    fits_get_colnum(fptr, CASEINSEN, dateColName, &colnum_date, &status);
                     fits_get_colnum(fptr, CASEINSEN, timeColName, &colnum_time, &status);
                     fits_get_colnum(fptr, CASEINSEN, sourceColName.data(), &colnum_source, &status);
                     fits_get_colnum(fptr, CASEINSEN, inttimColName.data(), &colnum_inttim, &status);
@@ -1094,9 +1097,11 @@ class ReadIO {
                         }
 
                     for (long i = 1; i <= nrows; ++i) {
+                        double date;
                         double time;
                         double inttime;
                         int source, freqid;
+                        fits_read_col(fptr, TDOUBLE, colnum_date, i, 1, 1, NULL, &date, NULL, &status);
                         fits_read_col(fptr, TDOUBLE, colnum_time, i, 1, 1, NULL, &time, NULL, &status);
                         fits_read_col(fptr, TINT, colnum_source, i, 1, 1, NULL, &source, NULL, &status);
                         fits_read_col(fptr, TDOUBLE, colnum_inttim, i, 1, 1, NULL, &inttime, NULL, &status);
@@ -1111,11 +1116,14 @@ class ReadIO {
                             return results;
                         }
 
+                        if (std::isnan(ref_date)) ref_date = date;
+
                         if (filter_by_sids && sids_set.find(source) == sids_set.end()) {
                             continue;
                         }
 
-                        double scantime_mjd = time;
+                        // TIME is relative to the row's DATE, which rolls over at midnight (#74)
+                        double scantime_mjd = (date - ref_date) + time;
 
                         if (source != current_source) {
                             if (current_source != -1) {

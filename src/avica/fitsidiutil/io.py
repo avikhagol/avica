@@ -344,13 +344,17 @@ class FITSIDI:
         self._reader.replace_table(extname, [tuple(c) for c in columns], payload,
                                    [tuple(k) for k in keys])
 
-    def listobs(self, sids=None, *, source_col="SOURCE", inttim_col="INTTIM", freqid_col="FREQID"):
+    def listobs(self, sids=None, *, source_col="SOURCE", inttim_col="INTTIM", freqid_col="FREQID",
+                ref_date=float("nan")):
         """Read scan data, optionally overriding UV_DATA column names.
 
         freqid_col also selects the frequency ID in the FREQUENCY table.
+        Scan times are days since ref_date (JD at 0h), computed from the
+        UV_DATA DATE + TIME columns; NaN uses the first row's DATE.
         """
         return self._reader.listobs(
             sids, source_col=source_col, inttim_col=inttim_col, freqid_col=freqid_col,
+            ref_date=ref_date,
         )
 
 

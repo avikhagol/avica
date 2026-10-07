@@ -1,13 +1,15 @@
 # Changelog
 
-## [0.3.1.19]
+## [0.3.1.20]
 
 ### Fixed
-- improved re copying/importing in `PreProcessFitsIdi` and `FitsIdiToMS` data when previous run has made stale fits/ms.
+- `ObservationSummary` / `listobs_fits.out` scan times now use the UV_DATA `DATE` column, so dates roll over at midnight and scans crossing midnight are no longer dropped ([#74](https://github.com/avikhagol/avica/issues/74)).
 
 ### Added
 - configuration parameter `force_reset` in `PreProcessFitsIdi` which will copy the fits file to the working directory.
 
+[0.3.1.20] : https://github.com/avikhagol/avica/compare/v0.3.1.19...v0.3.1.20
+[0.3.1.19] : https://github.com/avikhagol/avica/compare/v0.3.1.18...v0.3.1.19
 [0.3.1.18] : https://github.com/avikhagol/avica/compare/v0.3.1.17...v0.3.1.18
 [0.3.1.17] : https://github.com/avikhagol/avica/compare/v0.3.1.16...v0.3.1.17
 [0.3.1.16] : https://github.com/avikhagol/avica/compare/v0.3.1.15...v0.3.1.16

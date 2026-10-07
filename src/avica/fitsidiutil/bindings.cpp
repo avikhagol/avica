@@ -90,7 +90,8 @@ PYBIND11_MODULE (_core, m){
             py::arg("source_col") = "SOURCE",
             py::arg("inttim_col") = "INTTIM",
             py::arg("freqid_col") = "FREQID",
-                "Get observation data from the currently open file")
+            py::arg("ref_date") = NAN,
+                "Get observation data from the currently open file; times are days since ref_date (JD at 0h, defaults to the first row's DATE)")
         .def("delete_hdu", &ReadIO::delete_hdu,
             py::arg("hdu_num"),
                 "Delete an HDU from a FITS file by index.")

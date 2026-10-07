@@ -109,6 +109,7 @@ class ListObs:
             source_col=self.colnames.source,
             inttim_col=self.colnames.inttim,
             freqid_col=self.colnames.freqid,
+            ref_date=dateobs.jd,
         )
         hdu_source             =   fo.hdul['SOURCE']
         sid_colname     =   self._get_colnames(hdu_source, ['ID_NO', 'SOURCE_ID'])[0]
