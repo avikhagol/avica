@@ -1,15 +1,54 @@
-
 Pipeline Workflow
 ==================
 
 Execution
 ---------
 
-The pipeline steps can be invoked using the following command:
+Run the default pipeline:
 
 .. code-block:: bash
 
-  avica pipe run --t TARGET_NAME --f fitsfilenames
+   avica pipe run --target <target-name> --fitsfilenames <file1.uvfits,file2.uvfits>
+
+Run only some steps by passing their names:
+
+.. code-block:: bash
+
+   avica pipe run preprocess_fitsidi fits_to_ms --fitsfilenames <file.uvfits>
+
+The default pipeline executes these steps:
+
+* ``preprocess_fitsidi``
+* ``fits_to_ms``
+* ``phaseshift``
+* ``avica_avg``
+* ``avicameta_ms``
+* ``avica_snr``
+* ``avica_fill_input``
+* ``avica_split_ms``
+* ``rpicard``
+
+Common options:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Option
+     - Description
+   * - ``--f``, ``--fitsfilenames``
+     - Comma-separated FITS-IDI file names.
+   * - ``--t``, ``--target``
+     - Selected field or source name.
+   * - ``--configfile``
+     - Configuration file containing ``key=value`` entries. Defaults to
+       ``avica.inp``.
+   * - ``--resume``
+     - Resume after the last successful step in the result CSV.
+   * - ``--resume-from``
+     - Start from this pipeline step.
+   * - ``--help``
+     - Show the full command help.
 
 
 Flowchart
@@ -20,7 +59,22 @@ Flowchart
       <img src="_static/images/pipeline-workflow.svg" alt="Pipeline Flowchart" />
    </object>
 
-    The pipeline worflow. The workflow is managed by <a href="https://github.com/avikhagol/alfrd" >ALFRD</a>.
+    The pipeline workflow. The workflow is managed by <a href="https://github.com/avikhagol/alfrd" >ALFRD</a>.
+
+Output layout
+-------------
+
+The output folder structure follows this convention:
+
+::
+
+   CWD/
+   |-- avica.inp
+   `-- reductions/
+       `-- PROJECT_CODE/
+           `-- wd/
+               `-- wd_{BAND}/
+                   `-- wd_{BAND}_{TARGET_NAME}/
 
 Pre-process FITSIDI
 -------------------
@@ -57,6 +111,45 @@ Checks the FITSIDI file for the known problems using ``avica.fitsidiutil.fitsidi
    * - anmap
      - Incorrect antenna mapping detected in ``FLAG`` or ``PHASE-CAL`` tables.
 
+The same checks are available on the command line:
+
+.. code-block:: bash
+
+   avica fitsidi_check <file.uvfits>
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 75
+
+   * - Option
+     - Description
+   * - ``--fix``, ``--no-fix``
+     - Apply available fixes. Defaults to ``--no-fix``.
+   * - ``--desc``, ``--no-desc``
+     - Show issue descriptions. Defaults to ``--no-desc``.
+   * - ``--help``
+     - Show the full command help.
+
+Example output:
+
+.. code-block:: text
+
+   avica fitsidi_check VLBA_VSN005412_file3.uvfits
+   +--------------------+---------+-------+-------+----------------+----------+
+   | hdu                | fixable | total | fixed | problem_code   | affected |
+   +==========================================================================+
+   | ARRAY_GEOMETRY     | 0       | 8     | 0     | []             | []       |
+   | ANTENNA            | 0       | 16    | 0     | []             | []       |
+   | FREQUENCY          | 0       | 8     | 0     | []             | []       |
+   | PHASE-CAL          | 0       | 12    | 0     | []             | []       |
+   | PRIMARY            | 1       | 10    | 0     | ["extra_byte"] | [""]     |
+   | SOURCE             | 0       | 8     | 0     | []             | []       |
+   | FLAG               | 0       | 12    | 0     | []             | []       |
+   | UV_DATA            | 0       | 8     | 0     | []             | []       |
+   | GAIN_CURVE         | 0       | 8     | 0     | []             | []       |
+   | SYSTEM_TEMPERATURE | 0       | 8     | 0     | []             | []       |
+   +--------------------+---------+-------+-------+----------------+----------+
+
 Pre-Process FITS-IDI
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -74,6 +167,44 @@ FITSIDI to Measurement Set
   - Runs iteratively for files requiring different vis output.
   - Appropriate Casa task is triggered with the correct python environment using ``payload service``.
   - Logs "vis exists!" when the visiblity file is already present.
+
+Station flag files
+~~~~~~~~~~~~~~~~~~
+
+During ``fits_to_ms``, AVICA also discovers station flag files in
+``artifact_dirs``, ``folder_for_fits``, the input FITS directories, and
+``<workdir>/raw``. AIPS UVFLG files using ``ANT_NAME`` (such as EVN ``.flag``
+files) are converted and added after the existing FITS-IDI/MS flags.
+
+.. code-block:: ini
+
+   apply_flag_from_artifacts = True
+   artifact_flag_extensions = .fg;.uvflag;.uvflg;.uvfg;.flag;.flg;.uvflags;.uvflgs;.uvfgs;.flags;.flgs
+   artifact_flagfiles = []
+
+Extensions are case-insensitive. A nonempty ``artifact_flagfiles`` list
+overrides automatic discovery and accepts arbitrary filenames. Set
+``apply_flag_from_artifacts=False`` to disable this pass independently of
+``apply_flag_from_idi``. Existing measurement sets are flagged only when
+``apply_flag_to_existing_vis=True``.
+
+Supported UVFLG fields are ``ANT_NAME``, ``TIMERANG``, ``OPCODE='FLAG'``,
+``REASON``, ``TIMEOFF``, ``DTIMRANG``, ``BIF``/``EIF``, and
+``BCHAN``/``ECHAN``. ``TIMEOFF`` and ``DTIMRANG`` are in seconds and retain
+their nonzero settings between entries, following `AIPS UVFLG INTEXT
+semantics`_. Malformed files and records with unsupported selectors, invalid
+IF/channel ranges, absent antennas, or unrelated times are reported and
+skipped.
+
+Generated commands are saved as ``<MS>.artifact_flags.flagcmd``; its ``.json``
+sidecar records input files, row counts, skipped records and application
+status. Each application saves uniquely named ``before_artifact_flags_*`` and
+``after_artifact_flags_*`` versions using CASA flagmanager. If application
+fails, the step reports failure and the before-version remains available for
+restoration. Source flag files are read in place and are not copied into
+rPICARD directories.
+
+.. _AIPS UVFLG INTEXT semantics: https://www.aips.nrao.edu/cgi-bin/ZXHLP2.PL?UVFLG
 
 
 Phaseshift
@@ -111,9 +242,12 @@ Calibration
 Reading Pipeline Results
 ------------------------
 
-After ``avica pipe run`` completes (or is interrupted), a result CSV is written
-to ``reductions/<target>_result.csv``.  The ``avica pipe result`` command
-renders that file in several layouts.
+After each step completes, AVICA appends a row to
+``reductions/result__<target>__<project_code>__<workdir>.csv``, e.g.
+``result__J0102+5824__EY034__wd_1.csv``. The project code and workdir identify
+which working directory (``reductions/<project_code>/<workdir>/``) the results
+belong to. The ``avica pipe result`` command renders that file in several
+layouts.
 
 .. code-block:: bash
 
@@ -133,8 +267,16 @@ renders that file in several layouts.
    # Exit non-zero when any step has not fully succeeded
    avica pipe result --target J1234+5678 --check
 
+   # Pick among result CSVs of the same target
+   avica pipe result --target J1234+5678 --project EY034 --workdir wd_1
+
    # Pass the CSV path directly, skipping config lookup
-   avica pipe result --csvfile reductions/J1234+5678_result.csv
+   avica pipe result --csvfile reductions/result__J1234+5678__EY034__wd_1.csv
+
+If a target has result CSVs for several workdirs, they are listed and the
+newest one is shown; narrow the choice with ``--project`` / ``--workdir``, or
+pass ``--csvfile``. Result CSVs from older AVICA versions
+(``<target>_result.csv``) are still read when no new-style file exists.
 
 Step Status
 ~~~~~~~~~~~
@@ -166,3 +308,32 @@ footer,
    avica pipe run --resume-from <step>
 
 starts from the first step that has not yet achieved ``ok`` status.
+
+Logs
+----
+
+Each ``avica pipe run`` writes its logs next to each other in the directory it
+is started from:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 45 55
+
+   * - Folder
+     - Content
+   * - ``avica.logs/``
+     - AVICA pipeline log, crash snapshots
+   * - ``casa.logs/casa__log-<YYYYmmdd_HHMMSS>.log``
+     - the single CASA log of that run (all steps, all bands)
+   * - ``casa.logs/err-casa__log-<YYYYmmdd_HHMMSS>.log``
+     - CASA worker stderr and tracebacks of failed CASA tasks
+
+Every CASA task is preceded by a marker line naming the step, task and
+visibility, so a run can be followed on the terminal:
+
+.. code-block:: bash
+
+   grep -n '>>> avica' casa.logs/casa__log-*.log
+
+A resumed run starts a new CASA log. rPICARD keeps its own logs in its working
+directory.
