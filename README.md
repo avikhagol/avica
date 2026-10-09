@@ -105,7 +105,7 @@ Bug reports, questions and pull requests are welcome. Start with
 
 ## Citing AVICA
 
-If you use AVICA in your research, please cite our [https://doi.org/10.1051/0004-6361/202660469](https://doi.org/10.1051/0004-6361/202660469).
+If you use AVICA in your research, please cite our paper: [https://doi.org/10.1051/0004-6361/202660469](https://doi.org/10.1051/0004-6361/202660469).
 
 ## Acknowledgement
 
