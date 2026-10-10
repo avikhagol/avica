@@ -2,7 +2,7 @@
 
 # AVICA
 
-**Automated VLBI calibration in CASA**
+**Automated VLBI calibration pipeline in CASA**
 
 From raw FITS-IDI files to calibrated data with one command.
 
